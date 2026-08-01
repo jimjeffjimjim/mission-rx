@@ -18,7 +18,10 @@ import {
   RefreshCw,
   Activity,
   FileSpreadsheet,
-  Palette
+  Palette,
+  RotateCcw,
+  KeyRound,
+  Wrench
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
@@ -52,6 +55,7 @@ export default function AdminPortal({
   // Modals state
   const [isSpecialtyModalOpen, setIsSpecialtyModalOpen] = useState(false);
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
+  const [isResettingInventory, setIsResettingInventory] = useState(false);
 
   // Analytics State
   const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('week');
@@ -81,6 +85,33 @@ export default function AdminPortal({
       fetchAnalytics(timeframe);
     }
   }, [activeTab, timeframe]);
+
+  const handleResetInventoryToStart = async () => {
+    if (!confirm('Are you sure you want to reset all drugs in inventory to their initial starting stock levels?')) {
+      return;
+    }
+    setIsResettingInventory(true);
+    try {
+      const res = await fetch('/api/inventory/reset', { method: 'POST' });
+      if (res.ok) {
+        if (onRefreshData) onRefreshData();
+      }
+    } catch (e) {
+      console.error('Failed to reset inventory:', e);
+    } finally {
+      setIsResettingInventory(false);
+    }
+  };
+
+  const handleClearAuditLogs = async () => {
+    if (!confirm('Reset all audit logs?')) return;
+    try {
+      await fetch('/api/logs', { method: 'DELETE' });
+      if (activeTab === 'USAGE') fetchAnalytics(timeframe);
+    } catch (e) {
+      console.error('Failed to clear logs:', e);
+    }
+  };
 
   // Overall Stats
   const totalItems = items.length;
@@ -126,6 +157,49 @@ export default function AdminPortal({
 
   return (
     <div className="space-y-6 pb-16 select-none max-w-full overflow-x-hidden">
+      {/* Dev & Testing Utilities Section (Grouped for easy removal before production) */}
+      <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30">
+            <Wrench className="w-4 h-4 stroke-[2.5]" />
+          </div>
+          <div>
+            <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+              <span>Dev & Testing Utilities</span>
+              <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">Temporary</span>
+            </span>
+            <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
+              <span>Doctor PIN: <strong className="font-mono text-teal-400">1234</strong></span>
+              <span>|</span>
+              <span>Admin PIN: <strong className="font-mono text-amber-400">8888</strong></span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetInventoryToStart}
+            disabled={isResettingInventory}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            title="Reset all inventory items to original starting stock"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
+            <span>Reset Inventory to Start</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearAuditLogs}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            title="Reset all audit log entries"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Reset Audit Logs</span>
+          </button>
+        </div>
+      </div>
+
       {/* Admin Portal Banner Header */}
       <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 rounded-3xl p-5 sm:p-6 text-slate-950 shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-10 pointer-events-none">

@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch dispense logs with item relation
-    const logs = await (prisma as any).dispenseLog.findMany({
+    const logs = await prisma.dispenseLog.findMany({
       where: whereClause,
       include: {
         item: true,
@@ -33,16 +33,17 @@ export async function GET(request: Request) {
       orderBy: {
         createdAt: 'desc',
       },
-      take: 100,
+      take: 500,
     }).catch(() => []);
 
     // Format logs array safely
     const formattedLogs = logs.map((log: any) => ({
       id: log.id,
       itemId: log.itemId,
-      itemGenericName: log.item?.genericName || 'Unknown Formulation',
+      itemGenericName: log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation',
       quantityChanged: log.quantityChanged,
       actionType: log.actionType,
+      category: log.item?.shelfLocation || 'General Medical',
       createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString(),
     }));
 
@@ -51,10 +52,10 @@ export async function GET(request: Request) {
 
     formattedLogs.forEach((log: any) => {
       if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
-        const name = log.itemGenericName;
+        const name = log.itemGenericName || 'General Inventory Item';
         const qty = Math.abs(log.quantityChanged);
         if (!topMap[name]) {
-          topMap[name] = { totalDispensed: 0, category: log.item?.shelfLocation || 'General Medical' };
+          topMap[name] = { totalDispensed: 0, category: log.category };
         }
         topMap[name].totalDispensed += qty;
       }

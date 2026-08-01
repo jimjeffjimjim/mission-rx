@@ -73,65 +73,61 @@ export default function Home() {
     };
   }, []);
 
-  // Helper to record clinical transaction logs
-  const recordAuditLog = async (logData: {
+  // Helper to record clinical transaction logs instantly
+  const recordAuditLog = (logData: {
     itemId: string;
     itemGenericName: string;
     quantityChanged: number;
     actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
     details: string;
   }) => {
-    try {
-      await fetch('/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...logData,
-          userRole: role === 'LOCKED' ? 'STAFF' : role,
-        }),
-      });
-    } catch (e) {
-      console.warn('Failed to dispatch audit log:', e);
-    }
+    // Fire-and-forget fetch so rapid repeated clicks never block
+    fetch('/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...logData,
+        userRole: role === 'LOCKED' ? 'STAFF' : role,
+      }),
+    }).catch((e) => console.warn('Audit log write error:', e));
   };
 
-  // Optimistic stock updates with FDA/Compliance Audit Logging
-  const handleUpdateStock = async (id: string, newBottles: number, newLoose: number) => {
-    const target = items.find((i) => i.id === id);
-    if (target) {
-      const bottleDiff = newBottles - target.bottlesAvailable;
-      const looseDiff = newLoose - target.looseUnitsAvailable;
-      const totalChange = bottleDiff !== 0 ? bottleDiff : looseDiff;
-      const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-      const unitType = bottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-      const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+  // Rapid Optimistic stock updates with Instant Audit Logging
+  const handleUpdateStock = (id: string, newBottles: number, newLoose: number) => {
+    setItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        const bottleDiff = newBottles - target.bottlesAvailable;
+        const looseDiff = newLoose - target.looseUnitsAvailable;
+        const totalChange = bottleDiff !== 0 ? bottleDiff : looseDiff;
+        const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
+        const unitType = bottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+        const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
 
-      recordAuditLog({
-        itemId: target.id,
-        itemGenericName: `${target.genericName} (${target.dosage})`,
-        quantityChanged: totalChange,
-        actionType,
-        details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining stock: ${newBottles} bottles, ${newLoose} loose]`,
-      });
-    }
+        if (totalChange !== 0) {
+          recordAuditLog({
+            itemId: target.id,
+            itemGenericName: `${target.genericName} (${target.dosage})`,
+            quantityChanged: totalChange,
+            actionType,
+            details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
+          });
+        }
+      }
 
-    setItems((prev) =>
-      prev.map((item) =>
+      return prev.map((item) =>
         item.id === id
           ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }
           : item
-      )
-    );
+      );
+    });
 
-    try {
-      await fetch(`/api/inventory/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }),
-      });
-    } catch (e) {
-      console.error('Failed to sync stock update', e);
-    }
+    // Sync database asynchronously
+    fetch(`/api/inventory/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }),
+    }).catch((e) => console.error('Failed to sync stock update', e));
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
@@ -250,7 +246,7 @@ export default function Home() {
     });
   }, [items, searchQuery, selectedCategory, selectedStatus]);
 
-  // Group inventory by 10 exact specialties for Doctor View
+  // Group inventory by categories for Doctor View
   const groupedInventory = useMemo(() => {
     const groups: { [key: string]: InventoryItem[] } = {};
     const specialtyOrder = [
@@ -317,9 +313,9 @@ export default function Home() {
           />
         </div>
       ) : (
-        /* CLEAN DOCTOR STAFF VIEW WITH MOBILE-FIRST TO DESKTOP RESPONSIVE GRID */
+        /* CLEAN DOCTOR STAFF VIEW */
         <>
-          {/* Filter Bar with 10 Color-Coded Category Tabs */}
+          {/* Filter Bar with Color-Coded Category Tabs */}
           <FilterBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -407,6 +403,7 @@ export default function Home() {
       <AuditLogModal
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
+        onLogsCleared={fetchInventory}
       />
     </main>
   );

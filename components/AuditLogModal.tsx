@@ -2,15 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLogsCleared?: () => void;
 }
 
-export default function AuditLogModal({ isOpen, onClose }: AuditLogModalProps) {
+export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,6 +39,22 @@ export default function AuditLogModal({ isOpen, onClose }: AuditLogModalProps) {
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleResetAuditLogs = async () => {
+    if (!confirm('Are you sure you want to reset all audit logs? This action cannot be undone.')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await fetch('/api/logs', { method: 'DELETE' });
+      setLogs([]);
+      if (onLogsCleared) onLogsCleared();
+    } catch (e) {
+      console.error('Failed to reset audit logs', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredLogs = logs.filter((log) => {
     if (searchQuery.trim()) {
@@ -94,7 +111,17 @@ export default function AuditLogModal({ isOpen, onClose }: AuditLogModalProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={handleResetAuditLogs}
+              className="min-h-[42px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              title="Reset all audit log entries"
+            >
+              <Trash2 className="w-4 h-4 stroke-[2.5]" />
+              <span>Reset Logs</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportCSV}

@@ -30,7 +30,7 @@ let logsFallbackCache: DispenseLog[] = [
     quantityChanged: 0,
     actionType: 'AUDIT',
     userRole: 'ADMIN',
-    details: 'Clinical safety audit performed. Verified expiration date (2027-04-30) and Tall Man lettering (e-pi-NEPH-rine).',
+    details: 'Clinical safety audit performed. Verified expiration date (2027-04-30) and Tall Man lettering.',
     createdAt: new Date(Date.now() - 1800000).toISOString(),
   },
 ];
@@ -39,10 +39,11 @@ export async function GET() {
   try {
     const logs = await prisma.dispenseLog.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 500,
     });
+
     if (logs.length > 0) {
-      logsFallbackCache = logs.map((l) => ({
+      const dbLogs = logs.map((l) => ({
         id: l.id,
         itemId: l.itemId,
         itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
@@ -52,11 +53,19 @@ export async function GET() {
         details: (l as any).details || 'Clinical inventory adjustment logged.',
         createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
       }));
-      return NextResponse.json(logsFallbackCache);
+
+      // Combine with memory logs avoiding duplicate IDs
+      const map = new Map<string, DispenseLog>();
+      [...logsFallbackCache, ...dbLogs].forEach((item) => map.set(item.id, item));
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      return NextResponse.json(merged);
     }
+
     return NextResponse.json(logsFallbackCache);
   } catch (error) {
-    console.warn('Prisma logs DB error (using clinical fallback cache):', error);
     return NextResponse.json(logsFallbackCache);
   }
 }
@@ -70,7 +79,7 @@ export async function POST(request: Request) {
   }
 
   const newLog: DispenseLog = {
-    id: 'log-' + Math.random().toString(36).substr(2, 9),
+    id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
     itemId: data.itemId || 'unknown',
     itemGenericName: data.itemGenericName || 'General Inventory Item',
     quantityChanged: Number(data.quantityChanged) || 0,
@@ -90,9 +99,19 @@ export async function POST(request: Request) {
         actionType: newLog.actionType as any,
       },
     });
-    return NextResponse.json(newLog, { status: 201 });
   } catch (error) {
-    console.warn('Prisma DB write error on log (saved to runtime cache):', error);
-    return NextResponse.json(newLog, { status: 201 });
+    // Save to runtime cache
   }
+
+  return NextResponse.json(newLog, { status: 201 });
+}
+
+export async function DELETE() {
+  logsFallbackCache = [];
+  try {
+    await prisma.dispenseLog.deleteMany({});
+  } catch (e) {
+    console.warn('Cleared memory log cache:', e);
+  }
+  return NextResponse.json({ success: true, message: 'All audit logs reset.' });
 }
