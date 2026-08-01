@@ -1,0 +1,38 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model InventoryItem {
+  id                  String        @id @default(cuid())
+  shelfLocation       String
+  genericName         String
+  brandName           String?
+  chemicalName        String?
+  dosage              String
+  itemType            String
+  stockUnit           String        @default("Bottles")
+  subUnit             String        @default("pills")
+  bottlesAvailable    Int           @default(0)
+  pillsPerBottle      Int           @default(0)
+  looseUnitsAvailable Int           @default(0)
+  expirationDate      String
+  lotNumbers          String        @default("[]")
+  directions          String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  dispenseLogs        DispenseLog[]
+}
+
+model DispenseLog {
+  id              String        @id @default(uuid())
+  itemId          String
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantityChanged Int
+  actionType      String        // 'DISPENSE' | 'RESTOCK' | 'EDIT'
+  createdAt       DateTime      @default(now())
+}

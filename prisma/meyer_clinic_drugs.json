@@ -1,0 +1,145 @@
+[
+  {
+    "shelfLocation": "Dermatology",
+    "inventoryItem": "Clobetasol Propionate 0.05% Cream | Lot 153224031A",
+    "genericName": "Clobetasol Propionate",
+    "brandName": "",
+    "dosage": "0.05% Cream",
+    "stockUnit": "tubes",
+    "currentStock": "24",
+    "lot": "153224031A",
+    "expiration": "09/30/2026"
+  },
+  {
+    "shelfLocation": "Dermatology",
+    "inventoryItem": "Fluocinonide 0.05% Cream | Lot 153425002A",
+    "genericName": "Fluocinonide",
+    "brandName": "",
+    "dosage": "0.05% Cream",
+    "stockUnit": "tubes",
+    "currentStock": "24",
+    "lot": "153425002A",
+    "expiration": "10/31/2026"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Cetirizine 10 mg Tablet | Lot 3495B1AA",
+    "genericName": "Cetirizine",
+    "brandName": "Zyrtec Allergy",
+    "dosage": "10 mg Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "870",
+    "lot": "3495B1AA",
+    "expiration": "05/2028"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Cetirizine 10 mg Liquid-Filled Capsule | Lot 3495B1AA",
+    "genericName": "Cetirizine",
+    "brandName": "Zyrtec Allergy",
+    "dosage": "10 mg Liquid-Filled Capsule",
+    "stockUnit": "capsules",
+    "currentStock": "400",
+    "lot": "3495B1AA",
+    "expiration": "07/2027"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Diphenhydramine HCl 25 mg Tablet | Lot EEA191",
+    "genericName": "Diphenhydramine HCl",
+    "brandName": "Benadryl Allergy",
+    "dosage": "25 mg Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "3456",
+    "lot": "EEA191",
+    "expiration": "02/28/2027"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Neutrogena Hydro Boost Gel Cleanser 0.5 fl oz | Lot 1965B2CC",
+    "genericName": "Facial Cleanser",
+    "brandName": "Neutrogena Hydro Boost Hydrating Gel Cleanser Fragrance Free",
+    "dosage": "0.5 fl oz Gel Cleanser",
+    "stockUnit": "bottles",
+    "currentStock": "10",
+    "lot": "1965B2CC",
+    "expiration": "02/28/2027"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Neutrogena Hydro Boost Moisturizer SPF 50 1.7 fl oz | Lot 1965B2CC",
+    "genericName": "Hyaluronic Acid Moisturizer with Sunscreen",
+    "brandName": "Neutrogena Hydro Boost Hyaluronic Acid Moisturizer with Sunscreen SPF 50 Fragrance Free",
+    "dosage": "SPF 50 / 1.7 fl oz Facial Moisturizer / Lotion",
+    "stockUnit": "bottles",
+    "currentStock": "10",
+    "lot": "1965B2CC",
+    "expiration": "02/28/2027"
+  },
+  {
+    "shelfLocation": "Over the Counter",
+    "inventoryItem": "Neutrogena Collagen Bank SPF 30 2.7 fl oz | Lot 04425CA",
+    "genericName": "Sunscreen / Collagen Bank SPF Moisturizer",
+    "brandName": "Neutrogena Collagen Bank SPF 30",
+    "dosage": "SPF 30 / 2.7 fl oz Topical Moisturizer / Lotion",
+    "stockUnit": "bottles",
+    "currentStock": "48",
+    "lot": "04425CA",
+    "expiration": "01/13/2027"
+  },
+  {
+    "shelfLocation": "Psych/Neurology",
+    "inventoryItem": "Aripiprazole 10 mg Tablet | Lot 0000088525",
+    "genericName": "Aripiprazole",
+    "brandName": "Abilify",
+    "dosage": "10 mg Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "120",
+    "lot": "0000088525",
+    "expiration": "01/09/2027"
+  },
+  {
+    "shelfLocation": "Psych/Neurology",
+    "inventoryItem": "Bupropion HCl SR 100 mg Tablet | Lot 0000134515",
+    "genericName": "Bupropion HCl SR",
+    "brandName": "Wellbutrin SR",
+    "dosage": "100 mg Sustained-Release 12-Hour Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "6000",
+    "lot": "0000134515",
+    "expiration": "05/03/2027"
+  },
+  {
+    "shelfLocation": "Psych/Neurology",
+    "inventoryItem": "Escitalopram 5 mg Tablet | Lot 0000093834",
+    "genericName": "Escitalopram",
+    "brandName": "Lexapro",
+    "dosage": "5 mg Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "2400",
+    "lot": "0000093834",
+    "expiration": "02/28/2027"
+  },
+  {
+    "shelfLocation": "Psych/Neurology",
+    "inventoryItem": "Lurasidone HCl 20 mg Tablet | Lot A241211",
+    "genericName": "Lurasidone HCl",
+    "brandName": "Latuda",
+    "dosage": "20 mg Oral Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "720",
+    "lot": "A241211",
+    "expiration": "09/30/2026"
+  },
+  {
+    "shelfLocation": "Psych/Neurology",
+    "inventoryItem": "Quetiapine 300 mg Tablet | Lot E244744",
+    "genericName": "Quetiapine",
+    "brandName": "Seroquel",
+    "dosage": "300 mg Tablet",
+    "stockUnit": "tablets",
+    "currentStock": "2400",
+    "lot": "E244744",
+    "expiration": "09/30/2026"
+  }
+]
