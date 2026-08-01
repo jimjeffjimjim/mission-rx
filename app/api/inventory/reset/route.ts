@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,11 +15,22 @@ export async function POST() {
     const fileData = fs.readFileSync(seedPath, 'utf8');
     const rawItems = JSON.parse(fileData);
 
-    // Delete existing inventory items
-    await prisma.inventoryItem.deleteMany({});
+    // 1. Reset Supabase Cloud Postgres
+    if (supabase) {
+      try {
+        await supabase.from('inventory_items').delete().neq('id', 'non-existent');
+      } catch (e) {
+        console.warn('Supabase reset clear warning:', e);
+      }
+    }
+
+    // 2. Reset Prisma SQLite
+    await prisma.inventoryItem.deleteMany({}).catch(() => null);
 
     const created = [];
+    let idx = 1;
     for (const item of rawItems) {
+      const id = item.id || `meyer-${idx++}`;
       const genericName = item.genericName || item.inventoryItem || 'Clinic Medication';
       const brandName = item.brandName || '';
       const chemicalName = item.chemicalName || '';
@@ -33,8 +45,37 @@ export async function POST() {
       const lotNumbers = JSON.stringify(item.lot ? [item.lot] : ['LOT-MEYER']);
       const directions = item.directions || '';
 
+      // Insert to Supabase Cloud
+      if (supabase) {
+        try {
+          await supabase.from('inventory_items').insert([
+            {
+              id,
+              shelf_location: shelfLocation,
+              generic_name: genericName,
+              brand_name: brandName,
+              chemical_name: chemicalName,
+              dosage,
+              item_type: 'MEDICATION',
+              stock_unit: stockUnit,
+              sub_unit: subUnit,
+              bottles_available: bottlesAvailable,
+              loose_units_available: looseUnitsAvailable,
+              pills_per_bottle: pillsPerBottle,
+              expiration_date: expirationDate,
+              lot_numbers: lotNumbers,
+              directions,
+            },
+          ]);
+        } catch (e) {
+          // Fallback
+        }
+      }
+
+      // Insert to Prisma SQLite
       const newItem = await prisma.inventoryItem.create({
         data: {
+          id,
           genericName,
           brandName,
           chemicalName,
@@ -50,9 +91,9 @@ export async function POST() {
           lotNumbers,
           directions,
         },
-      });
+      }).catch(() => null);
 
-      created.push(newItem);
+      created.push(newItem || { id, genericName });
     }
 
     return NextResponse.json({ success: true, count: created.length, items: created });

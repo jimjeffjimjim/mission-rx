@@ -1,11 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Supabase Cloud Real-Time Configuration
-// When these environment variables are populated with your Supabase credentials, 
-// Mission RX immediately activates real-time multi-device synchronization across all clinical devices.
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Supabase Cloud Real-Time & Cloud Database Configuration
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dqnkbolcssrbckqwmagv.supabase.co';
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxbmtib2xjc3NyYmNrcXdtYWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MjcxODksImV4cCI6MjEwMTEwMzE4OX0.HJ294vvn5WomiMAzhT_oUD137DQ19PPVDc-wMWFM1so';
 
 let supabaseInstance: SupabaseClient | null = null;
 
@@ -24,17 +24,14 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')) {
     });
     console.info('✅ Supabase Cloud Real-Time Multi-Device Sync Activated');
   } catch (error) {
-    console.warn('⚠️ Supabase Cloud initial connection failed (using serverless resilience fallback):', error);
+    console.warn('⚠️ Supabase Cloud connection fallback:', error);
   }
-} else {
-  console.info('ℹ️ Supabase credentials not detected. Operating in High-Performance Standalone Resilience Mode.');
 }
 
 export const supabase = supabaseInstance;
 
 /**
  * Subscribe to real-time inventory alterations across multiple hospital devices.
- * Trigger callback immediately when any nurse, pharmacist, or physician edits stock elsewhere.
  */
 export function subscribeToClinicalUpdates(onUpdate: () => void) {
   if (!supabase) return () => {};
@@ -42,11 +39,11 @@ export function subscribeToClinicalUpdates(onUpdate: () => void) {
   try {
     const channel = supabase
       .channel('public:inventory_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'InventoryItem' }, (payload: any) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, (payload: any) => {
         console.info('🔄 Real-Time Remote Clinical Update Received:', payload.eventType);
         onUpdate();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'DispenseLog' }, (payload: any) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispense_logs' }, (payload: any) => {
         console.info('📋 Real-Time Compliance Audit Log Entry Received');
         onUpdate();
       })

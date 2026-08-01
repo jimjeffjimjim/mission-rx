@@ -7,9 +7,7 @@ import {
   Plus, 
   Trash2, 
   Check, 
-  Sparkles, 
   RefreshCw,
-  Tag
 } from 'lucide-react';
 import { 
   CustomSpecialtyConfig, 
@@ -26,16 +24,26 @@ interface SpecialtyManagerModalProps {
 }
 
 const COLOR_OPTIONS = [
-  { id: 'sky', name: 'Sky Blue', bg: 'bg-sky-500' },
-  { id: 'teal', name: 'Teal Green', bg: 'bg-teal-500' },
-  { id: 'rose', name: 'Rose Red', bg: 'bg-rose-500' },
-  { id: 'cyan', name: 'Cyan', bg: 'bg-cyan-500' },
-  { id: 'pink', name: 'Pink', bg: 'bg-pink-500' },
-  { id: 'indigo', name: 'Indigo Purple', bg: 'bg-indigo-500' },
-  { id: 'purple', name: 'Purple', bg: 'bg-purple-500' },
-  { id: 'blue', name: 'Deep Blue', bg: 'bg-blue-500' },
-  { id: 'emerald', name: 'Emerald Green', bg: 'bg-emerald-500' },
+  { id: 'red', name: 'Crimson Red', bg: 'bg-red-500' },
+  { id: 'orange', name: 'Bright Orange', bg: 'bg-orange-500' },
   { id: 'amber', name: 'Amber Gold', bg: 'bg-amber-500' },
+  { id: 'yellow', name: 'Lemon Yellow', bg: 'bg-yellow-400' },
+  { id: 'lime', name: 'Lime Green', bg: 'bg-lime-500' },
+  { id: 'green', name: 'Forest Green', bg: 'bg-green-500' },
+  { id: 'emerald', name: 'Emerald Green', bg: 'bg-emerald-500' },
+  { id: 'teal', name: 'Medical Teal', bg: 'bg-teal-500' },
+  { id: 'cyan', name: 'Cyan', bg: 'bg-cyan-500' },
+  { id: 'sky', name: 'Sky Blue', bg: 'bg-sky-500' },
+  { id: 'blue', name: 'Royal Blue', bg: 'bg-blue-500' },
+  { id: 'indigo', name: 'Deep Indigo', bg: 'bg-indigo-500' },
+  { id: 'violet', name: 'Electric Violet', bg: 'bg-violet-500' },
+  { id: 'purple', name: 'Psychiatry Purple', bg: 'bg-purple-500' },
+  { id: 'fuchsia', name: 'Fuchsia', bg: 'bg-fuchsia-500' },
+  { id: 'pink', name: 'Dermatology Pink', bg: 'bg-pink-500' },
+  { id: 'rose', name: 'Cardiology Rose', bg: 'bg-rose-500' },
+  { id: 'slate', name: 'Slate Gray', bg: 'bg-slate-500' },
+  { id: 'zinc', name: 'Zinc Gray', bg: 'bg-zinc-600' },
+  { id: 'stone', name: 'Stone Neutral', bg: 'bg-stone-600' },
 ];
 
 export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUpdated }: SpecialtyManagerModalProps) {
@@ -89,7 +97,7 @@ export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 select-none">
-      <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl relative max-h-[85vh] flex flex-col">
+      <div className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full p-6 sm:p-7 shadow-2xl relative max-h-[88vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
@@ -97,9 +105,9 @@ export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUp
               <Palette className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900">Manage Specialties & Color Schemes</h2>
+              <h2 className="text-xl font-black text-slate-900">Manage Specialties & Expanded Color Palette</h2>
               <p className="text-xs text-slate-500 font-bold">
-                Customize clinic category labels, visual tags, and theme colors
+                Choose from 20+ color themes or add custom medical specialty categories
               </p>
             </div>
           </div>
@@ -116,39 +124,45 @@ export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUp
         {/* Form to Add New Specialty */}
         <div className="my-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
           <span className="text-xs font-black uppercase text-slate-700 tracking-wider block">Add Custom Specialty Category</span>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <input
-              type="text"
-              placeholder="e.g. Ophthalmology, Neurology..."
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="flex-1 min-h-[44px] px-3.5 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-hidden"
-            />
+          <div className="flex flex-col space-y-3">
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                placeholder="e.g. Ophthalmology, Neurology, Oncology..."
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="flex-1 min-h-[44px] px-3.5 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-hidden"
+              />
 
-            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-              {COLOR_OPTIONS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setNewColor(c.id)}
-                  className={`w-7 h-7 rounded-full ${c.bg} transition-all border-2 flex items-center justify-center shrink-0 ${
-                    newColor === c.id ? 'border-slate-900 scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
-                  }`}
-                  title={c.name}
-                >
-                  {newColor === c.id && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={handleAddSpecialty}
+                className="min-h-[44px] px-5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0"
+              >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Add Specialty</span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleAddSpecialty}
-              className="min-h-[44px] px-4 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Add Specialty</span>
-            </button>
+            {/* Color Palette Grid */}
+            <div>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Select Color Badge Accent:</span>
+              <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto p-1 bg-white border border-slate-200 rounded-xl">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setNewColor(c.id)}
+                    className={`w-7 h-7 rounded-full ${c.bg} transition-all border-2 flex items-center justify-center shrink-0 ${
+                      newColor === c.id ? 'border-slate-900 scale-110 shadow-md ring-2 ring-amber-400' : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}
+                    title={c.name}
+                  >
+                    {newColor === c.id && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -158,22 +172,22 @@ export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUp
             const scheme = buildSchemeForColor(spec.color, spec.name);
             return (
               <div key={spec.id} className="p-3.5 bg-white border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-xs uppercase ${scheme.badge}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`px-3 py-1 rounded-full text-xs uppercase shrink-0 ${scheme.badge}`}>
                     {spec.name}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Color Selector */}
-                  <div className="flex items-center gap-1">
+                  {/* Expanded Color Selector Swatches */}
+                  <div className="flex items-center gap-1 overflow-x-auto max-w-[280px] py-1 no-scrollbar">
                     {COLOR_OPTIONS.map((c) => (
                       <button
                         key={c.id}
                         type="button"
                         onClick={() => handleUpdateColor(spec.id, c.id)}
-                        className={`w-6 h-6 rounded-full ${c.bg} transition-all border ${
-                          spec.color === c.id ? 'border-slate-900 scale-110 shadow-xs' : 'border-transparent opacity-60 hover:opacity-100'
+                        className={`w-5 h-5 rounded-full ${c.bg} transition-all border shrink-0 ${
+                          spec.color === c.id ? 'border-slate-900 scale-125 ring-1 ring-amber-500 shadow-xs' : 'border-transparent opacity-60 hover:opacity-100'
                         }`}
                         title={c.name}
                       />
@@ -183,7 +197,7 @@ export default function SpecialtyManagerModal({ isOpen, onClose, onSpecialtiesUp
                   <button
                     type="button"
                     onClick={() => handleDelete(spec.id)}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
                     title="Delete Category"
                   >
                     <Trash2 className="w-4 h-4 stroke-[2.5]" />

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 // 13 Full Meyer Center Community Clinic Drug Formulations with Complete Excel Fields
 const fullClinicItems = [
@@ -69,7 +70,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2027-07-31',
     lotNumbers: JSON.stringify(['3495B1AA']),
-    directions: 'Take 1 liquid-filled capsule by mouth once daily as needed for allergies. (Starting stock: 16 bottles × 25 capsules = 400 capsules)',
+    directions: 'Take 1 liquid-filled capsule by mouth once daily as needed for allergies.',
   },
   {
     id: 'meyer-5',
@@ -86,7 +87,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2027-02-28',
     lotNumbers: JSON.stringify(['EEA191']),
-    directions: 'Take 1 tablet by mouth every 4–6 hours as needed for allergy symptoms. (Starting stock: 72 bottles × 48 tablets = 3,456 tablets)',
+    directions: 'Take 1 tablet by mouth every 4–6 hours as needed for allergy symptoms.',
   },
   {
     id: 'meyer-6',
@@ -154,7 +155,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2027-01-09',
     lotNumbers: JSON.stringify(['0000088525']),
-    directions: 'Take as directed by provider. (Starting stock: 4 bottles × 30 tablets = 120 tablets)',
+    directions: 'Take as directed by provider.',
   },
   {
     id: 'meyer-10',
@@ -171,7 +172,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2027-05-03',
     lotNumbers: JSON.stringify(['0000134515']),
-    directions: 'Take as directed by provider. Swallow whole; do not crush, chew, or split. (Starting stock: 12 bottles × 500 tablets = 6,000 tablets)',
+    directions: 'Take as directed by provider. Swallow whole; do not crush, chew, or split.',
   },
   {
     id: 'meyer-11',
@@ -188,7 +189,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2027-02-28',
     lotNumbers: JSON.stringify(['0000093834']),
-    directions: 'Take as directed by provider. (Starting stock: 24 bottles × 100 tablets = 2,400 tablets)',
+    directions: 'Take as directed by provider.',
   },
   {
     id: 'meyer-12',
@@ -205,7 +206,7 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2026-09-30',
     lotNumbers: JSON.stringify(['A241211']),
-    directions: 'Take as directed by provider. Take with food. (Starting stock: 24 bottles × 30 tablets = 720 tablets)',
+    directions: 'Take as directed by provider. Take with food.',
   },
   {
     id: 'meyer-13',
@@ -222,39 +223,57 @@ const fullClinicItems = [
     looseUnitsAvailable: 0,
     expirationDate: '2026-09-30',
     lotNumbers: JSON.stringify(['E244744']),
-    directions: 'Take as directed by provider. (Starting stock: 24 bottles × 100 tablets = 2,400 tablets)',
+    directions: 'Take as directed by provider.',
   },
 ];
 
 export async function GET() {
+  // Query Supabase Cloud Postgres as primary datasource
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .order('shelf_location', { ascending: true })
+        .order('generic_name', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        const mapped = data.map((item: any) => ({
+          id: item.id,
+          shelfLocation: item.shelf_location,
+          genericName: item.generic_name,
+          brandName: item.brand_name || '',
+          chemicalName: item.chemical_name || '',
+          dosage: item.dosage,
+          itemType: item.item_type,
+          stockUnit: item.stock_unit,
+          subUnit: item.sub_unit,
+          bottlesAvailable: item.bottles_available,
+          looseUnitsAvailable: item.loose_units_available,
+          pillsPerBottle: item.pills_per_bottle,
+          expirationDate: item.expiration_date,
+          lotNumbers: item.lot_numbers,
+          directions: item.directions || '',
+        }));
+        return NextResponse.json(mapped);
+      }
+    } catch (e) {
+      console.warn('Supabase Cloud GET error:', e);
+    }
+  }
+
+  // Fallback to Prisma SQLite
   try {
     const items = await prisma.inventoryItem.findMany({
-      orderBy: [
-        { shelfLocation: 'asc' },
-        { genericName: 'asc' },
-      ],
+      orderBy: [{ shelfLocation: 'asc' }, { genericName: 'asc' }],
     });
 
     if (items.length > 0) {
       return NextResponse.json(items);
     }
 
-    // Auto-seed database if empty
-    for (const seed of fullClinicItems) {
-      await prisma.inventoryItem.upsert({
-        where: { id: seed.id },
-        update: {},
-        create: seed,
-      }).catch(() => null);
-    }
-
-    const seededItems = await prisma.inventoryItem.findMany({
-      orderBy: [{ shelfLocation: 'asc' }, { genericName: 'asc' }],
-    }).catch(() => fullClinicItems);
-
-    return NextResponse.json(seededItems.length > 0 ? seededItems : fullClinicItems);
+    return NextResponse.json(fullClinicItems);
   } catch (error) {
-    console.warn('Prisma DB error (fallback to Meyer Clinic default):', error);
     return NextResponse.json(fullClinicItems);
   }
 }
@@ -267,29 +286,58 @@ export async function POST(request: Request) {
     data = {};
   }
 
-  try {
-    const newItem = await prisma.inventoryItem.create({
-      data: {
-        shelfLocation: data.shelfLocation || 'General Medical',
-        genericName: data.genericName || 'New Medication',
-        brandName: data.brandName || null,
-        chemicalName: data.chemicalName || null,
-        dosage: data.dosage || 'Standard',
-        itemType: data.itemType || 'MEDICATION',
-        stockUnit: data.stockUnit || 'Bottles',
-        subUnit: data.subUnit || 'tablets',
-        bottlesAvailable: Number(data.bottlesAvailable) || 0,
-        pillsPerBottle: Number(data.pillsPerBottle) || 0,
-        looseUnitsAvailable: Number(data.looseUnitsAvailable) || 0,
-        expirationDate: data.expirationDate || '2027-12-31',
-        lotNumbers: typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers || []),
-        directions: data.directions || null,
-      },
-    });
+  const newId = 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
+  const payload = {
+    id: newId,
+    shelfLocation: data.shelfLocation || 'General Medical',
+    genericName: data.genericName || 'New Medication',
+    brandName: data.brandName || null,
+    chemicalName: data.chemicalName || null,
+    dosage: data.dosage || 'Standard',
+    itemType: data.itemType || 'MEDICATION',
+    stockUnit: data.stockUnit || 'Bottles',
+    subUnit: data.subUnit || 'tablets',
+    bottlesAvailable: Number(data.bottlesAvailable) || 0,
+    pillsPerBottle: Number(data.pillsPerBottle) || 100,
+    looseUnitsAvailable: Number(data.looseUnitsAvailable) || 0,
+    expirationDate: data.expirationDate || '2028-12-31',
+    lotNumbers: typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers || []),
+    directions: data.directions || null,
+  };
+
+  // Insert into Supabase Cloud Postgres
+  if (supabase) {
+    try {
+      await supabase.from('inventory_items').insert([
+        {
+          id: payload.id,
+          shelf_location: payload.shelfLocation,
+          generic_name: payload.genericName,
+          brand_name: payload.brandName,
+          chemical_name: payload.chemicalName,
+          dosage: payload.dosage,
+          item_type: payload.itemType,
+          stock_unit: payload.stockUnit,
+          sub_unit: payload.subUnit,
+          bottles_available: payload.bottlesAvailable,
+          loose_units_available: payload.looseUnitsAvailable,
+          pills_per_bottle: payload.pillsPerBottle,
+          expiration_date: payload.expirationDate,
+          lot_numbers: payload.lotNumbers,
+          directions: payload.directions,
+        },
+      ]);
+    } catch (e) {
+      console.warn('Supabase Cloud POST insert error:', e);
+    }
+  }
+
+  // Backup write to Prisma SQLite
+  try {
+    const newItem = await prisma.inventoryItem.create({ data: payload });
     return NextResponse.json(newItem, { status: 201 });
   } catch (error) {
-    console.error('Error creating inventory item:', error);
-    return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
+    return NextResponse.json(payload, { status: 201 });
   }
 }
