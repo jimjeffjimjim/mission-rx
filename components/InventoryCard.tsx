@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InventoryItem, AuthRole } from '@/types/inventory';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
@@ -32,6 +32,18 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
   
   const [editingLoose, setEditingLoose] = useState(false);
   const [looseInput, setLooseInput] = useState(item.looseUnitsAvailable.toString());
+
+  useEffect(() => {
+    if (!editingBottles) {
+      setBottlesInput(item.bottlesAvailable.toString());
+    }
+  }, [item.bottlesAvailable, editingBottles]);
+
+  useEffect(() => {
+    if (!editingLoose) {
+      setLooseInput(item.looseUnitsAvailable.toString());
+    }
+  }, [item.looseUnitsAvailable, editingLoose]);
 
   // Dynamic Units of Measure (UOM)
   const containerLabel = item.stockUnit || 'Bottles';
@@ -211,7 +223,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
               <div className="flex items-center justify-between gap-1 mt-1">
                 <button
                   onClick={decrementBottles}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95"
+                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
                   title={`Decrement ${containerLabel}`}
                 >
                   <Minus className="w-5 h-5 stroke-[3]" />
@@ -233,7 +245,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
                       setBottlesInput(item.bottlesAvailable.toString());
                       setEditingBottles(true);
                     }}
-                    className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80"
+                    className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80 cursor-pointer"
                     title="Tap to type exact number"
                   >
                     {item.bottlesAvailable}
@@ -242,7 +254,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
 
                 <button
                   onClick={incrementBottles}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95"
+                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
                   title={`Increment ${containerLabel}`}
                 >
                   <Plus className="w-5 h-5 text-emerald-600 stroke-[3]" />
@@ -270,7 +282,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
               <div className="flex items-center justify-between gap-1 mt-1">
                 <button
                   onClick={decrementLoose}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95"
+                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
                   title={`Decrement ${subUnitLabel}`}
                 >
                   <Minus className="w-5 h-5 stroke-[3]" />
@@ -292,7 +304,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
                       setLooseInput(item.looseUnitsAvailable.toString());
                       setEditingLoose(true);
                     }}
-                    className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80"
+                    className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80 cursor-pointer"
                     title="Tap to type exact number"
                   >
                     {item.looseUnitsAvailable}
@@ -301,7 +313,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
 
                 <button
                   onClick={incrementLoose}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95"
+                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
                   title={`Increment ${subUnitLabel}`}
                 >
                   <Plus className="w-5 h-5 text-emerald-600 stroke-[3]" />
@@ -342,7 +354,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
           {role === 'ADMIN' && (
             <button
               onClick={() => onEditItem(item)}
-              className="w-full mt-1 min-h-[48px] bg-slate-100 hover:bg-amber-50 hover:border-amber-400 text-slate-800 hover:text-amber-900 font-black text-xs sm:text-sm rounded-2xl border border-slate-300 flex items-center justify-center gap-2 transition-all touch-manipulation shadow-2xs active:scale-[0.98] animate-fadeIn"
+              className="w-full mt-1 min-h-[48px] bg-slate-100 hover:bg-amber-50 hover:border-amber-400 text-slate-800 hover:text-amber-900 font-black text-xs sm:text-sm rounded-2xl border border-slate-300 flex items-center justify-center gap-2 transition-all touch-manipulation shadow-2xs active:scale-[0.98] animate-fadeIn cursor-pointer"
             >
               <Edit2 className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
               <span>Edit Medication Details & Lot History</span>

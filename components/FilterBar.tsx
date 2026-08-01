@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FilterCategory, StatusFilter } from '@/types/inventory';
-import { getSpecialtyColor } from '@/lib/specialtyColors';
+import { getSpecialtyColor, getCustomSpecialties } from '@/lib/specialtyColors';
 import { Search, AlertTriangle, Clock, X, ShieldAlert } from 'lucide-react';
 
 interface FilterBarProps {
@@ -15,20 +15,6 @@ interface FilterBarProps {
   itemCount: number;
 }
 
-const categories: { label: string; value: FilterCategory }[] = [
-  { label: 'All Specialties', value: 'ALL' },
-  { label: 'General Medical', value: 'General Medical' },
-  { label: 'Allergy & Asthma', value: 'Allergy & Asthma' },
-  { label: 'Cardiology', value: 'Cardiology' },
-  { label: 'Dental', value: 'Dental' },
-  { label: 'Dermatology', value: 'Dermatology' },
-  { label: 'Orthopedics', value: 'Orthopedics' },
-  { label: 'Psychiatry', value: 'Psychiatry' },
-  { label: 'Pulmonology', value: 'Pulmonology' },
-  { label: 'Over-The-Counter (OTC)', value: 'Over-The-Counter (OTC)' },
-  { label: 'Supplies', value: 'Supplies' },
-];
-
 export default function FilterBar({
   searchQuery,
   onSearchChange,
@@ -38,10 +24,23 @@ export default function FilterBar({
   onStatusChange,
   itemCount,
 }: FilterBarProps) {
+  const [categories, setCategories] = useState<{ label: string; value: FilterCategory }[]>([
+    { label: 'All Specialties', value: 'ALL' },
+  ]);
+
+  useEffect(() => {
+    const custom = getCustomSpecialties();
+    const dynamicCats = [
+      { label: 'All Specialties', value: 'ALL' as FilterCategory },
+      ...custom.map((c) => ({ label: c.name, value: c.name as FilterCategory })),
+    ];
+    setCategories(dynamicCats);
+  }, [selectedCategory]);
+
   return (
     <section className="bg-slate-100/95 border-b border-slate-200 px-4 py-3 space-y-3 sticky top-[69px] z-30 backdrop-blur-md transition-all shadow-xs select-none">
       <div className="max-w-7xl mx-auto space-y-3">
-        {/* Search Bar & Status Alert Filters (Hybrid Desktop / Mobile Layout) */}
+        {/* Search Bar & Status Alert Filters */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none stroke-[2.5]" />
@@ -103,7 +102,7 @@ export default function FilterBar({
           </div>
         </div>
 
-        {/* 10 Color-Coded Category Navigation Pills */}
+        {/* Dynamic Color-Coded Category Navigation Pills */}
         <div className="flex items-center justify-between gap-4 pt-1.5 border-t border-slate-200/80">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0 hidden sm:inline">Categories:</span>
