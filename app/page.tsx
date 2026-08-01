@@ -313,6 +313,7 @@ export default function Home() {
             onOpenCreateModal={openCreateModal}
             onSwitchToDoctorView={() => setRole('STAFF')}
             onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+            onRefreshData={fetchInventory}
           />
         </div>
       ) : (

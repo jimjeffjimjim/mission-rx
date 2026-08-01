@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AuthRole } from '@/types/inventory';
-import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft, ToggleRight, Zap } from 'lucide-react';
+import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft, ToggleRight, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   currentRole: AuthRole;
@@ -49,6 +49,15 @@ export default function Header({
     }
   };
 
+  const handleExitAdmin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+    onSwitchRole('STAFF');
+  };
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 sm:px-6 transition-all shadow-xs select-none max-w-full overflow-x-hidden">
@@ -64,7 +73,7 @@ export default function Header({
                 {currentRole === 'ADMIN' ? (
                   <span className="text-[10px] sm:text-xs font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1 shrink-0">
                     <LayoutDashboard className="w-3 h-3 text-amber-700" />
-                    Admin
+                    Admin Portal
                   </span>
                 ) : (
                   <span className="text-[10px] sm:text-xs font-extrabold uppercase bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full shadow-2xs shrink-0">
@@ -123,14 +132,10 @@ export default function Header({
 
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onSwitchRole('STAFF');
-                  }}
-                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-md bg-amber-500 text-slate-950 border-amber-600 hover:bg-amber-400 cursor-pointer"
+                  onClick={handleExitAdmin}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-md bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-600 cursor-pointer"
                 >
-                  <User className="w-4 h-4 text-slate-950 shrink-0 stroke-[2.5]" />
+                  <LogOut className="w-4 h-4 text-slate-950 shrink-0 stroke-[2.5]" />
                   <span>Exit Admin</span>
                 </button>
               </>

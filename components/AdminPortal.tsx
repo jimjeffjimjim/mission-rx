@@ -10,16 +10,19 @@ import {
   Trash2, 
   Search, 
   ShieldCheck, 
-  UserCheck, 
   BarChart3, 
   Table, 
   TrendingDown, 
   TrendingUp, 
   Calendar, 
   RefreshCw,
-  Activity
+  Activity,
+  FileSpreadsheet,
+  Palette
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
+import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
+import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
 interface AdminPortalProps {
   items: InventoryItem[];
@@ -29,6 +32,7 @@ interface AdminPortalProps {
   onOpenCreateModal: () => void;
   onSwitchToDoctorView: () => void;
   onOpenAuditLogs?: () => void;
+  onRefreshData?: () => void;
 }
 
 export default function AdminPortal({
@@ -39,10 +43,15 @@ export default function AdminPortal({
   onOpenCreateModal,
   onSwitchToDoctorView,
   onOpenAuditLogs,
+  onRefreshData,
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
+
+  // Modals state
+  const [isSpecialtyModalOpen, setIsSpecialtyModalOpen] = useState(false);
+  const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
 
   // Analytics State
   const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('week');
@@ -115,15 +124,6 @@ export default function AdminPortal({
 
   const maxDispensed = topDispensed.length > 0 ? topDispensed[0].totalDispensed : 1;
 
-  const handleExitAdmin = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
-    onSwitchToDoctorView();
-  };
-
   return (
     <div className="space-y-6 pb-16 select-none max-w-full overflow-x-hidden">
       {/* Admin Portal Banner Header */}
@@ -133,7 +133,7 @@ export default function AdminPortal({
         </div>
 
         <div className="relative z-10 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-2xl bg-slate-950 text-amber-400 shadow-md shrink-0">
                 <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5]" />
@@ -148,35 +148,45 @@ export default function AdminPortal({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSpreadsheetModalOpen(true)}
+                className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-teal-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-teal-400/30 cursor-pointer"
+                title="Import from Excel/CSV spreadsheet"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-teal-400 stroke-[2.5]" />
+                <span>Import Spreadsheet</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSpecialtyModalOpen(true)}
+                className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-purple-300 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-purple-400/30 cursor-pointer"
+                title="Edit specialties and badge colors"
+              >
+                <Palette className="w-4 h-4 text-purple-300 stroke-[2.5]" />
+                <span>Specialties & Colors</span>
+              </button>
+
               {onOpenAuditLogs && (
                 <button
                   type="button"
                   onClick={onOpenAuditLogs}
-                  className="min-h-[48px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-400/30 cursor-pointer"
+                  className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-400/30 cursor-pointer"
                 >
                   <Activity className="w-4 h-4 text-amber-400 stroke-[2.5]" />
-                  <span>Compliance Audit Logs</span>
+                  <span>Audit Logs</span>
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={onOpenCreateModal}
-                className="min-h-[48px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
+                className="min-h-[44px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
                 <span>Add Medication</span>
-              </button>
-
-              {/* Exit Admin Portal Button */}
-              <button
-                type="button"
-                onClick={handleExitAdmin}
-                className="min-h-[48px] px-4 bg-white/90 hover:bg-white text-slate-900 font-extrabold text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
-              >
-                <UserCheck className="w-4 h-4 stroke-[2.5]" />
-                <span>Exit Admin Portal</span>
               </button>
             </div>
           </div>
@@ -504,88 +514,24 @@ export default function AdminPortal({
               </div>
             )}
           </div>
-
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-200">
-                  <Activity className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">Dispense & Restock Audit History</h3>
-                  <p className="text-xs text-slate-500 font-medium">Automatic real-time log of stock movements</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs">
-              <table className="w-full text-left border-collapse bg-white">
-                <thead>
-                  <tr className="bg-slate-100/90 text-slate-700 text-xs font-black uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4">Timestamp</th>
-                    <th className="py-3 px-4">Action Type</th>
-                    <th className="py-3 px-4">Formulation Name</th>
-                    <th className="py-3 px-4 text-center">Quantity Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-sm font-medium">
-                  {analyticsLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-10 text-center text-slate-400 text-xs font-bold">
-                        No transactions logged for this timeframe.
-                      </td>
-                    </tr>
-                  ) : (
-                    analyticsLogs.map((log) => {
-                      const isDispense = log.actionType === 'DISPENSE' || log.quantityChanged < 0;
-
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-4 font-mono text-xs font-bold text-slate-600 whitespace-nowrap">
-                            {new Date(log.createdAt).toLocaleString()}
-                          </td>
-
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black border ${
-                                isDispense
-                                  ? 'bg-rose-50 text-rose-700 border-rose-300'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                              }`}
-                            >
-                              {isDispense ? (
-                                <>
-                                  <TrendingDown className="w-3.5 h-3.5 stroke-[2.5]" />
-                                  <span>Dispensed</span>
-                                </>
-                              ) : (
-                                <>
-                                  <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
-                                  <span>Restocked</span>
-                                </>
-                              )}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-4 font-bold text-slate-900 select-text">
-                            {log.itemGenericName}
-                          </td>
-
-                          <td className="py-3 px-4 text-center font-mono font-black">
-                            <span className={isDispense ? 'text-rose-600' : 'text-emerald-600'}>
-                              {log.quantityChanged > 0 ? `+${log.quantityChanged}` : log.quantityChanged}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
+
+      {/* Specialty Manager Modal */}
+      <SpecialtyManagerModal
+        isOpen={isSpecialtyModalOpen}
+        onClose={() => setIsSpecialtyModalOpen(false)}
+        onSpecialtiesUpdated={onRefreshData}
+      />
+
+      {/* Spreadsheet Importer Modal */}
+      <SpreadsheetImportModal
+        isOpen={isSpreadsheetModalOpen}
+        onClose={() => setIsSpreadsheetModalOpen(false)}
+        onImportComplete={() => {
+          if (onRefreshData) onRefreshData();
+        }}
+      />
     </div>
   );
 }

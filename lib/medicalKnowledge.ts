@@ -56,6 +56,39 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     contraindications: 'May cause severe sedation. Avoid operating machinery. Caution in patients with narrow-angle glaucoma or urinary retention.'
   },
   {
+    genericName: 'Lisinopril',
+    brandName: 'Zestril / Prinivil',
+    chemicalName: 'ACE Inhibitor',
+    category: 'Cardiology',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily.',
+    contraindications: 'Contraindicated in pregnancy and patients with a history of angioedema related to previous ACE inhibitor treatment.'
+  },
+  {
+    genericName: 'Atorvastatin Calcium',
+    brandName: 'Lipitor',
+    chemicalName: 'HMG-CoA Reductase Inhibitor (Statin)',
+    category: 'Cardiology',
+    defaultDosage: '20 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth daily in the evening.',
+    contraindications: 'Active liver disease or unexplained persistent elevations of serum transaminases. Avoid in pregnancy/nursing.'
+  },
+  {
+    genericName: 'Metoprolol Succinate',
+    brandName: 'Toprol XL',
+    chemicalName: 'Beta-1 Selective Beta Blocker',
+    category: 'Cardiology',
+    defaultDosage: '50 mg Extended-Release Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily with or immediately after a meal.',
+    contraindications: 'Severe bradycardia, second- or third-degree heart block, overt heart failure, or cardiogenic shock.'
+  },
+  {
     genericName: 'Aripiprazole',
     brandName: 'Abilify',
     chemicalName: 'Atypical Antipsychotic (D2 Partial Agonist)',
@@ -64,7 +97,7 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
     typicalDirections: 'Take as directed by provider. Take at the same time each day.',
-    contraindications: 'Black Box Warning: Increased risk of suicidal thinking and behavior in young adults. Monitor for metabolic symptoms and tardive dyskinesia.'
+    contraindications: 'Black Box Warning: Increased risk of suicidal thinking and behavior in young adults.'
   },
   {
     genericName: 'Bupropion HCl SR',
@@ -75,7 +108,7 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
     typicalDirections: 'Take as directed by provider. Swallow whole; do not crush, chew, or split.',
-    contraindications: 'Contraindicated in patients with seizure disorders, bulimia or anorexia nervosa, or abrupt discontinuation of alcohol or benzodiazepines.'
+    contraindications: 'Contraindicated in patients with seizure disorders, bulimia or anorexia nervosa.'
   },
   {
     genericName: 'Escitalopram',
@@ -86,7 +119,7 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
     typicalDirections: 'Take as directed by provider.',
-    contraindications: 'Contraindicated with concomitant MAOI use or within 14 days of MAOI discontinuation. Monitor for serotonin syndrome.'
+    contraindications: 'Contraindicated with concomitant MAOI use or within 14 days of MAOI discontinuation.'
   },
   {
     genericName: 'Lurasidone HCl',
@@ -97,7 +130,7 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
     typicalDirections: 'Take as directed by provider. Take with food (at least 350 calories).',
-    contraindications: 'Contraindicated with strong CYP3A4 inhibitors (e.g., ketoconazole) and strong CYP3A4 inducers (e.g., rifampin, St. John\'s Wort).'
+    contraindications: 'Contraindicated with strong CYP3A4 inhibitors (e.g., ketoconazole) and inducers (e.g., rifampin).'
   },
   {
     genericName: 'Quetiapine Fumarate',
@@ -108,7 +141,7 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
     typicalDirections: 'Take as directed by provider.',
-    contraindications: 'May cause sedation, orthostatic hypotension, and metabolic changes. Monitor HbA1c and lipid panel periodically.'
+    contraindications: 'May cause sedation, orthostatic hypotension, and metabolic changes.'
   },
   {
     genericName: 'Amoxicillin',
@@ -119,18 +152,18 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultUnit: 'Bottles',
     defaultSubUnit: 'capsules',
     typicalDirections: 'Take 1 capsule by mouth three times daily (every 8 hours) until all medication is gone.',
-    contraindications: 'Strictly contraindicated in patients with known severe penicillin or beta-lactam hypersensitivity/anaphylaxis.'
+    contraindications: 'Strictly contraindicated in patients with known severe penicillin hypersensitivity.'
   },
   {
     genericName: 'Amoxicillin/Clavulanic Acid',
     brandName: 'Augmentin',
-    chemicalName: 'Beta-Lactam Penicillin Antibiotic + Beta-Lactamase Inhibitor',
+    chemicalName: 'Penicillin Antibiotic + Beta-Lactamase Inhibitor',
     category: 'General Medical',
     defaultDosage: '875/125 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 12 hours with meal or snack to prevent GI discomfort.',
-    contraindications: 'History of penicillin allergy or cholestatic jaundice/hepatic malfunction associated with amoxicillin-clavulanate.'
+    typicalDirections: 'Take 1 tablet by mouth every 12 hours with meal or snack.',
+    contraindications: 'History of penicillin allergy or cholestatic jaundice associated with amoxicillin-clavulanate.'
   },
   {
     genericName: 'Ciprofloxacin HCl',
@@ -140,19 +173,19 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultDosage: '500 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 12 hours with plenty of water. Separate from calcium/magnesium antacids or dairy.',
-    contraindications: 'Black Box Warning: Increased risk of tendonitis and tendon rupture, peripheral neuropathy, and CNS effects.'
+    typicalDirections: 'Take 1 tablet by mouth every 12 hours with plenty of water.',
+    contraindications: 'Black Box Warning: Increased risk of tendonitis and tendon rupture.'
   },
   {
     genericName: 'Doxycycline Hyclate',
-    brandName: 'Vibramycin / Vibra-Tabs',
+    brandName: 'Vibramycin',
     chemicalName: 'Tetracycline Class Broad-Spectrum Antibiotic',
     category: 'General Medical',
     defaultDosage: '100 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth twice daily with full glass of water. Remain upright for at least 30 minutes after dosing.',
-    contraindications: 'Avoid in pregnancy, lactation, and children under 8 years due to permanent tooth discoloration and bone inhibition.'
+    typicalDirections: 'Take 1 tablet by mouth twice daily with full glass of water. Remain upright for 30 mins.',
+    contraindications: 'Avoid in pregnancy, lactation, and children under 8 years due to permanent tooth discoloration.'
   },
   {
     genericName: 'Epinephrine Injectable',
@@ -162,30 +195,30 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultDosage: '1 mg/ml Auto-Injector (0.3 mg dose)',
     defaultUnit: 'Vials',
     defaultSubUnit: 'injectors',
-    typicalDirections: 'Inject intramuscularly directly into anterolateral thigh immediately upon onset of acute systemic allergic response / anaphylaxis.',
-    contraindications: 'No definitive absolute contraindications during life-threatening anaphylaxis. Use caution with concurrent cardiothoracic stressors.'
+    typicalDirections: 'Inject IM directly into outer thigh immediately upon acute systemic allergic response.',
+    contraindications: 'No absolute contraindications in life-threatening anaphylaxis.'
   },
   {
     genericName: 'Albuterol Sulfate Inhaler',
     brandName: 'ProAir HFA / Ventolin HFA',
     chemicalName: 'Short-Acting Beta2-Agonist (SABA)',
     category: 'Allergy & Asthma',
-    defaultDosage: '90 mcg / actuation (200 inhalations)',
+    defaultDosage: '90 mcg / actuation',
     defaultUnit: 'Canisters',
     defaultSubUnit: 'inhalers',
     typicalDirections: 'Inhale 1-2 puffs by mouth every 4-6 hours as needed for bronchospasm or wheezing.',
-    contraindications: 'Hypersensitivity to albuterol or milk proteins (for dry powder formulations). May induce reflex tachycardia.'
+    contraindications: 'Hypersensitivity to albuterol or milk proteins.'
   },
   {
     genericName: 'Ibuprofen',
     brandName: 'Advil / Motrin',
-    chemicalName: 'Nonsteroidal Anti-Inflammatory Drug (NSAID)',
+    chemicalName: 'NSAID Anti-Inflammatory',
     category: 'Over-The-Counter (OTC)',
     defaultDosage: '200 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1-2 tablets by mouth every 4-6 hours with food as needed for pain or fever (Maximum 1,200 mg/day OTC).',
-    contraindications: 'Avoid in active peptic ulcer disease, acute renal injury, severe uncontrolled hypertension, or third-trimester pregnancy.'
+    typicalDirections: 'Take 1-2 tablets by mouth every 4-6 hours with food as needed for pain or fever.',
+    contraindications: 'Avoid in active peptic ulcer disease, acute renal injury, or third-trimester pregnancy.'
   },
   {
     genericName: 'Hydrocortisone Ointment',
@@ -195,52 +228,8 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultDosage: '1% Ointment',
     defaultUnit: 'Tubes',
     defaultSubUnit: 'tubes',
-    typicalDirections: 'Apply sparingly to affected skin up to 3-4 times daily for mild pruritus or inflammation.',
-    contraindications: 'Do not use on undiagnosed bacterial, fungal, or viral skin infection without proper concomitant antimicrobial therapy.'
-  },
-  {
-    genericName: 'Clindamycin HCl',
-    brandName: 'Cleocin',
-    chemicalName: 'Lincosamide Antibiotic',
-    category: 'General Medical',
-    defaultDosage: '300 mg Capsule',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'capsules',
-    typicalDirections: 'Take 1 capsule by mouth every 6 hours with a full glass of water.',
-    contraindications: 'Black Box Warning: Associated with severe pseudomammous colitis caused by Clostridioides difficile. Discontinue immediately if persistent diarrhea occurs.'
-  },
-  {
-    genericName: 'Fluconazole',
-    brandName: 'Diflucan',
-    chemicalName: 'Triazole Antifungal Agent',
-    category: 'General Medical',
-    defaultDosage: '150 mg Oral Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth as a single dose for uncomplicated candidiasis.',
-    contraindications: 'Contraindicated with medications known to prolong QTc interval that are metabolized by CYP3A4 (e.g., quinidine, pimozide, erythromycin).'
-  },
-  {
-    genericName: 'Cefazolin Sodium',
-    brandName: 'Ancef / Kefazol',
-    chemicalName: 'First-Generation Cephalosporin Antibiotic',
-    category: 'General Medical',
-    defaultDosage: '1 g Powder for Injection',
-    defaultUnit: 'Vials',
-    defaultSubUnit: 'vials',
-    typicalDirections: 'Reconstitute and administer intravenously or intramuscularly as directed by clinical protocol.',
-    contraindications: 'Known severe immediate hypersensitivity (e.g., anaphylaxis) to cephalosporin antibiotics or severe penicillin reactions.'
-  },
-  {
-    genericName: 'Ceftriaxone Sodium',
-    brandName: 'Rocephin',
-    chemicalName: 'Third-Generation Cephalosporin Antibiotic',
-    category: 'General Medical',
-    defaultDosage: '250 mg Powder for Injection',
-    defaultUnit: 'Vials',
-    defaultSubUnit: 'vials',
-    typicalDirections: 'Reconstitute and inject intramuscularly or intravenously as directed by clinical protocol.',
-    contraindications: 'Contraindicated in hyperbilirubinemic neonates and with concomitant IV calcium administration due to risk of precipitation.'
+    typicalDirections: 'Apply sparingly to affected skin up to 3-4 times daily.',
+    contraindications: 'Do not use on undiagnosed bacterial, fungal, or viral skin infection.'
   }
 ];
 
@@ -263,4 +252,59 @@ export function getExactMedicalMatch(name: string): MedicalDrugEntry | undefined
       item.genericName.toLowerCase() === normalized ||
       item.brandName.toLowerCase() === normalized
   );
+}
+
+/**
+ * Quizlet & Flashcard Parser Helper
+ * Accepts raw Quizlet term/definition text, tab-delimited flashcard exports, or study lines.
+ * Examples:
+ *   "Lisinopril - 10 mg Tablet - Cardiology - Take 1 tablet daily"
+ *   "Lipitor\tAtorvastatin 20mg - Cardiology - 1 tab daily"
+ */
+export function parseQuizletText(text: string): Partial<MedicalDrugEntry> {
+  if (!text || !text.trim()) return {};
+  const cleaned = text.trim();
+
+  // Try tab-delimited Quizlet export format (Term \t Definition)
+  if (cleaned.includes('\t')) {
+    const parts = cleaned.split('\t').map((p) => p.trim()).filter(Boolean);
+    const term = parts[0] || '';
+    const def = parts.slice(1).join(' - ');
+
+    const match = searchMedicalKnowledge(term)[0] || searchMedicalKnowledge(def)[0];
+    if (match) {
+      return { ...match, typicalDirections: def || match.typicalDirections };
+    }
+
+    return {
+      genericName: term,
+      typicalDirections: def,
+    };
+  }
+
+  // Try dash-separated or colon-separated Quizlet flashcard text
+  const separators = [' - ', ' – ', ' : ', ':', '-'];
+  for (const sep of separators) {
+    if (cleaned.includes(sep)) {
+      const parts = cleaned.split(sep).map((p) => p.trim()).filter(Boolean);
+      const mainName = parts[0];
+      const match = searchMedicalKnowledge(mainName)[0];
+      if (match) {
+        return {
+          ...match,
+          typicalDirections: parts.slice(1).join(' | ') || match.typicalDirections,
+        };
+      }
+      return {
+        genericName: mainName,
+        typicalDirections: parts.slice(1).join(' | '),
+      };
+    }
+  }
+
+  // Fallback: search dictionary directly
+  const directMatch = searchMedicalKnowledge(cleaned)[0];
+  if (directMatch) return directMatch;
+
+  return { genericName: cleaned };
 }
