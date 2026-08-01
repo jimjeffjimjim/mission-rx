@@ -28,50 +28,77 @@ export async function POST(request: Request) {
       const lotNumbers = typeof itemData.lotNumbers === 'string' ? itemData.lotNumbers : JSON.stringify(itemData.lotNumbers || []);
       const directions = itemData.directions || '';
 
-      const newItem = await prisma.inventoryItem.create({
-        data: {
-          genericName,
-          brandName,
-          chemicalName,
-          dosage,
-          itemType,
-          shelfLocation,
-          stockUnit,
-          subUnit,
-          bottlesAvailable,
-          looseUnitsAvailable,
-          pillsPerBottle,
-          expirationDate,
-          lotNumbers,
-          directions,
-        },
-      });
+      const id = 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
-      // Mirror to Supabase cloud if active
+      // 1. Mirror to Supabase cloud first if active
       if (supabase) {
         try {
           await supabase.from('inventory_items').insert([
             {
-              id: newItem.id,
-              generic_name: newItem.genericName,
-              brand_name: newItem.brandName,
-              chemical_name: newItem.chemicalName,
-              dosage: newItem.dosage,
-              item_type: newItem.itemType,
-              shelf_location: newItem.shelfLocation,
-              stock_unit: newItem.stockUnit,
-              sub_unit: newItem.subUnit,
-              bottles_available: newItem.bottlesAvailable,
-              loose_units_available: newItem.looseUnitsAvailable,
-              pills_per_bottle: newItem.pillsPerBottle,
-              expiration_date: newItem.expirationDate,
-              lot_numbers: newItem.lotNumbers,
-              directions: newItem.directions,
+              id,
+              generic_name: genericName,
+              brand_name: brandName || null,
+              chemical_name: chemicalName || null,
+              dosage,
+              item_type: itemType,
+              shelf_location: shelfLocation,
+              stock_unit: stockUnit,
+              sub_unit: subUnit,
+              bottles_available: bottlesAvailable,
+              loose_units_available: looseUnitsAvailable,
+              pills_per_bottle: pillsPerBottle,
+              expiration_date: expirationDate,
+              lot_numbers: lotNumbers,
+              directions: directions || null,
             },
           ]);
         } catch (e) {
           console.warn('Supabase bulk sync warning:', e);
         }
+      }
+
+      // 2. Local SQLite backup
+      let newItem: any = {
+        id,
+        genericName,
+        brandName,
+        chemicalName,
+        dosage,
+        itemType,
+        shelfLocation,
+        stockUnit,
+        subUnit,
+        bottlesAvailable,
+        looseUnitsAvailable,
+        pillsPerBottle,
+        expirationDate,
+        lotNumbers,
+        directions,
+      };
+
+      try {
+        const dbItem = await prisma.inventoryItem.create({
+          data: {
+            id,
+            genericName,
+            brandName,
+            chemicalName,
+            dosage,
+            itemType,
+            shelfLocation,
+            stockUnit,
+            subUnit,
+            bottlesAvailable,
+            looseUnitsAvailable,
+            pillsPerBottle,
+            expirationDate,
+            lotNumbers,
+            directions,
+          },
+        });
+        if (dbItem) newItem = dbItem;
+      } catch (e) {
+        // Expected on serverless without SQLite write access
       }
 
       createdItems.push(newItem);

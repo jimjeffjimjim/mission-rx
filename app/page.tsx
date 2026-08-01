@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { InventoryItem, AuthRole, FilterCategory, StatusFilter } from '@/types/inventory';
 import AuthGate from '@/components/AuthGate';
 import Header from '@/components/Header';
@@ -31,6 +31,12 @@ export default function Home() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
+
+  // Interaction resilience refs for rapid clicking & network debouncing
+  const isUpdatingStockRef = useRef(false);
+  const stockUpdateTimersRef = useRef<{ [id: string]: any }>({});
+  const lockResetTimerRef = useRef<any>(null);
+  const isProcessingQueueRef = useRef(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -72,6 +78,51 @@ export default function Home() {
     }
   };
 
+  // Process pending audit logs sequentially to prevent dropping events during rapid clicking
+  const processAuditQueue = async () => {
+    if (isProcessingQueueRef.current || typeof window === 'undefined') return;
+    const rawQueue = localStorage.getItem('mission_rx_audit_queue');
+    if (!rawQueue) return;
+
+    let queue: any[] = [];
+    try {
+      queue = JSON.parse(rawQueue);
+    } catch (e) {
+      localStorage.removeItem('mission_rx_audit_queue');
+      return;
+    }
+
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    isProcessingQueueRef.current = true;
+    while (queue.length > 0) {
+      const currentLog = queue[0];
+      try {
+        const res = await fetch('/api/logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentLog),
+        });
+        if (res.ok || (res.status !== 500 && res.status !== 504)) {
+          // Remove successfully sent or permanently invalid log from queue
+          queue.shift();
+          localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
+        } else {
+          break;
+        }
+      } catch (err) {
+        // Network offline or temporary interruption; retry in next loop
+        break;
+      }
+    }
+    isProcessingQueueRef.current = false;
+  };
+
+  useEffect(() => {
+    const queueTimer = setInterval(processAuditQueue, 600);
+    return () => clearInterval(queueTimer);
+  }, []);
+
   // Fetch inventory from API
   const fetchInventory = async () => {
     setLoading(true);
@@ -92,14 +143,17 @@ export default function Home() {
   useEffect(() => {
     fetchInventory();
     const unsubscribe = subscribeToClinicalUpdates(() => {
-      fetchInventory();
+      // Do not fetch and overwrite local state if the user is actively making rapid edits
+      if (!isUpdatingStockRef.current) {
+        fetchInventory();
+      }
     });
     return () => {
       unsubscribe();
     };
   }, []);
 
-  // Helper to record clinical transaction logs instantly
+  // Helper to record clinical transaction logs into persistent queue instantly
   const recordAuditLog = (logData: {
     itemId: string;
     itemGenericName: string;
@@ -107,18 +161,38 @@ export default function Home() {
     actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
     details: string;
   }) => {
-    fetch('/api/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...logData,
-        userRole: role === 'LOCKED' ? 'STAFF' : role,
-      }),
-    }).catch((e) => console.warn('Audit log write error:', e));
+    if (typeof window === 'undefined') return;
+    const payload = {
+      ...logData,
+      userRole: role === 'LOCKED' ? 'STAFF' : role,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const rawQueue = localStorage.getItem('mission_rx_audit_queue');
+      const queue = rawQueue ? JSON.parse(rawQueue) : [];
+      queue.push(payload);
+      localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
+      setTimeout(processAuditQueue, 10);
+    } catch (e) {
+      // Fallback direct network transmission if storage fails
+      fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch((err) => console.warn('Audit log direct write error:', err));
+    }
   };
 
-  // Rapid Optimistic stock updates with Instant Audit Logging & Local Cache Backup
+  // Rapid Optimistic stock updates with Debounced DB Sync & Instant Audit Queueing
   const handleUpdateStock = (id: string, newBottles: number, newLoose: number) => {
+    // Lock real-time subscription refreshes during active user interactions
+    isUpdatingStockRef.current = true;
+    if (lockResetTimerRef.current) clearTimeout(lockResetTimerRef.current);
+    lockResetTimerRef.current = setTimeout(() => {
+      isUpdatingStockRef.current = false;
+    }, 2500);
+
     setItems((prev) => {
       const target = prev.find((i) => i.id === id);
       if (target) {
@@ -150,12 +224,19 @@ export default function Home() {
       return updated;
     });
 
-    // Sync database asynchronously
-    fetch(`/api/inventory/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }),
-    }).catch((e) => console.error('Failed to sync stock update', e));
+    // Debounce database sync by 400ms to eliminate out-of-order network race conditions during rapid clicking
+    if (stockUpdateTimersRef.current[id]) {
+      clearTimeout(stockUpdateTimersRef.current[id]);
+    }
+
+    stockUpdateTimersRef.current[id] = setTimeout(() => {
+      fetch(`/api/inventory/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }),
+      }).catch((e) => console.error('Failed to sync stock update', e));
+      delete stockUpdateTimersRef.current[id];
+    }, 400);
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {

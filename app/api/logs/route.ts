@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 import { DispenseLog } from '@/types/inventory';
 
 let logsFallbackCache: DispenseLog[] = [
@@ -37,13 +38,48 @@ let logsFallbackCache: DispenseLog[] = [
 
 export async function GET() {
   try {
+    // 1. Prioritize Supabase Cloud Postgres
+    if (supabase) {
+      try {
+        const { data: cloudLogs, error } = await supabase
+          .from('dispense_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
+
+        if (cloudLogs && !error && cloudLogs.length > 0) {
+          const mapped: DispenseLog[] = cloudLogs.map((l: any) => ({
+            id: l.id,
+            itemId: l.item_id || 'unknown',
+            itemGenericName: l.item_generic_name || 'Medication Transaction Record',
+            quantityChanged: Number(l.quantity_changed) || 0,
+            actionType: l.action_type || 'DISPENSE',
+            userRole: l.user_role || 'STAFF',
+            details: l.details || 'Clinical inventory adjustment logged.',
+            createdAt: l.created_at || new Date().toISOString(),
+          }));
+
+          const map = new Map<string, DispenseLog>();
+          [...mapped, ...logsFallbackCache].forEach((item) => map.set(item.id, item));
+          return NextResponse.json(
+            Array.from(map.values()).sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )
+          );
+        }
+      } catch (cloudErr) {
+        console.warn('Supabase fetch logs warning:', cloudErr);
+      }
+    }
+
+    // 2. Fallback to local SQLite database if cloud unreachable
     const logs = await prisma.dispenseLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 500,
-    });
+    }).catch(() => []);
 
     if (logs.length > 0) {
-      const dbLogs = logs.map((l) => ({
+      const dbLogs: DispenseLog[] = logs.map((l) => ({
         id: l.id,
         itemId: l.itemId,
         itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
@@ -54,7 +90,6 @@ export async function GET() {
         createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
       }));
 
-      // Combine with memory logs avoiding duplicate IDs
       const map = new Map<string, DispenseLog>();
       [...logsFallbackCache, ...dbLogs].forEach((item) => map.set(item.id, item));
       const merged = Array.from(map.values()).sort(
@@ -91,6 +126,27 @@ export async function POST(request: Request) {
 
   logsFallbackCache.unshift(newLog);
 
+  // 1. Supabase Cloud Postgres Insertion (First)
+  if (supabase) {
+    try {
+      await supabase.from('dispense_logs').insert([
+        {
+          id: newLog.id,
+          item_id: newLog.itemId,
+          item_generic_name: newLog.itemGenericName,
+          quantity_changed: newLog.quantityChanged,
+          action_type: newLog.actionType,
+          user_role: newLog.userRole,
+          details: newLog.details,
+          created_at: newLog.createdAt,
+        },
+      ]);
+    } catch (cloudErr) {
+      console.warn('Failed saving audit log to Supabase:', cloudErr);
+    }
+  }
+
+  // 2. Prisma SQLite local backup
   try {
     await prisma.dispenseLog.create({
       data: {
@@ -100,7 +156,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    // Save to runtime cache
+    // Expected on read-only serverless platforms
   }
 
   return NextResponse.json(newLog, { status: 201 });
@@ -108,10 +164,22 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
   logsFallbackCache = [];
+
+  // 1. Clear Supabase Cloud Postgres table
+  if (supabase) {
+    try {
+      await supabase.from('dispense_logs').delete().neq('id', 'none');
+    } catch (cloudErr) {
+      console.warn('Failed clearing Supabase logs:', cloudErr);
+    }
+  }
+
+  // 2. Clear local SQLite
   try {
     await prisma.dispenseLog.deleteMany({});
   } catch (e) {
     console.warn('Cleared memory log cache:', e);
   }
+
   return NextResponse.json({ success: true, message: 'All audit logs reset.' });
 }
