@@ -10,7 +10,7 @@ const fullClinicItems = [
     brandName: 'Clobetasol 0.05%',
     chemicalName: 'Ultra-High Potency Topical Steroid',
     dosage: '0.05% Cream',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Tubes',
     subUnit: 'tubes',
     bottlesAvailable: 24,
@@ -27,7 +27,7 @@ const fullClinicItems = [
     brandName: 'Fluocinonide 0.05%',
     chemicalName: 'High-Potency Topical Corticosteroid',
     dosage: '0.05% Cream',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Tubes',
     subUnit: 'tubes',
     bottlesAvailable: 24,
@@ -146,7 +146,7 @@ const fullClinicItems = [
     brandName: 'Abilify',
     chemicalName: 'Atypical Antipsychotic',
     dosage: '10 mg Tablet',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Bottles',
     subUnit: 'tablets',
     bottlesAvailable: 4,
@@ -163,7 +163,7 @@ const fullClinicItems = [
     brandName: 'Wellbutrin SR',
     chemicalName: 'Aminoketone Antidepressant',
     dosage: '100 mg Sustained-Release 12-Hour Tablet',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Bottles',
     subUnit: 'tablets',
     bottlesAvailable: 12,
@@ -180,7 +180,7 @@ const fullClinicItems = [
     brandName: 'Lexapro',
     chemicalName: 'SSRI Antidepressant',
     dosage: '5 mg Tablet',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Bottles',
     subUnit: 'tablets',
     bottlesAvailable: 24,
@@ -197,7 +197,7 @@ const fullClinicItems = [
     brandName: 'Latuda',
     chemicalName: 'Atypical Antipsychotic',
     dosage: '20 mg Oral Tablet',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Bottles',
     subUnit: 'tablets',
     bottlesAvailable: 24,
@@ -214,7 +214,7 @@ const fullClinicItems = [
     brandName: 'Seroquel',
     chemicalName: 'Atypical Antipsychotic',
     dosage: '300 mg Tablet',
-    itemType: 'Medication',
+    itemType: 'MEDICATION',
     stockUnit: 'Bottles',
     subUnit: 'tablets',
     bottlesAvailable: 24,
@@ -226,8 +226,6 @@ const fullClinicItems = [
   },
 ];
 
-let fallbackCache: any[] | null = null;
-
 export async function GET() {
   try {
     const items = await prisma.inventoryItem.findMany({
@@ -236,18 +234,28 @@ export async function GET() {
         { genericName: 'asc' },
       ],
     });
+
     if (items.length > 0) {
-      fallbackCache = items;
       return NextResponse.json(items);
     }
-    fallbackCache = fullClinicItems;
-    return NextResponse.json(fullClinicItems);
+
+    // Auto-seed database if empty
+    for (const seed of fullClinicItems) {
+      await prisma.inventoryItem.upsert({
+        where: { id: seed.id },
+        update: {},
+        create: seed,
+      }).catch(() => null);
+    }
+
+    const seededItems = await prisma.inventoryItem.findMany({
+      orderBy: [{ shelfLocation: 'asc' }, { genericName: 'asc' }],
+    }).catch(() => fullClinicItems);
+
+    return NextResponse.json(seededItems.length > 0 ? seededItems : fullClinicItems);
   } catch (error) {
     console.warn('Prisma DB error (fallback to Meyer Clinic default):', error);
-    if (!fallbackCache || fallbackCache.length === 0) {
-      fallbackCache = fullClinicItems;
-    }
-    return NextResponse.json(fallbackCache);
+    return NextResponse.json(fullClinicItems);
   }
 }
 
@@ -267,7 +275,7 @@ export async function POST(request: Request) {
         brandName: data.brandName || null,
         chemicalName: data.chemicalName || null,
         dosage: data.dosage || 'Standard',
-        itemType: data.itemType || 'Medication',
+        itemType: data.itemType || 'MEDICATION',
         stockUnit: data.stockUnit || 'Bottles',
         subUnit: data.subUnit || 'tablets',
         bottlesAvailable: Number(data.bottlesAvailable) || 0,
@@ -279,30 +287,9 @@ export async function POST(request: Request) {
       },
     });
 
-    if (fallbackCache) {
-      fallbackCache.push(newItem);
-    }
     return NextResponse.json(newItem, { status: 201 });
   } catch (error) {
     console.error('Error creating inventory item:', error);
-    const simulatedItem = {
-      id: 'sim-' + Math.random().toString(36).substr(2, 9),
-      shelfLocation: data.shelfLocation || 'General Medical',
-      genericName: data.genericName || 'New Medication',
-      brandName: data.brandName || null,
-      chemicalName: data.chemicalName || null,
-      dosage: data.dosage || 'Standard',
-      itemType: data.itemType || 'Medication',
-      stockUnit: data.stockUnit || 'Bottles',
-      subUnit: data.subUnit || 'tablets',
-      bottlesAvailable: Number(data.bottlesAvailable) || 0,
-      pillsPerBottle: Number(data.pillsPerBottle) || 0,
-      looseUnitsAvailable: Number(data.looseUnitsAvailable) || 0,
-      expirationDate: data.expirationDate || '2027-12-31',
-      lotNumbers: typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers || []),
-      directions: data.directions || null,
-    };
-    if (fallbackCache) fallbackCache.push(simulatedItem);
-    return NextResponse.json(simulatedItem, { status: 201 });
+    return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
   }
 }

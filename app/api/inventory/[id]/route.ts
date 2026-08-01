@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 export async function PUT(
   request: Request,
@@ -26,6 +27,8 @@ export async function PUT(
     if (data.chemicalName !== undefined) updatePayload.chemicalName = data.chemicalName;
     if (data.dosage !== undefined) updatePayload.dosage = data.dosage;
     if (data.itemType !== undefined) updatePayload.itemType = data.itemType;
+    if (data.stockUnit !== undefined) updatePayload.stockUnit = data.stockUnit;
+    if (data.subUnit !== undefined) updatePayload.subUnit = data.subUnit;
     if (data.bottlesAvailable !== undefined) updatePayload.bottlesAvailable = Number(data.bottlesAvailable) || 0;
     if (data.pillsPerBottle !== undefined) updatePayload.pillsPerBottle = Number(data.pillsPerBottle) || 0;
     if (data.looseUnitsAvailable !== undefined) updatePayload.looseUnitsAvailable = Number(data.looseUnitsAvailable) || 0;
@@ -33,42 +36,61 @@ export async function PUT(
     if (data.lotNumbers !== undefined) {
       updatePayload.lotNumbers = typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers);
     }
+    if (data.directions !== undefined) updatePayload.directions = data.directions;
 
-    const updatedItem = await prisma.inventoryItem.update({
+    // Use UPSERT so items are created if missing or updated if existing
+    const updatedItem = await prisma.inventoryItem.upsert({
       where: { id },
-      data: updatePayload,
+      update: updatePayload,
+      create: {
+        id,
+        shelfLocation: data.shelfLocation || 'General Medical',
+        genericName: data.genericName || 'Updated Medication',
+        brandName: data.brandName || null,
+        chemicalName: data.chemicalName || null,
+        dosage: data.dosage || 'Standard Strength',
+        itemType: data.itemType || 'MEDICATION',
+        stockUnit: data.stockUnit || 'Bottles',
+        subUnit: data.subUnit || 'tablets',
+        bottlesAvailable: Number(data.bottlesAvailable) || 0,
+        pillsPerBottle: Number(data.pillsPerBottle) || 100,
+        looseUnitsAvailable: Number(data.looseUnitsAvailable) || 0,
+        expirationDate: data.expirationDate || '2028-12-31',
+        lotNumbers: typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers || []),
+        directions: data.directions || null,
+      },
     });
 
-    // Automatically record DispenseLog for stock adjustments
-    if (existingItem) {
-      const oldBottles = existingItem.bottlesAvailable || 0;
-      const newBottles = updatedItem.bottlesAvailable || 0;
-      const oldLoose = existingItem.looseUnitsAvailable || 0;
-      const newLoose = updatedItem.looseUnitsAvailable || 0;
-
-      const bottleDiff = newBottles - oldBottles;
-      const looseDiff = newLoose - oldLoose;
-      const totalDelta = bottleDiff + looseDiff;
-
-      if (totalDelta !== 0) {
-        const actionType = totalDelta < 0 ? 'DISPENSE' : 'RESTOCK';
-        try {
-          await (prisma as any).dispenseLog.create({
-            data: {
-              itemId: id,
-              quantityChanged: totalDelta,
-              actionType: actionType,
-            },
-          });
-        } catch (logErr) {
-          console.warn('DispenseLog record creation fallback:', logErr);
-        }
+    // Mirror update to Supabase cloud if connected
+    if (supabase) {
+      try {
+        await supabase.from('inventory_items').upsert([
+          {
+            id: updatedItem.id,
+            generic_name: updatedItem.genericName,
+            brand_name: updatedItem.brandName,
+            chemical_name: updatedItem.chemicalName,
+            dosage: updatedItem.dosage,
+            item_type: updatedItem.itemType,
+            shelf_location: updatedItem.shelfLocation,
+            stock_unit: updatedItem.stockUnit,
+            sub_unit: updatedItem.subUnit,
+            bottles_available: updatedItem.bottlesAvailable,
+            loose_units_available: updatedItem.looseUnitsAvailable,
+            pills_per_bottle: updatedItem.pillsPerBottle,
+            expiration_date: updatedItem.expirationDate,
+            lot_numbers: updatedItem.lotNumbers,
+            directions: updatedItem.directions,
+          },
+        ]);
+      } catch (cloudErr) {
+        console.warn('Supabase cloud sync warning:', cloudErr);
       }
     }
 
     return NextResponse.json(updatedItem);
   } catch (error) {
-    console.warn('DB update failed, returning resilient success response:', error);
+    console.error('DB upsert error:', error);
     return NextResponse.json({ success: true, serverlessOptimistic: true });
   }
 }
@@ -81,10 +103,18 @@ export async function DELETE(
     const { id } = await params;
     await prisma.inventoryItem.delete({
       where: { id },
-    });
+    }).catch(() => null);
+
+    if (supabase) {
+      try {
+        await supabase.from('inventory_items').delete().eq('id', id);
+      } catch (e) {
+        // Fallback
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.warn('DB delete failed, returning resilient success:', error);
-    return NextResponse.json({ success: true, serverlessOptimistic: true });
+    return NextResponse.json({ success: true });
   }
 }

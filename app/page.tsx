@@ -15,6 +15,8 @@ import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 
+const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
+
 export default function Home() {
   // App launches with 4-Digit PIN Gate requiring 1234 for Doctors (Staff) or 8888 for Admin Control Portal
   const [role, setRole] = useState<AuthRole>('LOCKED');
@@ -36,8 +38,31 @@ export default function Home() {
       if (savedAutofill !== null) {
         setIsAutofillEnabled(savedAutofill === 'true');
       }
+
+      // Check local cache for immediate render
+      const localCached = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (localCached) {
+        try {
+          const parsed = JSON.parse(localCached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setItems(parsed);
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
     }
   }, []);
+
+  const saveLocalCache = (newItems: InventoryItem[]) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(newItems));
+      } catch (e) {
+        console.warn('Failed to save to local cache:', e);
+      }
+    }
+  };
 
   const handleToggleAutofill = () => {
     const nextVal = !isAutofillEnabled;
@@ -55,6 +80,7 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setItems(data);
+        saveLocalCache(data);
       }
     } catch (e) {
       console.error('Failed to fetch inventory items', e);
@@ -81,7 +107,6 @@ export default function Home() {
     actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
     details: string;
   }) => {
-    // Fire-and-forget fetch so rapid repeated clicks never block
     fetch('/api/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,7 +117,7 @@ export default function Home() {
     }).catch((e) => console.warn('Audit log write error:', e));
   };
 
-  // Rapid Optimistic stock updates with Instant Audit Logging
+  // Rapid Optimistic stock updates with Instant Audit Logging & Local Cache Backup
   const handleUpdateStock = (id: string, newBottles: number, newLoose: number) => {
     setItems((prev) => {
       const target = prev.find((i) => i.id === id);
@@ -115,11 +140,14 @@ export default function Home() {
         }
       }
 
-      return prev.map((item) =>
+      const updated = prev.map((item) =>
         item.id === id
           ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }
           : item
       );
+
+      saveLocalCache(updated);
+      return updated;
     });
 
     // Sync database asynchronously
@@ -132,9 +160,12 @@ export default function Home() {
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
     if (itemData.id) {
-      setItems((prev) =>
-        prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i))
-      );
+      setItems((prev) => {
+        const updated = prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i));
+        saveLocalCache(updated);
+        return updated;
+      });
+
       recordAuditLog({
         itemId: itemData.id,
         itemGenericName: itemData.genericName || 'Medication Formulation',
@@ -142,6 +173,7 @@ export default function Home() {
         actionType: 'EDIT',
         details: `Updated formulation details, dosage strength (${itemData.dosage}), or lot tracking history.`,
       });
+
       try {
         await fetch(`/api/inventory/${itemData.id}`, {
           method: 'PUT',
@@ -160,7 +192,12 @@ export default function Home() {
         });
         if (res.ok) {
           const newItem = await res.json();
-          setItems((prev) => [...prev, newItem]);
+          setItems((prev) => {
+            const updated = [...prev, newItem];
+            saveLocalCache(updated);
+            return updated;
+          });
+
           recordAuditLog({
             itemId: newItem.id || 'new-item',
             itemGenericName: `${newItem.genericName} (${newItem.dosage})`,
@@ -177,7 +214,12 @@ export default function Home() {
 
   const handleDeleteItem = async (id: string) => {
     const target = items.find((i) => i.id === id);
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      saveLocalCache(updated);
+      return updated;
+    });
+
     if (target) {
       recordAuditLog({
         itemId: id,
@@ -187,6 +229,7 @@ export default function Home() {
         details: `Permanently retired drug formulation from active dispensary catalog.`,
       });
     }
+
     try {
       await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
     } catch (e) {
