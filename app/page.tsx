@@ -137,6 +137,26 @@ export default function Home() {
         const data = await res.json();
         setItems(data);
         saveLocalCache(data);
+
+        // Check if an automated weekly backup is due (every 7 days)
+        if (typeof window !== 'undefined' && Array.isArray(data) && data.length > 0) {
+          const lastBackup = localStorage.getItem('mission_rx_last_auto_backup');
+          const now = Date.now();
+          const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+          if (!lastBackup || now - Number(lastBackup) > sevenDaysMs) {
+            localStorage.setItem('mission_rx_last_auto_backup', String(now));
+            fetch('/api/backups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: `Automated Weekly Snapshot - ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`,
+                notes: 'Scheduled automatic weekly background backup of clinical formulary stock and audit logs.',
+                inventory: data,
+                logs: [],
+              }),
+            }).catch(() => null);
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to fetch inventory items', e);
@@ -144,6 +164,7 @@ export default function Home() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchInventory();

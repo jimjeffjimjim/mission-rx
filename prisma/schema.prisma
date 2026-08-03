@@ -36,3 +36,15 @@ model DispenseLog {
   actionType      String        // 'DISPENSE' | 'RESTOCK' | 'EDIT'
   createdAt       DateTime      @default(now())
 }
+
+model InventoryBackup {
+  id                String   @id @default(uuid())
+  title             String
+  createdAt         DateTime @default(now())
+  itemCount         Int      @default(0)
+  logCount          Int      @default(0)
+  inventorySnapshot String   // JSON string
+  logsSnapshot      String   // JSON string
+  notes             String?
+}
+

@@ -24,7 +24,14 @@ import {
   Wrench,
   AlertTriangle,
   Check,
-  Edit3
+  Edit3,
+  Database,
+  Download,
+  Upload,
+  Clock,
+  ShieldAlert,
+  CheckCircle,
+  HardDrive
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
@@ -53,9 +60,114 @@ export default function AdminPortal({
   onOpenAuditLogs,
   onRefreshData,
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE'>('TABLE');
+  const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
+
+  // Weekly Backups State
+  const [backups, setBackups] = useState<any[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [backupTitle, setBackupTitle] = useState('');
+  const [backupNotes, setBackupNotes] = useState('');
+  const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
+  const [isRestoreWarningOpen, setIsRestoreWarningOpen] = useState(false);
+  const [selectedBackupToRestore, setSelectedBackupToRestore] = useState<any | null>(null);
+
+  const fetchBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const res = await fetch('/api/backups');
+      if (res.ok) {
+        const data = await res.json();
+        setBackups(data || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch weekly backups', e);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'BACKUPS') {
+      fetchBackups();
+    }
+  }, [activeTab]);
+
+  const handleCreateWeeklyBackup = async () => {
+    setCreatingBackup(true);
+    try {
+      let logsSnapshot = [];
+      try {
+        const logsRes = await fetch('/api/logs');
+        if (logsRes.ok) logsSnapshot = await logsRes.json();
+      } catch (e) {}
+
+      const res = await fetch('/api/backups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: backupTitle || `Weekly Snapshot - ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`,
+          notes: backupNotes || 'Manual weekly snapshot triggered by administrator.',
+          inventory: items,
+          logs: logsSnapshot,
+        }),
+      });
+
+      if (res.ok) {
+        setBackupTitle('');
+        setBackupNotes('');
+        await fetchBackups();
+      }
+    } catch (e) {
+      console.error('Failed creating backup:', e);
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleConfirmRestoreBackup = async () => {
+    if (!selectedBackupToRestore) return;
+    setRestoringBackupId(selectedBackupToRestore.id);
+    try {
+      const res = await fetch('/api/backups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupId: selectedBackupToRestore.id }),
+      });
+      if (res.ok) {
+        setIsRestoreWarningOpen(false);
+        setSelectedBackupToRestore(null);
+        if (onRefreshData) onRefreshData();
+      }
+    } catch (e) {
+      console.error('Failed to restore backup:', e);
+    } finally {
+      setRestoringBackupId(null);
+    }
+  };
+
+  const handleDeleteBackup = async (id: string) => {
+    if (!confirm('Delete this historical weekly backup snapshot?')) return;
+    try {
+      await fetch(`/api/backups?id=${id}`, { method: 'DELETE' });
+      setBackups((prev) => prev.filter((b) => b.id !== id));
+    } catch (e) {
+      console.error('Failed deleting backup:', e);
+    }
+  };
+
+  const handleDownloadBackupJSON = (backup: any) => {
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `mission_rx_weekly_backup_${backup.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Modals state
   const [isSpecialtyModalOpen, setIsSpecialtyModalOpen] = useState(false);
@@ -357,6 +469,19 @@ export default function AdminPortal({
           <BarChart3 className="w-4 h-4 stroke-[2.5]" />
           <span>Usage Reports & Dispense Analytics</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('BACKUPS')}
+          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border ${
+            activeTab === 'BACKUPS'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-[1.02]'
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          <Database className="w-4 h-4 stroke-[2.5]" />
+          <span>Weekly Backups & Recovery</span>
+        </button>
       </div>
 
       {/* VIEW 1: BACKDOOR INVENTORY TABLE */}
@@ -641,6 +766,208 @@ export default function AdminPortal({
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: WEEKLY BACKUPS & DISASTER RECOVERY */}
+      {activeTab === 'BACKUPS' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Info / Generator Box */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+            
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+              <div className="space-y-2 max-w-2xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-extrabold text-xs tracking-wide">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Automated Weekly Backup System Active</span>
+                </div>
+                <h3 className="text-xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+                  <Database className="w-8 h-8 text-emerald-400 shrink-0 stroke-[2.5]" />
+                  <span>Weekly Inventory Snapshots & Recovery</span>
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 font-semibold leading-relaxed">
+                  Generate immutable snapshots of your entire drug inventory and regulatory audit logs. Backups are automatically archived in Supabase Cloud Postgres for audit resilience and disaster recovery.
+                </p>
+              </div>
+
+              <div className="w-full lg:w-auto bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-3 shrink-0 shadow-lg min-w-[300px]">
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  Generate Manual Backup Snapshot
+                </h4>
+                <input
+                  type="text"
+                  value={backupTitle}
+                  onChange={(e) => setBackupTitle(e.target.value)}
+                  placeholder="Snapshot Title (Optional)..."
+                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
+                />
+                <input
+                  type="text"
+                  value={backupNotes}
+                  onChange={(e) => setBackupNotes(e.target.value)}
+                  placeholder="Clinical notes or reason (Optional)..."
+                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateWeeklyBackup}
+                  disabled={creatingBackup}
+                  className="w-full min-h-[44px] px-4 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {creatingBackup ? (
+                    <RotateCcw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Database className="w-4 h-4 stroke-[2.5]" />
+                  )}
+                  <span>{creatingBackup ? 'Creating Snapshot...' : 'Create Backup Snapshot Now'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Backups Archive List */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-slate-100 text-slate-700 rounded-xl">
+                  <HardDrive className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Historical Weekly Backup Archives
+                </h4>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
+                {backups.length} archived {backups.length === 1 ? 'snapshot' : 'snapshots'}
+              </span>
+            </div>
+
+            {loadingBackups ? (
+              <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
+                <RotateCcw className="w-7 h-7 text-amber-500 animate-spin" />
+                <span className="font-bold text-sm tracking-wider uppercase">Loading historical archives...</span>
+              </div>
+            ) : backups.length === 0 ? (
+              <div className="py-16 text-center text-slate-400 font-bold text-sm space-y-2">
+                <p>No weekly backups recorded yet.</p>
+                <p className="text-xs font-semibold text-slate-400">Click the button above to generate your initial snapshot right away!</p>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {backups.map((backup) => (
+                  <div
+                    key={backup.id}
+                    className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:shadow-md transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300">
+                          SNAPSHOT
+                        </span>
+                        <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          {new Date(backup.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <h5 className="text-base sm:text-lg font-black text-slate-900 truncate">
+                        {backup.title}
+                      </h5>
+                      {backup.notes && (
+                        <p className="text-xs font-medium text-slate-600">
+                          {backup.notes}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-xs font-extrabold text-slate-700">
+                        <span>📦 {backup.itemCount} Medications Archived</span>
+                        <span>📑 {backup.logCount} Audit Logs Captured</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 w-full md:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadBackupJSON(backup)}
+                        className="min-h-[40px] px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                        title="Download full JSON backup snapshot"
+                      >
+                        <Download className="w-4 h-4 stroke-[2.5]" />
+                        <span>Export JSON</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBackupToRestore(backup);
+                          setIsRestoreWarningOpen(true);
+                        }}
+                        disabled={restoringBackupId === backup.id}
+                        className="min-h-[40px] px-4 bg-gradient-to-tr from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-amber-400 font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
+                      >
+                        {restoringBackupId === backup.id ? (
+                          <RotateCcw className="w-4 h-4 animate-spin text-amber-400" />
+                        ) : (
+                          <Upload className="w-4 h-4 text-amber-400 stroke-[2.5]" />
+                        )}
+                        <span>Restore Backup</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBackup(backup.id)}
+                        className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all border border-rose-200 cursor-pointer"
+                        title="Delete backup archive"
+                      >
+                        <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Warning Confirmation Pop-up Dialog for Restoring from Backup */}
+      {isRestoreWarningOpen && selectedBackupToRestore && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-2 border-rose-500 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-rose-100 text-rose-700 border border-rose-300 shrink-0 shadow-inner">
+                <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-slate-900 leading-snug">
+                  Are you sure you want to restore this backup?
+                </h3>
+                <p className="text-xs font-semibold text-slate-600 leading-normal">
+                  You are about to restore clinical inventory and audit logs to <span className="font-bold text-slate-900">{selectedBackupToRestore.title}</span> ({new Date(selectedBackupToRestore.createdAt).toLocaleDateString()}).
+                </p>
+                <p className="text-xs font-bold text-rose-600 pt-1">
+                  ⚠️ This will overwrite your current medication stock levels and transaction records with this historical snapshot.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setIsRestoreWarningOpen(false); setSelectedBackupToRestore(null); }}
+                className="min-h-[44px] px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestoreBackup}
+                disabled={restoringBackupId !== null}
+                className="min-h-[44px] px-5 rounded-xl bg-gradient-to-tr from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black text-xs sm:text-sm shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>{restoringBackupId ? 'Restoring...' : 'Yes, Restore Backup'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
