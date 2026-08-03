@@ -21,7 +21,10 @@ import {
   Palette,
   RotateCcw,
   KeyRound,
-  Wrench
+  Wrench,
+  AlertTriangle,
+  Check,
+  Edit3
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
@@ -64,6 +67,41 @@ export default function AdminPortal({
   const [analyticsLogs, setAnalyticsLogs] = useState<DispenseLog[]>([]);
   const [topDispensed, setTopDispensed] = useState<{ genericName: string; totalDispensed: number; category: string }[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  const [editingDispenseItem, setEditingDispenseItem] = useState<{ genericName: string; totalDispensed: number; category: string } | null>(null);
+  const [newDispenseAmt, setNewDispenseAmt] = useState<number | string>('');
+  const [isDispenseWarningOpen, setIsDispenseWarningOpen] = useState(false);
+  const [savingDispenseEdit, setSavingDispenseEdit] = useState(false);
+
+  const handleConfirmDispenseEdit = async () => {
+    if (!editingDispenseItem) return;
+    setSavingDispenseEdit(true);
+    try {
+      const currentVal = editingDispenseItem.totalDispensed;
+      const targetVal = Number(newDispenseAmt) || 0;
+      const diff = targetVal - currentVal;
+      await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemGenericName: editingDispenseItem.genericName,
+          quantityChanged: -diff,
+          actionType: 'EDIT',
+          userRole: 'ADMIN',
+          details: `Manual adjustment of total amount dispensed from ${currentVal} to ${targetVal} units via Usage Analytics.`,
+          createdAt: new Date().toISOString()
+        })
+      });
+      setIsDispenseWarningOpen(false);
+      setEditingDispenseItem(null);
+      await fetchAnalytics(timeframe);
+      if (onRefreshData) onRefreshData();
+    } catch (e) {
+      console.error('Failed updating dispensed amount:', e);
+    } finally {
+      setSavingDispenseEdit(false);
+    }
+  };
 
   // Fetch Usage Analytics Data
   const fetchAnalytics = async (tf: 'today' | 'week' | 'month' | 'all') => {
@@ -573,9 +611,23 @@ export default function AdminPortal({
                             {style.label}
                           </span>
                         </div>
-                        <span className="font-mono text-rose-600 font-black">
-                          {item.totalDispensed} units dispensed
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-rose-600 font-black">
+                            {item.totalDispensed} units dispensed
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDispenseItem(item);
+                              setNewDispenseAmt(item.totalDispensed);
+                              setIsDispenseWarningOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
+                            title="Edit total amount dispensed"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200/80">
@@ -608,6 +660,60 @@ export default function AdminPortal({
           if (onRefreshData) onRefreshData();
         }}
       />
+
+      {/* Warning Confirmation Pop-up Dialog for Editing Total Amount Dispensed */}
+      {isDispenseWarningOpen && editingDispenseItem && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-amber-100 text-amber-700 border border-amber-300 shrink-0 shadow-inner">
+                <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-slate-900 leading-snug">
+                  Are you sure?
+                </h3>
+                <p className="text-xs font-semibold text-slate-600 leading-normal">
+                  You are changing the total dispensed count for <span className="font-bold text-slate-900">{editingDispenseItem.genericName}</span>. Modifying dispensed totals directly alters clinical compliance tracking and dispensary statistics.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
+                New Total Units Dispensed:
+              </label>
+              <input
+                type="number"
+                value={newDispenseAmt}
+                onChange={(e) => setNewDispenseAmt(e.target.value)}
+                className="w-full min-h-[46px] px-4 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner select-text"
+                placeholder="e.g. 15"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setIsDispenseWarningOpen(false); setEditingDispenseItem(null); }}
+                className="min-h-[44px] px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDispenseEdit}
+                disabled={savingDispenseEdit}
+                className="min-h-[44px] px-5 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>{savingDispenseEdit ? 'Saving...' : 'Yes, Modify Total'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

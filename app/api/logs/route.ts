@@ -164,6 +164,56 @@ export async function POST(request: Request) {
   return NextResponse.json(newLogs.length === 1 ? newLogs[0] : newLogs, { status: 201 });
 }
 
+export async function PUT(request: Request) {
+  try {
+    const data = await request.json();
+    const { id, quantityChanged, details } = data;
+    if (!id) {
+      return NextResponse.json({ error: 'Missing log record id' }, { status: 400 });
+    }
+
+    const numericQty = Number(quantityChanged) || 0;
+    const updatedDetails = details || 'Clinical usage log updated manually during audit review.';
+
+    // 1. Update in Supabase Cloud Postgres
+    if (supabase) {
+      try {
+        await supabase
+          .from('dispense_logs')
+          .update({
+            quantity_changed: numericQty,
+            details: updatedDetails,
+          })
+          .eq('id', id);
+      } catch (cloudErr) {
+        console.warn('Failed updating Supabase log:', cloudErr);
+      }
+    }
+
+    // 2. Update local fallback cache
+    const target = logsFallbackCache.find((l) => l.id === id);
+    if (target) {
+      target.quantityChanged = numericQty;
+      if (details) target.details = updatedDetails;
+    }
+
+    // 3. Update local SQLite if accessible
+    try {
+      await prisma.dispenseLog.update({
+        where: { id },
+        data: { quantityChanged: numericQty },
+      }).catch(() => null);
+    } catch (dbErr) {
+      // Ignore on serverless
+    }
+
+    return NextResponse.json({ success: true, id, quantityChanged: numericQty, details: updatedDetails });
+  } catch (err: any) {
+    console.error('Failed to update audit log:', err);
+    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+  }
+}
+
 export async function DELETE() {
   logsFallbackCache = [];
 
@@ -185,3 +235,4 @@ export async function DELETE() {
 
   return NextResponse.json({ success: true, message: 'All audit logs reset.' });
 }
+

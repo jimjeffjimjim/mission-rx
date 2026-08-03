@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2 } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
@@ -16,6 +16,9 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('ALL');
+  const [editingLog, setEditingLog] = useState<DispenseLog | null>(null);
+  const [editQty, setEditQty] = useState<number | string>('');
+  const [isWarningOpen, setIsWarningOpen] = useState(false);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -51,6 +54,38 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
       if (onLogsCleared) onLogsCleared();
     } catch (e) {
       console.error('Failed to reset audit logs', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditingLog = (log: DispenseLog) => {
+    setEditingLog(log);
+    setEditQty(log.quantityChanged);
+    setIsWarningOpen(true);
+  };
+
+  const handleConfirmEdit = async () => {
+    if (!editingLog) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/logs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingLog.id,
+          quantityChanged: Number(editQty),
+          details: `${editingLog.details} (Manual regulatory revision: quantity changed from ${editingLog.quantityChanged} to ${editQty})`,
+        }),
+      });
+      if (res.ok) {
+        setIsWarningOpen(false);
+        setEditingLog(null);
+        await fetchLogs();
+        if (onLogsCleared) onLogsCleared();
+      }
+    } catch (e) {
+      console.error('Failed editing log:', e);
     } finally {
       setLoading(false);
     }
@@ -247,9 +282,9 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
                     </div>
                   </div>
 
-                  {/* Quantity Indicator */}
-                  {log.quantityChanged !== 0 && (
-                    <div className="shrink-0 sm:text-right flex sm:flex-col items-baseline justify-between border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                  {/* Quantity & Action Controls */}
+                  <div className="shrink-0 flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                    <div className="sm:text-right flex sm:flex-col items-baseline sm:items-end justify-between gap-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider sm:hidden">Qty Change</span>
                       <span
                         className={`font-mono font-black text-lg sm:text-2xl ${
@@ -259,13 +294,76 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
                         {isPositive ? `+${log.quantityChanged}` : log.quantityChanged}
                       </span>
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => startEditingLog(log)}
+                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 shrink-0 cursor-pointer"
+                      title="Edit recorded dispensed quantity"
+                    >
+                      <Edit3 className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </div>
                 </div>
               );
             })
           )}
         </div>
+
+        {/* Warning Confirmation Pop-up Dialog for Editing Dispensed Amount */}
+        {isWarningOpen && editingLog && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-2xl bg-amber-100 text-amber-700 border border-amber-300 shrink-0 shadow-inner">
+                  <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-black text-slate-900 leading-snug">
+                    Are you sure?
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-600 leading-normal">
+                    You are modifying an official clinical transaction log for <span className="font-bold text-slate-900">{editingLog.itemGenericName}</span>. Altering regulatory usage records changes historical compliance totals and dispense reporting.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
+                  New Recorded Quantity (Dispensed is negative, Restock is positive):
+                </label>
+                <input
+                  type="number"
+                  value={editQty}
+                  onChange={(e) => setEditQty(e.target.value)}
+                  className="w-full min-h-[46px] px-4 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner select-text"
+                  placeholder="e.g. -2"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setIsWarningOpen(false); setEditingLog(null); }}
+                  className="min-h-[44px] px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmEdit}
+                  disabled={loading}
+                  className="min-h-[44px] px-5 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>{loading ? 'Saving...' : 'Yes, Modify Record'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
