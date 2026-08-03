@@ -55,6 +55,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [autofillEnabled, setAutofillEnabled] = useState(isAutofillEnabled);
   const [suggestions, setSuggestions] = useState<MedicalDrugEntry[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [activeDropdownField, setActiveDropdownField] = useState<'generic' | 'brand' | null>(null);
   const [quizletText, setQuizletText] = useState('');
   const [showQuizletTab, setShowQuizletTab] = useState(false);
   const [autofilledNotice, setAutofilledNotice] = useState(false);
@@ -126,6 +127,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setNewLotInput('');
     setSuggestions([]);
     setShowDropdown(false);
+    setActiveDropdownField(null);
     setQuizletText('');
     setShowQuizletTab(false);
     setAutofilledNotice(false);
@@ -139,15 +141,17 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
 
-      // Instant Autocomplete Dropdown List
-      if (autofillEnabled && (field === 'genericName' || field === 'brandName') && typeof value === 'string') {
+      // Instant Autocomplete Dropdown List (Exclusively for adding new medication)
+      if (!item && autofillEnabled && (field === 'genericName' || field === 'brandName') && typeof value === 'string') {
         if (value.trim().length >= 2) {
           const matches = searchMedicalKnowledge(value);
           setSuggestions(matches);
           setShowDropdown(matches.length > 0);
+          setActiveDropdownField(field === 'genericName' ? 'generic' : 'brand');
         } else {
           setSuggestions([]);
           setShowDropdown(false);
+          setActiveDropdownField(null);
         }
       }
 
@@ -168,6 +172,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
       directions: prev.directions || `${entry.typicalDirections} [Contraindications: ${entry.contraindications}]`,
     }));
     setShowDropdown(false);
+    setActiveDropdownField(null);
     setAutofilledNotice(true);
     setTimeout(() => setAutofilledNotice(false), 4000);
   };
@@ -197,6 +202,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setAutofillEnabled(nextState);
     if (!nextState) {
       setShowDropdown(false);
+      setActiveDropdownField(null);
     }
   };
 
@@ -258,42 +264,46 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowQuizletTab(!showQuizletTab)}
-              className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
-                showQuizletTab
-                  ? 'bg-purple-600 text-white border-purple-700'
-                  : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-              }`}
-              title="Parse Quizlet flashcard or study terms"
-            >
-              <BookOpen className="w-4 h-4 stroke-[2.5]" />
-              <span>Quizlet Import</span>
-            </button>
+            {!item && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowQuizletTab(!showQuizletTab)}
+                  className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
+                    showQuizletTab
+                      ? 'bg-purple-600 text-white border-purple-700'
+                      : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+                  }`}
+                  title="Parse Quizlet flashcard or study terms"
+                >
+                  <BookOpen className="w-4 h-4 stroke-[2.5]" />
+                  <span>Quizlet Import</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleToggleAutofill}
-              className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
-                autofillEnabled
-                  ? 'bg-amber-50 text-amber-900 border-amber-300'
-                  : 'bg-slate-100 text-slate-500 border-slate-300'
-              }`}
-              title={autofillEnabled ? 'Click to disable Smart Medical Auto-Fill' : 'Click to enable Smart Medical Auto-Fill'}
-            >
-              {autofillEnabled ? (
-                <>
-                  <ToggleRight className="w-4 h-4 text-amber-600 stroke-[2.5]" />
-                  <span>Autofill: ON</span>
-                </>
-              ) : (
-                <>
-                  <ToggleLeft className="w-4 h-4 text-slate-400 stroke-[2.5]" />
-                  <span>Autofill: OFF</span>
-                </>
-              )}
-            </button>
+                <button
+                  type="button"
+                  onClick={handleToggleAutofill}
+                  className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
+                    autofillEnabled
+                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                      : 'bg-slate-100 text-slate-500 border-slate-300'
+                  }`}
+                  title={autofillEnabled ? 'Click to disable Smart Medical Auto-Fill' : 'Click to enable Smart Medical Auto-Fill'}
+                >
+                  {autofillEnabled ? (
+                    <>
+                      <ToggleRight className="w-4 h-4 text-amber-600 stroke-[2.5]" />
+                      <span>Autofill: ON</span>
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-4 h-4 text-slate-400 stroke-[2.5]" />
+                      <span>Autofill: OFF</span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
 
             <button
               type="button"
@@ -387,17 +397,18 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   value={formData.genericName || ''}
                   onChange={(e) => handleChange('genericName', e.target.value)}
                   onFocus={() => {
-                    if (formData.genericName && formData.genericName.length >= 2) {
+                    if (!item && autofillEnabled && formData.genericName && formData.genericName.length >= 2) {
                       const matches = searchMedicalKnowledge(formData.genericName);
                       setSuggestions(matches);
                       setShowDropdown(matches.length > 0);
+                      setActiveDropdownField('generic');
                     }
                   }}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-amber-500 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
                 />
 
                 {/* Instant Autocomplete Suggestions Dropdown Box */}
-                {autofillEnabled && showDropdown && suggestions.length > 0 && (
+                {!item && autofillEnabled && showDropdown && activeDropdownField === 'generic' && suggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-teal-500 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
                     {suggestions.map((entry, idx) => (
                       <button
@@ -421,7 +432,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 )}
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
                   Brand / Commercial Name
                 </label>
@@ -430,8 +441,39 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   placeholder="e.g. Lipitor, Zoloft, Benadryl"
                   value={formData.brandName || ''}
                   onChange={(e) => handleChange('brandName', e.target.value)}
+                  onFocus={() => {
+                    if (!item && autofillEnabled && formData.brandName && formData.brandName.length >= 2) {
+                      const matches = searchMedicalKnowledge(formData.brandName);
+                      setSuggestions(matches);
+                      setShowDropdown(matches.length > 0);
+                      setActiveDropdownField('brand');
+                    }
+                  }}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
                 />
+
+                {!item && autofillEnabled && showDropdown && activeDropdownField === 'brand' && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-teal-500 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                    {suggestions.map((entry, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => applyMedicalEntry(entry)}
+                        className="w-full p-3 text-left hover:bg-teal-50 transition-colors flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <div className="font-black text-slate-900 text-xs">{entry.brandName || entry.genericName}</div>
+                          <div className="text-[11px] text-slate-500 font-bold">
+                            Generic: {entry.genericName} • {entry.defaultDosage}
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full shrink-0">
+                          Autofill
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

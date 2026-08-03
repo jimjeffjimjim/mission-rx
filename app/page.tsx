@@ -47,6 +47,11 @@ export default function Home() {
         setIsAutofillEnabled(savedAutofill === 'true');
       }
 
+      const savedRole = localStorage.getItem('mission_rx_active_role') as AuthRole | null;
+      if (savedRole === 'ADMIN' || savedRole === 'STAFF') {
+        setRole(savedRole);
+      }
+
       // Check local cache for immediate render
       const localCached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (localCached) {
@@ -73,10 +78,22 @@ export default function Home() {
   };
 
   const handleToggleAutofill = () => {
-    const nextVal = !isAutofillEnabled;
-    setIsAutofillEnabled(nextVal);
+    const newVal = !isAutofillEnabled;
+    setIsAutofillEnabled(newVal);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('mission_rx_autofill_enabled', String(nextVal));
+      localStorage.setItem('mission_rx_autofill_enabled', String(newVal));
+    }
+  };
+
+  const handleSwitchRole = (newRole: AuthRole) => {
+    setRole(newRole);
+    if (typeof window !== 'undefined') {
+      if (newRole !== 'LOCKED') {
+        localStorage.setItem('mission_rx_active_role', newRole);
+      }
+      if (newRole === 'ADMIN') {
+        sessionStorage.setItem('mission_rx_admin_authorized', 'true');
+      }
     }
   };
 
@@ -493,110 +510,105 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-28 selection:bg-teal-600 selection:text-white">
       {/* 4-Digit PIN Security Gate */}
-      <AuthGate currentRole={role} onAuthenticate={(newRole) => setRole(newRole)} />
+      <AuthGate currentRole={role} onAuthenticate={handleSwitchRole} />
 
       {/* Main Header Navigation Bar */}
       <Header
         currentRole={role}
-        onSwitchRole={(newRole) => setRole(newRole)}
+        onSwitchRole={handleSwitchRole}
         onOpenCreateModal={openCreateModal}
-        isAutofillEnabled={isAutofillEnabled}
-        onToggleAutofill={handleToggleAutofill}
         onOpenAuditLogs={() => setIsAuditModalOpen(true)}
       />
 
       {/* DEDICATED ADMIN CONTROL PORTAL VIEW */}
-      {role === 'ADMIN' ? (
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-6">
-          <AdminPortal
-            items={items}
-            onUpdateStock={handleUpdateStock}
-            onAdjustStock={handleAdjustStock}
-            onEditItem={openEditModal}
-            onDeleteItem={handleDeleteItem}
-            onOpenCreateModal={openCreateModal}
-            onSwitchToDoctorView={() => setRole('STAFF')}
-            onOpenAuditLogs={() => setIsAuditModalOpen(true)}
-            onRefreshData={fetchInventory}
-          />
+      <div className={role === 'ADMIN' ? 'max-w-[1600px] mx-auto px-4 sm:px-6 mt-6 block animate-in fade-in duration-150' : 'hidden'}>
+        <AdminPortal
+          items={items}
+          onUpdateStock={handleUpdateStock}
+          onAdjustStock={handleAdjustStock}
+          onEditItem={openEditModal}
+          onDeleteItem={handleDeleteItem}
+          onOpenCreateModal={openCreateModal}
+          onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+          onRefreshData={fetchInventory}
+        />
+      </div>
+
+      {/* CLEAN DOCTOR STAFF VIEW */}
+      <div className={role === 'STAFF' ? 'block animate-in fade-in duration-150' : 'hidden'}>
+        {/* Filter Bar with Color-Coded Category Tabs */}
+        <FilterBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          itemCount={filteredItems.length}
+        />
+
+        {/* Responsive Layout Container */}
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-7">
+          {loading && items.length === 0 ? (
+            <div className="py-28 flex flex-col items-center justify-center space-y-3.5 text-slate-500">
+              <RefreshCw className="w-8 h-8 text-teal-600 animate-spin" />
+              <span className="font-extrabold text-sm tracking-wider uppercase">Loading hospital formulary...</span>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="py-20 bg-white border border-slate-200/90 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-3.5 shadow-xs">
+              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-500">
+                <Layers className="w-8 h-8 stroke-[2.5]" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">No formulations match your search</h3>
+              <p className="text-xs font-medium text-slate-500 max-w-md">
+                Try clarifying your keyword query, switching active specialty tabs, or deselecting critical alert toggles above.
+              </p>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('ALL');
+                  setSelectedStatus('ALL');
+                }}
+                className="mt-2 min-h-[48px] px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-all touch-manipulation active:scale-95"
+              >
+                Reset Filter Tabs
+              </button>
+            </div>
+          ) : (
+            /* Doctor View Grouped Specialty Cards */
+            <div className="space-y-10">
+              {groupedInventory.map(({ category, items: groupItems }) => {
+                const style = getSpecialtyColor(category);
+                return (
+                  <section key={category} className="space-y-4">
+                    <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-2xs select-none ${style.borderLeft}`}>
+                      <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase flex items-center gap-2.5">
+                        <span>{style.label}</span> 
+                      </h2>
+                      <span className={`font-mono text-xs font-black px-3 py-1 rounded-xl border shadow-2xs ${style.countBadge}`}>
+                        {groupItems.length} {groupItems.length === 1 ? 'Formulation' : 'Formulations'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
+                      {groupItems.map((item) => (
+                        <InventoryCard
+                          key={item.id}
+                          item={item}
+                          role={role}
+                          onUpdateStock={handleUpdateStock}
+                          onAdjustStock={handleAdjustStock}
+                          onEditItem={openEditModal}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
-      ) : (
-        /* CLEAN DOCTOR STAFF VIEW */
-        <>
-          {/* Filter Bar with Color-Coded Category Tabs */}
-          <FilterBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            selectedStatus={selectedStatus}
-            onStatusChange={setSelectedStatus}
-            itemCount={filteredItems.length}
-          />
-
-          {/* Responsive Layout Container */}
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-7">
-            {loading && items.length === 0 ? (
-              <div className="py-28 flex flex-col items-center justify-center space-y-3.5 text-slate-500">
-                <RefreshCw className="w-8 h-8 text-teal-600 animate-spin" />
-                <span className="font-extrabold text-sm tracking-wider uppercase">Loading hospital formulary...</span>
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="py-20 bg-white border border-slate-200/90 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-3.5 shadow-xs">
-                <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-500">
-                  <Layers className="w-8 h-8 stroke-[2.5]" />
-                </div>
-                <h3 className="text-xl font-black text-slate-900">No formulations match your search</h3>
-                <p className="text-xs font-medium text-slate-500 max-w-md">
-                  Try clarifying your keyword query, switching active specialty tabs, or deselecting critical alert toggles above.
-                </p>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('ALL');
-                    setSelectedStatus('ALL');
-                  }}
-                  className="mt-2 min-h-[48px] px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-all touch-manipulation active:scale-95"
-                >
-                  Reset Filter Tabs
-                </button>
-              </div>
-            ) : (
-              /* Doctor View Grouped Specialty Cards */
-              <div className="space-y-10">
-                {groupedInventory.map(({ category, items: groupItems }) => {
-                  const style = getSpecialtyColor(category);
-                  return (
-                    <section key={category} className="space-y-4">
-                      <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-2xs select-none ${style.borderLeft}`}>
-                        <h2 className="text-base sm:text-lg font-black tracking-tight text-slate-900 uppercase flex items-center gap-2.5">
-                          <span>{style.label}</span> 
-                        </h2>
-                        <span className={`font-mono text-xs font-black px-3 py-1 rounded-xl border shadow-2xs ${style.countBadge}`}>
-                          {groupItems.length} {groupItems.length === 1 ? 'Formulation' : 'Formulations'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
-                        {groupItems.map((item) => (
-                          <InventoryCard
-                            key={item.id}
-                            item={item}
-                            role={role}
-                            onUpdateStock={handleUpdateStock}
-                            onAdjustStock={handleAdjustStock}
-                            onEditItem={openEditModal}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      </div>
 
       {/* Medication Create & Edit Modal Sheet */}
       <ItemEditModal

@@ -31,15 +31,23 @@ export default function Header({
     if (currentRole === 'ADMIN') {
       onSwitchRole('STAFF');
     } else {
-      setShowAdminPrompt(true);
-      setAdminPinInput('');
-      setError(false);
+      const isAuthorized = typeof window !== 'undefined' && sessionStorage.getItem('mission_rx_admin_authorized') === 'true';
+      if (isAuthorized) {
+        onSwitchRole('ADMIN');
+      } else {
+        setShowAdminPrompt(true);
+        setAdminPinInput('');
+        setError(false);
+      }
     }
   };
 
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminPinInput === '8888') {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('mission_rx_admin_authorized', 'true');
+      }
       onSwitchRole('ADMIN');
       setShowAdminPrompt(false);
       setAdminPinInput('');
@@ -52,11 +60,9 @@ export default function Header({
   const handleExitAdmin = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    }
     onSwitchRole('STAFF');
   };
+
 
   return (
     <>
@@ -91,33 +97,6 @@ export default function Header({
 
           {/* Action Controls */}
           <div className="flex items-center gap-2 shrink-0">
-            {onToggleAutofill && (
-              <button
-                type="button"
-                onClick={onToggleAutofill}
-                className={`flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-3.5 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs ${
-                  isAutofillEnabled
-                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                    : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
-                }`}
-                title={isAutofillEnabled ? 'Click to disable Smart Clinical Autofill' : 'Click to enable Smart Clinical Autofill'}
-              >
-                {isAutofillEnabled ? (
-                  <>
-                    <ToggleRight className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 stroke-[2.5]" />
-                    <span className="hidden lg:inline">Autofill: ON</span>
-                    <span className="lg:hidden">AF ON</span>
-                  </>
-                ) : (
-                  <>
-                    <ToggleLeft className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 stroke-[2.5]" />
-                    <span className="hidden lg:inline">Autofill: OFF</span>
-                    <span className="lg:hidden">AF OFF</span>
-                  </>
-                )}
-              </button>
-            )}
-
             {currentRole === 'ADMIN' ? (
               <>
                 <button
@@ -143,11 +122,10 @@ export default function Header({
               <button
                 type="button"
                 onClick={handleRoleToggle}
-                className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 cursor-pointer"
               >
                 <Shield className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
-                <span className="hidden sm:inline">Admin Portal</span>
-                <span className="sm:hidden">Admin</span>
+                <span>Switch to Admin</span>
               </button>
             )}
           </div>

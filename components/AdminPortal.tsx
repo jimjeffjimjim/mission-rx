@@ -44,7 +44,6 @@ interface AdminPortalProps {
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
   onOpenCreateModal: () => void;
-  onSwitchToDoctorView: () => void;
   onOpenAuditLogs?: () => void;
   onRefreshData?: () => void;
 }
@@ -56,7 +55,6 @@ export default function AdminPortal({
   onEditItem,
   onDeleteItem,
   onOpenCreateModal,
-  onSwitchToDoctorView,
   onOpenAuditLogs,
   onRefreshData,
 }: AdminPortalProps) {

@@ -13,7 +13,7 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')) {
   try {
     supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: true,
+        persistSession: typeof window !== 'undefined',
         autoRefreshToken: true,
       },
       realtime: {

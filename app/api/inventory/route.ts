@@ -53,8 +53,10 @@ export async function GET() {
             directions: item.directions,
           }));
           await supabase.from('inventory_items').insert(seedPayload);
+          return NextResponse.json(fullClinicItems);
         } catch (seedErr) {
           console.warn('Auto-seed warning:', seedErr);
+          return NextResponse.json(fullClinicItems);
         }
       }
     } catch (e) {
