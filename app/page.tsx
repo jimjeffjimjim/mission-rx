@@ -35,6 +35,8 @@ export default function Home() {
   // Interaction resilience refs for rapid clicking & network debouncing
   const isUpdatingStockRef = useRef(false);
   const stockUpdateTimersRef = useRef<{ [id: string]: any }>({});
+  const auditLogAccumulatorsRef = useRef<{ [key: string]: any }>({});
+  const auditLogTimersRef = useRef<{ [key: string]: any }>({});
   const lockResetTimerRef = useRef<any>(null);
   const isProcessingQueueRef = useRef(false);
   const itemsRef = useRef<InventoryItem[]>([]);
@@ -248,13 +250,43 @@ export default function Home() {
         const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
 
         if (totalChange !== 0) {
-          recordAuditLog({
-            itemId: target.id,
-            itemGenericName: `${target.genericName} (${target.dosage})`,
-            quantityChanged: totalChange,
-            actionType,
-            details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
-          });
+          const itemKey = `${target.id}_${unitType}`;
+          if (!auditLogAccumulatorsRef.current[itemKey]) {
+            auditLogAccumulatorsRef.current[itemKey] = {
+              itemId: target.id,
+              itemGenericName: `${target.genericName} (${target.dosage})`,
+              quantityChanged: totalChange,
+              unitType,
+              newBottles,
+              newLoose,
+            };
+          } else {
+            auditLogAccumulatorsRef.current[itemKey].quantityChanged += totalChange;
+            auditLogAccumulatorsRef.current[itemKey].newBottles = newBottles;
+            auditLogAccumulatorsRef.current[itemKey].newLoose = newLoose;
+          }
+
+          if (auditLogTimersRef.current[itemKey]) {
+            clearTimeout(auditLogTimersRef.current[itemKey]);
+          }
+
+          auditLogTimersRef.current[itemKey] = setTimeout(() => {
+            const pending = auditLogAccumulatorsRef.current[itemKey];
+            if (pending && pending.quantityChanged !== 0) {
+              const pendingAction = pending.quantityChanged < 0 ? 'DISPENSE' : 'RESTOCK';
+              const pendingVerb = pending.quantityChanged < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+
+              recordAuditLog({
+                itemId: pending.itemId,
+                itemGenericName: pending.itemGenericName,
+                quantityChanged: pending.quantityChanged,
+                actionType: pendingAction,
+                details: `${pendingVerb}: ${Math.abs(pending.quantityChanged)} ${pending.unitType} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
+              });
+            }
+            delete auditLogAccumulatorsRef.current[itemKey];
+            delete auditLogTimersRef.current[itemKey];
+          }, 600);
         }
       }
 
@@ -305,17 +337,45 @@ export default function Home() {
     const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
 
     if (totalChange !== 0) {
-      const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
       const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-      const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+      const itemKey = `${target.id}_${unitType}`;
 
-      recordAuditLog({
-        itemId: target.id,
-        itemGenericName: `${target.genericName} (${target.dosage})`,
-        quantityChanged: totalChange,
-        actionType,
-        details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
-      });
+      if (!auditLogAccumulatorsRef.current[itemKey]) {
+        auditLogAccumulatorsRef.current[itemKey] = {
+          itemId: target.id,
+          itemGenericName: `${target.genericName} (${target.dosage})`,
+          quantityChanged: totalChange,
+          unitType,
+          newBottles,
+          newLoose,
+        };
+      } else {
+        auditLogAccumulatorsRef.current[itemKey].quantityChanged += totalChange;
+        auditLogAccumulatorsRef.current[itemKey].newBottles = newBottles;
+        auditLogAccumulatorsRef.current[itemKey].newLoose = newLoose;
+      }
+
+      if (auditLogTimersRef.current[itemKey]) {
+        clearTimeout(auditLogTimersRef.current[itemKey]);
+      }
+
+      auditLogTimersRef.current[itemKey] = setTimeout(() => {
+        const pending = auditLogAccumulatorsRef.current[itemKey];
+        if (pending && pending.quantityChanged !== 0) {
+          const pendingAction = pending.quantityChanged < 0 ? 'DISPENSE' : 'RESTOCK';
+          const pendingVerb = pending.quantityChanged < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+
+          recordAuditLog({
+            itemId: pending.itemId,
+            itemGenericName: pending.itemGenericName,
+            quantityChanged: pending.quantityChanged,
+            actionType: pendingAction,
+            details: `${pendingVerb}: ${Math.abs(pending.quantityChanged)} ${pending.unitType} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
+          });
+        }
+        delete auditLogAccumulatorsRef.current[itemKey];
+        delete auditLogTimersRef.current[itemKey];
+      }, 600);
 
       const updatedItem = { ...target, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose };
       itemsRef.current = itemsRef.current.map((item) => (item.id === id ? updatedItem : item));

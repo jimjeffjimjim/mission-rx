@@ -98,7 +98,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   const incrementBottles = () => {
     if (onAdjustStock) {
       onAdjustStock(item.id, 1, 0);
-      setBottlesInput((item.bottlesAvailable + 1).toString());
+      setBottlesInput((prev) => (Number(prev || item.bottlesAvailable || 0) + 1).toString());
     } else {
       const newVal = item.bottlesAvailable + 1;
       onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
@@ -107,10 +107,11 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   };
 
   const decrementBottles = () => {
-    if (item.bottlesAvailable <= 0) return;
+    const currentVal = Number(bottlesInput !== undefined ? bottlesInput : item.bottlesAvailable || 0);
+    if (currentVal <= 0 && item.bottlesAvailable <= 0) return;
     if (onAdjustStock) {
       onAdjustStock(item.id, -1, 0);
-      setBottlesInput((Math.max(0, item.bottlesAvailable - 1)).toString());
+      setBottlesInput((prev) => Math.max(0, Number(prev || item.bottlesAvailable || 0) - 1).toString());
     } else {
       const newVal = Math.max(0, item.bottlesAvailable - 1);
       onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
@@ -121,7 +122,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   const incrementLoose = () => {
     if (onAdjustStock) {
       onAdjustStock(item.id, 0, 1);
-      setLooseInput((item.looseUnitsAvailable + 1).toString());
+      setLooseInput((prev) => (Number(prev || item.looseUnitsAvailable || 0) + 1).toString());
     } else {
       const newVal = item.looseUnitsAvailable + 1;
       onUpdateStock(item.id, item.bottlesAvailable, newVal);
@@ -130,10 +131,11 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   };
 
   const decrementLoose = () => {
-    if (item.looseUnitsAvailable <= 0) return;
+    const currentVal = Number(looseInput !== undefined ? looseInput : item.looseUnitsAvailable || 0);
+    if (currentVal <= 0 && item.looseUnitsAvailable <= 0) return;
     if (onAdjustStock) {
       onAdjustStock(item.id, 0, -1);
-      setLooseInput((Math.max(0, item.looseUnitsAvailable - 1)).toString());
+      setLooseInput((prev) => Math.max(0, Number(prev || item.looseUnitsAvailable || 0) - 1).toString());
     } else {
       const newVal = Math.max(0, item.looseUnitsAvailable - 1);
       onUpdateStock(item.id, item.bottlesAvailable, newVal);
