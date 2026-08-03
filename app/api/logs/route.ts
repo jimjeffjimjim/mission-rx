@@ -113,53 +113,55 @@ export async function POST(request: Request) {
     data = {};
   }
 
-  const newLog: DispenseLog = {
-    id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-    itemId: data.itemId || 'unknown',
-    itemGenericName: data.itemGenericName || 'General Inventory Item',
-    quantityChanged: Number(data.quantityChanged) || 0,
-    actionType: data.actionType || 'DISPENSE',
-    userRole: data.userRole || 'STAFF',
-    details: data.details || 'Routine medical supply transaction.',
-    createdAt: new Date().toISOString(),
-  };
+  const items: any[] = Array.isArray(data) ? data : [data];
+  const newLogs: DispenseLog[] = items.map((item) => ({
+    id: item.id || ('log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5)),
+    itemId: item.itemId || 'unknown',
+    itemGenericName: item.itemGenericName || 'General Inventory Item',
+    quantityChanged: Number(item.quantityChanged) || 0,
+    actionType: item.actionType || 'DISPENSE',
+    userRole: item.userRole || 'STAFF',
+    details: item.details || 'Routine medical supply transaction.',
+    createdAt: item.createdAt || new Date().toISOString(),
+  }));
 
-  logsFallbackCache.unshift(newLog);
+  logsFallbackCache.unshift(...newLogs);
 
   // 1. Supabase Cloud Postgres Insertion (First)
-  if (supabase) {
+  if (supabase && newLogs.length > 0) {
     try {
-      await supabase.from('dispense_logs').insert([
-        {
-          id: newLog.id,
-          item_id: newLog.itemId,
-          item_generic_name: newLog.itemGenericName,
-          quantity_changed: newLog.quantityChanged,
-          action_type: newLog.actionType,
-          user_role: newLog.userRole,
-          details: newLog.details,
-          created_at: newLog.createdAt,
-        },
-      ]);
+      const cloudRows = newLogs.map((l) => ({
+        id: l.id,
+        item_id: l.itemId,
+        item_generic_name: l.itemGenericName,
+        quantity_changed: l.quantityChanged,
+        action_type: l.actionType,
+        user_role: l.userRole,
+        details: l.details,
+        created_at: l.createdAt,
+      }));
+      await supabase.from('dispense_logs').insert(cloudRows);
     } catch (cloudErr) {
-      console.warn('Failed saving audit log to Supabase:', cloudErr);
+      console.warn('Failed saving audit logs to Supabase:', cloudErr);
     }
   }
 
   // 2. Prisma SQLite local backup
   try {
-    await prisma.dispenseLog.create({
-      data: {
-        itemId: newLog.itemId || 'unknown',
-        quantityChanged: newLog.quantityChanged,
-        actionType: newLog.actionType as any,
-      },
-    });
+    for (const l of newLogs) {
+      await prisma.dispenseLog.create({
+        data: {
+          itemId: l.itemId || 'unknown',
+          quantityChanged: l.quantityChanged,
+          actionType: l.actionType as any,
+        },
+      }).catch(() => null);
+    }
   } catch (error) {
     // Expected on read-only serverless platforms
   }
 
-  return NextResponse.json(newLog, { status: 201 });
+  return NextResponse.json(newLogs.length === 1 ? newLogs[0] : newLogs, { status: 201 });
 }
 
 export async function DELETE() {

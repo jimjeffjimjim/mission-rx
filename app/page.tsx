@@ -37,6 +37,8 @@ export default function Home() {
   const stockUpdateTimersRef = useRef<{ [id: string]: any }>({});
   const lockResetTimerRef = useRef<any>(null);
   const isProcessingQueueRef = useRef(false);
+  const itemsRef = useRef<InventoryItem[]>([]);
+  itemsRef.current = items;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -78,7 +80,7 @@ export default function Home() {
     }
   };
 
-  // Process pending audit logs sequentially to prevent dropping events during rapid clicking
+  // Process pending audit logs sequentially in bulk batches to prevent dropping events during rapid clicking
   const processAuditQueue = async () => {
     if (isProcessingQueueRef.current || typeof window === 'undefined') return;
     const rawQueue = localStorage.getItem('mission_rx_audit_queue');
@@ -95,31 +97,25 @@ export default function Home() {
     if (!Array.isArray(queue) || queue.length === 0) return;
 
     isProcessingQueueRef.current = true;
-    while (queue.length > 0) {
-      const currentLog = queue[0];
-      try {
-        const res = await fetch('/api/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentLog),
-        });
-        if (res.ok || (res.status !== 500 && res.status !== 504)) {
-          // Remove successfully sent or permanently invalid log from queue
-          queue.shift();
-          localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
-        } else {
-          break;
-        }
-      } catch (err) {
-        // Network offline or temporary interruption; retry in next loop
-        break;
+    const batch = queue.slice(0, 100);
+    try {
+      const res = await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch),
+      });
+      if (res.ok || (res.status !== 500 && res.status !== 504)) {
+        queue.splice(0, batch.length);
+        localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
       }
+    } catch (err) {
+      // Network offline or temporary interruption; retry in next loop
     }
     isProcessingQueueRef.current = false;
   };
 
   useEffect(() => {
-    const queueTimer = setInterval(processAuditQueue, 600);
+    const queueTimer = setInterval(processAuditQueue, 300);
     return () => clearInterval(queueTimer);
   }, []);
 
@@ -230,11 +226,68 @@ export default function Home() {
     }
 
     stockUpdateTimersRef.current[id] = setTimeout(() => {
+      const latestItem = itemsRef.current.find((i) => i.id === id);
+      const payload = latestItem ? latestItem : { bottlesAvailable: newBottles, looseUnitsAvailable: newLoose };
       fetch(`/api/inventory/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }),
+        body: JSON.stringify(payload),
       }).catch((e) => console.error('Failed to sync stock update', e));
+      delete stockUpdateTimersRef.current[id];
+    }, 400);
+  };
+
+  // Delta adjustment for rapid multi-click "spamming" without closure race conditions
+  const handleAdjustStock = (id: string, bottleDelta: number, looseDelta: number) => {
+    isUpdatingStockRef.current = true;
+    if (lockResetTimerRef.current) clearTimeout(lockResetTimerRef.current);
+    lockResetTimerRef.current = setTimeout(() => {
+      isUpdatingStockRef.current = false;
+    }, 2500);
+
+    setItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (!target) return prev;
+
+      const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
+      const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
+      const actualBottleDiff = newBottles - target.bottlesAvailable;
+      const actualLooseDiff = newLoose - target.looseUnitsAvailable;
+      const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
+
+      if (totalChange !== 0) {
+        const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
+        const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+        const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+
+        recordAuditLog({
+          itemId: target.id,
+          itemGenericName: `${target.genericName} (${target.dosage})`,
+          quantityChanged: totalChange,
+          actionType,
+          details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
+        });
+      }
+
+      const updated = prev.map((item) =>
+        item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
+      );
+      saveLocalCache(updated);
+      return updated;
+    });
+
+    if (stockUpdateTimersRef.current[id]) {
+      clearTimeout(stockUpdateTimersRef.current[id]);
+    }
+    stockUpdateTimersRef.current[id] = setTimeout(() => {
+      const latestItem = itemsRef.current.find((i) => i.id === id);
+      if (latestItem) {
+        fetch(`/api/inventory/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(latestItem),
+        }).catch((e) => console.error('Failed to sync stock update', e));
+      }
       delete stockUpdateTimersRef.current[id];
     }, 400);
   };
@@ -428,6 +481,7 @@ export default function Home() {
           <AdminPortal
             items={items}
             onUpdateStock={handleUpdateStock}
+            onAdjustStock={handleAdjustStock}
             onEditItem={openEditModal}
             onDeleteItem={handleDeleteItem}
             onOpenCreateModal={openCreateModal}
@@ -500,6 +554,7 @@ export default function Home() {
                             item={item}
                             role={role}
                             onUpdateStock={handleUpdateStock}
+                            onAdjustStock={handleAdjustStock}
                             onEditItem={openEditModal}
                           />
                         ))}

@@ -256,6 +256,30 @@ export async function GET() {
           directions: item.directions || '',
         }));
         return NextResponse.json(mapped);
+      } else if (!error && (!data || data.length === 0)) {
+        // Automatically seed Supabase Cloud Postgres with initial clinic formulations if empty
+        try {
+          const seedPayload = fullClinicItems.map(item => ({
+            id: item.id,
+            shelf_location: item.shelfLocation,
+            generic_name: item.genericName,
+            brand_name: item.brandName,
+            chemical_name: item.chemicalName,
+            dosage: item.dosage,
+            item_type: item.itemType,
+            stock_unit: item.stockUnit,
+            sub_unit: item.subUnit,
+            bottles_available: item.bottlesAvailable,
+            loose_units_available: item.looseUnitsAvailable,
+            pills_per_bottle: item.pillsPerBottle,
+            expiration_date: item.expirationDate,
+            lot_numbers: item.lotNumbers,
+            directions: item.directions,
+          }));
+          await supabase.from('inventory_items').insert(seedPayload);
+        } catch (seedErr) {
+          console.warn('Auto-seed warning:', seedErr);
+        }
       }
     } catch (e) {
       console.warn('Supabase Cloud GET error:', e);

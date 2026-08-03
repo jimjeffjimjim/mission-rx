@@ -22,10 +22,11 @@ interface InventoryCardProps {
   item: InventoryItem;
   role: AuthRole;
   onUpdateStock: (id: string, newBottles: number, newLoose: number) => void;
+  onAdjustStock?: (id: string, bottleDelta: number, looseDelta: number) => void;
   onEditItem: (item: InventoryItem) => void;
 }
 
-export default function InventoryCard({ item, role, onUpdateStock, onEditItem }: InventoryCardProps) {
+export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock, onEditItem }: InventoryCardProps) {
   // Local state for direct numeric typing entry when in Admin mode
   const [editingBottles, setEditingBottles] = useState(false);
   const [bottlesInput, setBottlesInput] = useState(item.bottlesAvailable.toString());
@@ -95,27 +96,49 @@ export default function InventoryCard({ item, role, onUpdateStock, onEditItem }:
 
   // Stock mutation helpers
   const incrementBottles = () => {
-    const newVal = item.bottlesAvailable + 1;
-    onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
-    setBottlesInput(newVal.toString());
+    if (onAdjustStock) {
+      onAdjustStock(item.id, 1, 0);
+      setBottlesInput((item.bottlesAvailable + 1).toString());
+    } else {
+      const newVal = item.bottlesAvailable + 1;
+      onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
+      setBottlesInput(newVal.toString());
+    }
   };
 
   const decrementBottles = () => {
-    const newVal = Math.max(0, item.bottlesAvailable - 1);
-    onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
-    setBottlesInput(newVal.toString());
+    if (item.bottlesAvailable <= 0) return;
+    if (onAdjustStock) {
+      onAdjustStock(item.id, -1, 0);
+      setBottlesInput((Math.max(0, item.bottlesAvailable - 1)).toString());
+    } else {
+      const newVal = Math.max(0, item.bottlesAvailable - 1);
+      onUpdateStock(item.id, newVal, item.looseUnitsAvailable);
+      setBottlesInput(newVal.toString());
+    }
   };
 
   const incrementLoose = () => {
-    const newVal = item.looseUnitsAvailable + 1;
-    onUpdateStock(item.id, item.bottlesAvailable, newVal);
-    setLooseInput(newVal.toString());
+    if (onAdjustStock) {
+      onAdjustStock(item.id, 0, 1);
+      setLooseInput((item.looseUnitsAvailable + 1).toString());
+    } else {
+      const newVal = item.looseUnitsAvailable + 1;
+      onUpdateStock(item.id, item.bottlesAvailable, newVal);
+      setLooseInput(newVal.toString());
+    }
   };
 
   const decrementLoose = () => {
-    const newVal = Math.max(0, item.looseUnitsAvailable - 1);
-    onUpdateStock(item.id, item.bottlesAvailable, newVal);
-    setLooseInput(newVal.toString());
+    if (item.looseUnitsAvailable <= 0) return;
+    if (onAdjustStock) {
+      onAdjustStock(item.id, 0, -1);
+      setLooseInput((Math.max(0, item.looseUnitsAvailable - 1)).toString());
+    } else {
+      const newVal = Math.max(0, item.looseUnitsAvailable - 1);
+      onUpdateStock(item.id, item.bottlesAvailable, newVal);
+      setLooseInput(newVal.toString());
+    }
   };
 
   const commitBottlesInput = () => {

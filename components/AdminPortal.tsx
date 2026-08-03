@@ -30,6 +30,7 @@ import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 interface AdminPortalProps {
   items: InventoryItem[];
   onUpdateStock: (id: string, newBottles: number, newLoose: number) => void;
+  onAdjustStock?: (id: string, bottleDelta: number, looseDelta: number) => void;
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
   onOpenCreateModal: () => void;
@@ -41,6 +42,7 @@ interface AdminPortalProps {
 export default function AdminPortal({
   items,
   onUpdateStock,
+  onAdjustStock,
   onEditItem,
   onDeleteItem,
   onOpenCreateModal,
@@ -393,7 +395,7 @@ export default function AdminPortal({
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => onUpdateStock(item.id, Math.max(0, item.bottlesAvailable - 1), item.looseUnitsAvailable)}
+                              onClick={() => item.bottlesAvailable > 0 && (onAdjustStock ? onAdjustStock(item.id, -1, 0) : onUpdateStock(item.id, Math.max(0, item.bottlesAvailable - 1), item.looseUnitsAvailable))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Dispense 1 Bottle (-1)"
                             >
@@ -404,7 +406,7 @@ export default function AdminPortal({
                             </span>
                             <button
                               type="button"
-                              onClick={() => onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable)}
+                              onClick={() => (onAdjustStock ? onAdjustStock(item.id, 1, 0) : onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Restock 1 Bottle (+1)"
                             >
@@ -417,7 +419,7 @@ export default function AdminPortal({
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => onUpdateStock(item.id, item.bottlesAvailable, Math.max(0, item.looseUnitsAvailable - 1))}
+                              onClick={() => item.looseUnitsAvailable > 0 && (onAdjustStock ? onAdjustStock(item.id, 0, -1) : onUpdateStock(item.id, item.bottlesAvailable, Math.max(0, item.looseUnitsAvailable - 1)))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Dispense 1 Loose Unit (-1)"
                             >
@@ -428,7 +430,7 @@ export default function AdminPortal({
                             </span>
                             <button
                               type="button"
-                              onClick={() => onUpdateStock(item.id, item.bottlesAvailable, item.looseUnitsAvailable + 1)}
+                              onClick={() => (onAdjustStock ? onAdjustStock(item.id, 0, 1) : onUpdateStock(item.id, item.bottlesAvailable, item.looseUnitsAvailable + 1))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Restock 1 Loose Unit (+1)"
                             >
