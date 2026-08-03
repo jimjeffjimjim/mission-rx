@@ -105,8 +105,17 @@ export default function Home() {
         body: JSON.stringify(batch),
       });
       if (res.ok || (res.status !== 500 && res.status !== 504)) {
-        queue.splice(0, batch.length);
-        localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
+        const currentRaw = localStorage.getItem('mission_rx_audit_queue');
+        if (currentRaw) {
+          try {
+            const currentQueue: any[] = JSON.parse(currentRaw);
+            const sentIds = new Set(batch.map((b: any) => b.id));
+            const remainingQueue = currentQueue.filter((item: any) => !sentIds.has(item.id));
+            localStorage.setItem('mission_rx_audit_queue', JSON.stringify(remainingQueue));
+          } catch (e) {
+            localStorage.setItem('mission_rx_audit_queue', JSON.stringify([]));
+          }
+        }
       }
     } catch (err) {
       // Network offline or temporary interruption; retry in next loop
@@ -159,6 +168,7 @@ export default function Home() {
   }) => {
     if (typeof window === 'undefined') return;
     const payload = {
+      id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
       ...logData,
       userRole: role === 'LOCKED' ? 'STAFF' : role,
       createdAt: new Date().toISOString(),
@@ -237,7 +247,7 @@ export default function Home() {
     }, 400);
   };
 
-  // Delta adjustment for rapid multi-click "spamming" without closure race conditions
+  // Delta adjustment for rapid multi-click "spamming" without closure or state batching race conditions
   const handleAdjustStock = (id: string, bottleDelta: number, looseDelta: number) => {
     isUpdatingStockRef.current = true;
     if (lockResetTimerRef.current) clearTimeout(lockResetTimerRef.current);
@@ -245,36 +255,35 @@ export default function Home() {
       isUpdatingStockRef.current = false;
     }, 2500);
 
-    setItems((prev) => {
-      const target = prev.find((i) => i.id === id);
-      if (!target) return prev;
+    // Synchronously update itemsRef so immediate successive clicks instantly read the newest stock counts
+    const targetIndex = itemsRef.current.findIndex((i) => i.id === id);
+    if (targetIndex === -1) return;
 
-      const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
-      const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
-      const actualBottleDiff = newBottles - target.bottlesAvailable;
-      const actualLooseDiff = newLoose - target.looseUnitsAvailable;
-      const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
+    const target = itemsRef.current[targetIndex];
+    const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
+    const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
+    const actualBottleDiff = newBottles - target.bottlesAvailable;
+    const actualLooseDiff = newLoose - target.looseUnitsAvailable;
+    const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
 
-      if (totalChange !== 0) {
-        const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-        const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-        const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+    if (totalChange !== 0) {
+      const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
+      const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+      const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
 
-        recordAuditLog({
-          itemId: target.id,
-          itemGenericName: `${target.genericName} (${target.dosage})`,
-          quantityChanged: totalChange,
-          actionType,
-          details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
-        });
-      }
+      recordAuditLog({
+        itemId: target.id,
+        itemGenericName: `${target.genericName} (${target.dosage})`,
+        quantityChanged: totalChange,
+        actionType,
+        details: `${verb}: ${Math.abs(totalChange)} ${unitType} [Remaining: ${newBottles} bottles, ${newLoose} loose]`,
+      });
 
-      const updated = prev.map((item) =>
-        item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
-      );
-      saveLocalCache(updated);
-      return updated;
-    });
+      const updatedItem = { ...target, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose };
+      itemsRef.current = itemsRef.current.map((item) => (item.id === id ? updatedItem : item));
+      saveLocalCache(itemsRef.current);
+      setItems([...itemsRef.current]);
+    }
 
     if (stockUpdateTimersRef.current[id]) {
       clearTimeout(stockUpdateTimersRef.current[id]);
