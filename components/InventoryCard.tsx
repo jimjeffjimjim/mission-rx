@@ -13,10 +13,8 @@ import {
   Tag, 
   Layers, 
   AlertTriangle,
-  FileText,
-  ShieldAlert
+  FileText
 } from 'lucide-react';
-import { checkLASA } from '@/lib/lasa';
 
 interface InventoryCardProps {
   item: InventoryItem;
@@ -86,10 +84,6 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
       return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `Exp: ${item.expirationDate}` };
     }
   }, [item.expirationDate]);
-
-  const lasaAlert = React.useMemo(() => {
-    return checkLASA(item.genericName || item.brandName);
-  }, [item.genericName, item.brandName]);
 
   // Low stock check
   const isLowStock = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
@@ -218,18 +212,6 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
             <div className="pt-2 flex items-start gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200 select-text">
               <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5] mt-0.5" />
               <p className="font-medium text-slate-700 leading-relaxed">{item.directions}</p>
-            </div>
-          )}
-
-          {/* LASA Safety Alert Badge */}
-          {lasaAlert && (
-            <div className="mt-2 flex items-start gap-2 text-xs bg-amber-50 text-amber-950 p-2.5 rounded-xl border-2 border-amber-400 select-text font-semibold shadow-2xs">
-              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5] mt-0.5" />
-              <div className="min-w-0">
-                <span className="font-black text-[10px] uppercase tracking-wider block text-amber-900">⚠️ LASA Safety Warning</span>
-                <span className="font-mono font-black text-xs sm:text-sm text-amber-950 block truncate">{lasaAlert.tallManName}</span>
-                <span className="text-slate-700 text-[11px] block font-medium mt-0.5">Confused with: <strong className="font-black font-mono text-rose-700 underline">{lasaAlert.tallManConfusedWith}</strong></span>
-              </div>
             </div>
           )}
         </div>

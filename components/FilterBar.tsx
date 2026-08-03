@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { FilterCategory, StatusFilter } from '@/types/inventory';
 import { getSpecialtyColor, getCustomSpecialties } from '@/lib/specialtyColors';
-import { Search, AlertTriangle, Clock, X, ShieldAlert } from 'lucide-react';
-
+import { Search, AlertTriangle, Clock, X } from 'lucide-react';
 interface FilterBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -86,18 +85,6 @@ export default function FilterBar({
             >
               <Clock className={`w-4 h-4 stroke-[2.5] ${selectedStatus === 'EXPIRING' ? 'text-slate-950 animate-spin' : 'text-amber-600'}`} />
               <span>Expiring Within 30d</span>
-            </button>
-
-            <button
-              onClick={() => onStatusChange(selectedStatus === 'LASA_ALERT' ? 'ALL' : 'LASA_ALERT')}
-              className={`flex items-center gap-2 min-h-[48px] px-4 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 ${
-                selectedStatus === 'LASA_ALERT'
-                  ? 'bg-amber-600 text-white border-amber-700 shadow-md shadow-amber-600/25 scale-[1.02]'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-amber-300'
-              }`}
-            >
-              <ShieldAlert className={`w-4 h-4 stroke-[2.5] ${selectedStatus === 'LASA_ALERT' ? 'text-white' : 'text-amber-600'}`} />
-              <span>LASA Risk Drugs</span>
             </button>
           </div>
         </div>

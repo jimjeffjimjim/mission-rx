@@ -44,4 +44,4 @@ export type FilterCategory =
   | 'Over-The-Counter (OTC)'
   | 'Supplies';
 
-export type StatusFilter = 'ALL' | 'LOW_STOCK' | 'EXPIRING' | 'LASA_ALERT';
+export type StatusFilter = 'ALL' | 'LOW_STOCK' | 'EXPIRING';

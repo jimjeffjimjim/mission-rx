@@ -10,7 +10,6 @@ import ItemEditModal from '@/components/ItemEditModal';
 import AdminPortal from '@/components/AdminPortal';
 import AuditLogModal from '@/components/AuditLogModal';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
-import { checkLASA } from '@/lib/lasa';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
@@ -521,9 +520,6 @@ export default function Home() {
         } catch (e) {
           return false;
         }
-      } else if (selectedStatus === 'LASA_ALERT') {
-        const alert = checkLASA(item.genericName || item.brandName);
-        if (!alert) return false;
       }
 
       return true;

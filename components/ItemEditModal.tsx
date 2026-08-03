@@ -14,12 +14,10 @@ import {
   CheckCircle2, 
   ToggleLeft, 
   ToggleRight, 
-  ShieldAlert,
   BookOpen,
   Check
 } from 'lucide-react';
 import { searchMedicalKnowledge, parseQuizletText, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
-import { checkLASA } from '@/lib/lasa';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 
 interface ItemEditModalProps {
@@ -140,8 +138,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   }, [item, isOpen]);
 
   if (!isOpen) return null;
-
-  const lasaAlert = checkLASA(formData.genericName || formData.brandName || '');
 
   const handleChange = (field: keyof InventoryItem, value: any) => {
     setFormData((prev) => {
@@ -454,26 +450,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               <Zap className="w-4 h-4 fill-white" />
               <span>Parse & Autofill Form</span>
             </button>
-          </div>
-        )}
-
-        {/* LASA Safety Alert Warning Banner */}
-        {lasaAlert && (
-          <div className="mb-5 p-4 bg-amber-50/90 border-2 border-amber-400 rounded-2xl text-slate-900 shadow-md flex items-start gap-3.5 animate-fadeIn">
-            <ShieldAlert className="w-7 h-7 text-amber-600 shrink-0 stroke-[2.5] mt-0.5" />
-            <div className="space-y-1.5 text-xs min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-black uppercase tracking-wider bg-amber-300 text-amber-950 px-2 py-0.5 rounded-md text-[10px] shadow-2xs">
-                  ⚠️ LASA Safety Alert
-                </span>
-                <span className="font-mono font-black text-amber-950 text-xs sm:text-sm bg-white/80 px-2 py-0.5 rounded-md border border-amber-300">
-                  {lasaAlert.tallManName}
-                </span>
-              </div>
-              <p className="font-extrabold text-slate-900 text-xs">
-                Commonly confused with: <span className="text-rose-700 font-black font-mono underline decoration-2">{lasaAlert.tallManConfusedWith}</span> ({lasaAlert.confusedWith})
-              </p>
-            </div>
           </div>
         )}
 
