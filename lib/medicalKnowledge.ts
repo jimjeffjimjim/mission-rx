@@ -11,50 +11,209 @@ export interface MedicalDrugEntry {
 }
 
 export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
+  // === DERMATOLOGY ===
   {
     genericName: 'Clobetasol Propionate',
-    brandName: 'Clobetasol 0.05%',
+    brandName: 'Temovate / Clobetasol 0.05%',
     chemicalName: 'Ultra-High Potency Topical Corticosteroid',
     category: 'Dermatology',
     defaultDosage: '0.05% Cream',
     defaultUnit: 'Tubes',
     defaultSubUnit: 'tubes',
-    typicalDirections: 'Apply a thin layer to the affected area as directed by provider.',
+    typicalDirections: 'Apply a thin layer to the affected area twice daily as directed by provider.',
     contraindications: 'Do not use on open wounds, viral skin lesions (e.g., herpes, varicella), or face/groin without specialist guidance.'
   },
   {
     genericName: 'Fluocinonide',
-    brandName: 'Fluocinonide 0.05%',
+    brandName: 'Lidex / Fluocinonide 0.05%',
     chemicalName: 'High-Potency Topical Corticosteroid',
     category: 'Dermatology',
     defaultDosage: '0.05% Cream',
     defaultUnit: 'Tubes',
     defaultSubUnit: 'tubes',
-    typicalDirections: 'Apply a thin layer to the affected area as directed by provider.',
+    typicalDirections: 'Apply a thin layer to the affected skin 2 to 4 times daily as directed by provider.',
     contraindications: 'Avoid prolonged use (>2 consecutive weeks) to prevent skin atrophy and systemic absorption.'
   },
   {
-    genericName: 'Cetirizine HCl',
-    brandName: 'Zyrtec Allergy',
-    chemicalName: 'Second-Generation Antihistamine',
-    category: 'Over-The-Counter (OTC)',
-    defaultDosage: '10 mg Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth once daily as needed for allergies.',
-    contraindications: 'Known allergy to cetirizine or hydroxyzine; use caution with concurrent CNS depressants or alcohol.'
+    genericName: 'Triamcinolone Acetonide',
+    brandName: 'Kenalog',
+    chemicalName: 'Medium-Potency Topical Corticosteroid',
+    category: 'Dermatology',
+    defaultDosage: '0.1% Cream / Ointment',
+    defaultUnit: 'Tubes',
+    defaultSubUnit: 'tubes',
+    typicalDirections: 'Apply a thin film to the affected skin 2 to 4 times daily as directed.',
+    contraindications: 'Not for ophthalmic use or untreated deep skin infections.'
   },
   {
-    genericName: 'Diphenhydramine HCl',
-    brandName: 'Benadryl Allergy',
-    chemicalName: 'First-Generation Antihistamine',
-    category: 'Over-The-Counter (OTC)',
-    defaultDosage: '25 mg Tablet',
+    genericName: 'Mupirocin',
+    brandName: 'Bactroban',
+    chemicalName: 'Topical Antibacterial',
+    category: 'Dermatology',
+    defaultDosage: '2% Ointment',
+    defaultUnit: 'Tubes',
+    defaultSubUnit: 'tubes',
+    typicalDirections: 'Apply a small amount to the affected area 3 times daily for up to 10 days.',
+    contraindications: 'Avoid application to extensive burns or open wounds due to polyethylene glycol absorption.'
+  },
+  {
+    genericName: 'Ketoconazole Topical',
+    brandName: 'Nizoral',
+    chemicalName: 'Azole Antifungal',
+    category: 'Dermatology',
+    defaultDosage: '2% Cream / Shampoo',
+    defaultUnit: 'Tubes',
+    defaultSubUnit: 'tubes',
+    typicalDirections: 'Apply to the affected area once daily for 2 to 4 weeks.',
+    contraindications: 'Known hypersensitivity to imidazole antifungals.'
+  },
+  {
+    genericName: 'Clindamycin Phosphate Topical',
+    brandName: 'Cleocin T / Clindagel',
+    chemicalName: 'Lincosamide Antibacterial',
+    category: 'Dermatology',
+    defaultDosage: '1% Gel / Solution',
+    defaultUnit: 'Tubes',
+    defaultSubUnit: 'tubes',
+    typicalDirections: 'Apply a thin film to affected acne-prone skin twice daily.',
+    contraindications: 'History of regional enteritis, ulcerative colitis, or antibiotic-associated colitis.'
+  },
+  {
+    genericName: 'Hydrocortisone Ointment',
+    brandName: 'Cortizone 10',
+    chemicalName: 'Low-Potency Topical Corticosteroid',
+    category: 'Over the Counter',
+    defaultDosage: '1% Ointment',
+    defaultUnit: 'Tubes',
+    defaultSubUnit: 'tubes',
+    typicalDirections: 'Apply sparingly to affected skin up to 3 to 4 times daily.',
+    contraindications: 'Do not use on undiagnosed bacterial, fungal, or viral skin infection.'
+  },
+
+  // === INFECTIOUS DISEASE / ANTIBIOTICS ===
+  {
+    genericName: 'Amoxicillin',
+    brandName: 'Amoxil / Moxatag',
+    chemicalName: 'Beta-Lactam Penicillin Antibiotic',
+    category: 'Infectious Disease',
+    defaultDosage: '500 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 1 capsule (500 mg) by mouth every 8 hours or 875 mg every 12 hours for 7 to 10 days.',
+    contraindications: 'History of severe allergic reaction (e.g., anaphylaxis, Stevens-Johnson syndrome) to any penicillin or cephalosporin.'
+  },
+  {
+    genericName: 'Amoxicillin / Clavulanic Acid',
+    brandName: 'Augmentin',
+    chemicalName: 'Beta-Lactam + Beta-Lactamase Inhibitor',
+    category: 'Infectious Disease',
+    defaultDosage: '875/125 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 4–6 hours as needed for allergy symptoms.',
-    contraindications: 'May cause severe sedation. Avoid operating machinery. Caution in patients with narrow-angle glaucoma or urinary retention.'
+    typicalDirections: 'Take 1 tablet by mouth every 12 hours with food to reduce GI upset.',
+    contraindications: 'History of Augmentin-associated cholestatic jaundice or severe penicillin hypersensitivity.'
   },
+  {
+    genericName: 'Azithromycin',
+    brandName: 'Zithromax / Z-Pak',
+    chemicalName: 'Macrolide Antibacterial',
+    category: 'Infectious Disease',
+    defaultDosage: '250 mg Tablet (6-Tablet Pack)',
+    defaultUnit: 'Packs',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 2 tablets (500 mg) on Day 1, then 1 tablet (250 mg) once daily on Days 2 through 5.',
+    contraindications: 'Known hypersensitivity to macrolides; caution in patients with prolonged QTc interval or severe hepatic impairment.'
+  },
+  {
+    genericName: 'Doxycycline Hyclate',
+    brandName: 'Vibramycin / Doryx',
+    chemicalName: 'Tetracycline Antibacterial',
+    category: 'Infectious Disease',
+    defaultDosage: '100 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 100 mg by mouth twice daily with a full glass of water. Maintain upright posture for 30 minutes post-dose.',
+    contraindications: 'Avoid in children under 8 years and during the second/third trimesters of pregnancy due to tooth discoloration risk.'
+  },
+  {
+    genericName: 'Cephalexin',
+    brandName: 'Keflex',
+    chemicalName: 'First-Generation Cephalosporin Antibiotic',
+    category: 'Infectious Disease',
+    defaultDosage: '500 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 1 capsule (500 mg) by mouth every 6 hours for 7 to 10 days.',
+    contraindications: 'Known severe allergy to cephalosporin class antibiotics.'
+  },
+  {
+    genericName: 'Ciprofloxacin',
+    brandName: 'Cipro',
+    chemicalName: 'Fluoroquinolone Antibacterial',
+    category: 'Infectious Disease',
+    defaultDosage: '500 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth every 12 hours. Do not administer simultaneously with dairy or calcium-fortified juices.',
+    contraindications: 'Black Box Warning: Risk of tendinitis, tendon rupture, peripheral neuropathy, and CNS effects. Concurrent tizanidine administration contraindicated.'
+  },
+  {
+    genericName: 'Sulfamethoxazole / Trimethoprim',
+    brandName: 'Bactrim DS / Septra DS',
+    chemicalName: 'Sulfonamide Antibacterial Combination',
+    category: 'Infectious Disease',
+    defaultDosage: '800/160 mg Double Strength Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth every 12 hours with plenty of fluids.',
+    contraindications: 'Known sulfa drug allergy, megaloblastic anemia due to folate deficiency, or pregnancy at term.'
+  },
+  {
+    genericName: 'Metronidazole',
+    brandName: 'Flagyl',
+    chemicalName: 'Nitroimidazole Antimicrobial',
+    category: 'Infectious Disease',
+    defaultDosage: '500 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth three times daily with a meal.',
+    contraindications: 'Strict avoidance of alcohol during therapy and for at least 3 days afterward (disulfiram-like reaction).'
+  },
+  {
+    genericName: 'Nitrofurantoin',
+    brandName: 'Macrobid / Macrodantin',
+    chemicalName: 'Nitrofuran Antibacterial',
+    category: 'Infectious Disease',
+    defaultDosage: '100 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 100 mg by mouth twice daily with meals for 5 to 7 days for uncomplicated urinary tract infection.',
+    contraindications: 'Anuria, oliguria, or significant impairment of renal function (CrCl < 30 mL/min); pregnancy at term.'
+  },
+  {
+    genericName: 'Fluconazole',
+    brandName: 'Diflucan',
+    chemicalName: 'Triazole Antifungal',
+    category: 'Infectious Disease',
+    defaultDosage: '150 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet (150 mg) by mouth as a single dose for candidiasis.',
+    contraindications: 'Co-administration with terfenadine, cisapride, or pimozide due to risk of cardiac arrhythmias.'
+  },
+  {
+    genericName: 'Valacyclovir HCl',
+    brandName: 'Valtrex',
+    chemicalName: 'Nucleoside Analogue Antiviral',
+    category: 'Infectious Disease',
+    defaultDosage: '1000 mg (1 g) Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1000 mg by mouth three times daily for 7 days (shingles) or twice daily for HSV episodes.',
+    contraindications: 'Hypersensitivity to valacyclovir or acyclovir. Maintain adequate hydration during therapy.'
+  },
+
+  // === CARDIOLOGY / CARDIOVASCULAR ===
   {
     genericName: 'Lisinopril',
     brandName: 'Zestril / Prinivil',
@@ -67,6 +226,28 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     contraindications: 'Contraindicated in pregnancy and patients with a history of angioedema related to previous ACE inhibitor treatment.'
   },
   {
+    genericName: 'Losartan Potassium',
+    brandName: 'Cozaar',
+    chemicalName: 'Angiotensin II Receptor Blocker (ARB)',
+    category: 'Cardiology',
+    defaultDosage: '50 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily for hypertension or diabetic nephropathy.',
+    contraindications: 'Black Box Warning: Fetal toxicity. Discontinue immediately when pregnancy is detected.'
+  },
+  {
+    genericName: 'Amlodipine Besylate',
+    brandName: 'Norvasc',
+    chemicalName: 'Dihydropyridine Calcium Channel Blocker',
+    category: 'Cardiology',
+    defaultDosage: '5 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily. May titrate up to 10 mg as clinically indicated.',
+    contraindications: 'Severe hypotension or cardiogenic shock. Monitor for dose-dependent systemic edema.'
+  },
+  {
     genericName: 'Atorvastatin Calcium',
     brandName: 'Lipitor',
     chemicalName: 'HMG-CoA Reductase Inhibitor (Statin)',
@@ -74,174 +255,668 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     defaultDosage: '20 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth daily in the evening.',
+    typicalDirections: 'Take 1 tablet by mouth once daily in the evening.',
     contraindications: 'Active liver disease or unexplained persistent elevations of serum transaminases. Avoid in pregnancy/nursing.'
+  },
+  {
+    genericName: 'Rosuvastatin Calcium',
+    brandName: 'Crestor',
+    chemicalName: 'High-Potency HMG-CoA Reductase Inhibitor',
+    category: 'Cardiology',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily at any time of day.',
+    contraindications: 'Active hepatic disease or acute liver failure. Monitor for signs of myopathy or rhabdomyolysis.'
   },
   {
     genericName: 'Metoprolol Succinate',
     brandName: 'Toprol XL',
-    chemicalName: 'Beta-1 Selective Beta Blocker',
+    chemicalName: 'Beta-1 Selective Beta Blocker (Extended-Release)',
     category: 'Cardiology',
     defaultDosage: '50 mg Extended-Release Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth once daily with or immediately after a meal.',
+    typicalDirections: 'Take 1 tablet by mouth once daily with or immediately after a meal. Do not chew or crush.',
     contraindications: 'Severe bradycardia, second- or third-degree heart block, overt heart failure, or cardiogenic shock.'
   },
   {
-    genericName: 'Aripiprazole',
-    brandName: 'Abilify',
-    chemicalName: 'Atypical Antipsychotic (D2 Partial Agonist)',
+    genericName: 'Metoprolol Tartrate',
+    brandName: 'Lopressor',
+    chemicalName: 'Beta-1 Selective Beta Blocker (Immediate-Release)',
+    category: 'Cardiology',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth twice daily with meals.',
+    contraindications: 'Do not abruptly discontinue without clinical tapering due to risk of myocardial rebound ischemia.'
+  },
+  {
+    genericName: 'Carvedilol',
+    brandName: 'Coreg',
+    chemicalName: 'Non-selective Beta & Alpha-1 Blocker',
+    category: 'Cardiology',
+    defaultDosage: '6.25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth twice daily with food to slow absorption and minimize orthostatic hypotension.',
+    contraindications: 'Bronchial asthma, severe sinus bradycardia, second/third-degree AV block without pacemaker, cardiogenic shock.'
+  },
+  {
+    genericName: 'Hydrochlorothiazide (HCTZ)',
+    brandName: 'Microzide',
+    chemicalName: 'Thiazide Diuretic',
+    category: 'Cardiology',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily in the morning to prevent nocturnal diuresis.',
+    contraindications: 'Anuria or hypersensitivity to sulfonamide-derived drugs; monitor electrolytes for hypokalemia.'
+  },
+  {
+    genericName: 'Furosemide',
+    brandName: 'Lasix',
+    chemicalName: 'Loop Diuretic',
+    category: 'Cardiology',
+    defaultDosage: '40 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 40 mg by mouth once or twice daily in the morning/early afternoon.',
+    contraindications: 'Anuria or hepatic coma. Monitor serum potassium and electrolyte panels closely during diuresis.'
+  },
+  {
+    genericName: 'Spironolactone',
+    brandName: 'Aldactone',
+    chemicalName: 'Aldosterone Receptor Antagonist / Potassium-Sparing Diuretic',
+    category: 'Cardiology',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily.',
+    contraindications: 'Hyperkalemia (serum potassium > 5.0 mEq/L), Addison’s disease, or significant renal impairment.'
+  },
+  {
+    genericName: 'Clopidogrel Bisulfate',
+    brandName: 'Plavix',
+    chemicalName: 'P2Y12 ADP Platelet Inhibitor',
+    category: 'Cardiology',
+    defaultDosage: '75 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet (75 mg) by mouth once daily without regard to food.',
+    contraindications: 'Active pathologic bleeding such as peptic ulcer or intracranial hemorrhage. Diminished effectiveness in CYP2C19 poor metabolizers.'
+  },
+  {
+    genericName: 'Apixaban',
+    brandName: 'Eliquis',
+    chemicalName: 'Direct Factor Xa Inhibitor (DOAC)',
+    category: 'Cardiology',
+    defaultDosage: '5 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 5 mg by mouth twice daily for non-valvular atrial fibrillation or DVT/PE treatment.',
+    contraindications: 'Active pathological bleeding or prosthetic mechanical heart valves. Black Box Warning: Risk of hematoma with epidural anesthesia.'
+  },
+  {
+    genericName: 'Rivaroxaban',
+    brandName: 'Xarelto',
+    chemicalName: 'Direct Factor Xa Inhibitor (DOAC)',
+    category: 'Cardiology',
+    defaultDosage: '20 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily with the evening meal (food essential for absorption of doses >= 15 mg).',
+    contraindications: 'Active major bleeding. Premature discontinuation increases thrombosis risk.'
+  },
+
+  // === PSYCHIATRY & NEUROLOGY ===
+  {
+    genericName: 'Sertraline HCl',
+    brandName: 'Zoloft',
+    chemicalName: 'Selective Serotonin Reuptake Inhibitor (SSRI)',
+    category: 'Psychiatry',
+    defaultDosage: '50 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily, either in the morning or evening.',
+    contraindications: 'Black Box Warning: Suicidal thoughts/behavior in children and young adults. Do not combine with MAOIs or pimozide.'
+  },
+  {
+    genericName: 'Escitalopram Oxalate',
+    brandName: 'Lexapro',
+    chemicalName: 'Selective Serotonin Reuptake Inhibitor (SSRI)',
     category: 'Psychiatry',
     defaultDosage: '10 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take as directed by provider. Take at the same time each day.',
-    contraindications: 'Black Box Warning: Increased risk of suicidal thinking and behavior in young adults.'
+    typicalDirections: 'Take 1 tablet by mouth once daily.',
+    contraindications: 'Concurrent use of MAOIs or pimozide. Monitor for serotonin syndrome when co-administered with serotonergic agents.'
   },
   {
-    genericName: 'Bupropion HCl SR',
-    brandName: 'Wellbutrin SR',
-    chemicalName: 'Norepinephrine-Dopamine Reuptake Inhibitor (NDRI)',
-    category: 'Psychiatry',
-    defaultDosage: '100 mg Sustained-Release Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take as directed by provider. Swallow whole; do not crush, chew, or split.',
-    contraindications: 'Contraindicated in patients with seizure disorders, bulimia or anorexia nervosa.'
-  },
-  {
-    genericName: 'Escitalopram',
-    brandName: 'Lexapro',
+    genericName: 'Fluoxetine HCl',
+    brandName: 'Prozac',
     chemicalName: 'Selective Serotonin Reuptake Inhibitor (SSRI)',
     category: 'Psychiatry',
-    defaultDosage: '5 mg Tablet',
+    defaultDosage: '20 mg Capsule',
     defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take as directed by provider.',
-    contraindications: 'Contraindicated with concomitant MAOI use or within 14 days of MAOI discontinuation.'
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 20 mg by mouth once daily in the morning.',
+    contraindications: 'Use of an MAOI intended to treat psychological disorders within 14 days before starting or 5 weeks after discontinuing fluoxetine.'
   },
   {
-    genericName: 'Lurasidone HCl',
-    brandName: 'Latuda',
-    chemicalName: 'Atypical Antipsychotic',
+    genericName: 'Duloxetine HCl',
+    brandName: 'Cymbalta',
+    chemicalName: 'Serotonin-Norepinephrine Reuptake Inhibitor (SNRI)',
     category: 'Psychiatry',
-    defaultDosage: '20 mg Oral Tablet',
+    defaultDosage: '60 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 60 mg by mouth once daily without regard to food. Swallow capsules whole.',
+    contraindications: 'Use in patients with severe hepatic impairment or end-stage renal disease (CrCl < 30 mL/min). Risk of hepatotoxicity.'
+  },
+  {
+    genericName: 'Bupropion HCl SR / XL',
+    brandName: 'Wellbutrin SR / XL / Zyban',
+    chemicalName: 'Norepinephrine-Dopamine Reuptake Inhibitor (NDRI)',
+    category: 'Psychiatry',
+    defaultDosage: '150 mg Extended-Release Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take as directed by provider. Take with food (at least 350 calories).',
-    contraindications: 'Contraindicated with strong CYP3A4 inhibitors (e.g., ketoconazole) and inducers (e.g., rifampin).'
+    typicalDirections: 'Take 150 mg by mouth once daily in the morning. Swallow whole; do not crush or chew.',
+    contraindications: 'Seizure disorders, bulimia or anorexia nervosa, and concurrent discontinuation of alcohol or sedatives/benzodiazepines.'
+  },
+  {
+    genericName: 'Trazodone HCl',
+    brandName: 'Desyrel',
+    chemicalName: 'Serotonin Antagonist and Reuptake Inhibitor (SARI)',
+    category: 'Psychiatry',
+    defaultDosage: '50 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 50 to 100 mg by mouth at bedtime as needed for insomnia or related mood symptoms.',
+    contraindications: 'Co-administration with MAOIs; monitor for somnolence, orthostasis, or priapism.'
+  },
+  {
+    genericName: 'Aripiprazole',
+    brandName: 'Abilify',
+    chemicalName: 'Atypical Antipsychotic (D2/5-HT1A Partial Agonist)',
+    category: 'Psychiatry',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take as directed by provider at the same time each day without regard to meals.',
+    contraindications: 'Black Box Warning: Increased mortality in elderly patients with dementia-related psychosis; suicidal ideation in young adults.'
   },
   {
     genericName: 'Quetiapine Fumarate',
     brandName: 'Seroquel',
     chemicalName: 'Atypical Antipsychotic',
     category: 'Psychiatry',
-    defaultDosage: '300 mg Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take as directed by provider.',
-    contraindications: 'May cause sedation, orthostatic hypotension, and metabolic changes.'
-  },
-  {
-    genericName: 'Amoxicillin',
-    brandName: 'Amoxil',
-    chemicalName: 'Beta-Lactam Penicillin Antibiotic',
-    category: 'General Medical',
-    defaultDosage: '500 mg Capsule',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'capsules',
-    typicalDirections: 'Take 1 capsule by mouth three times daily (every 8 hours) until all medication is gone.',
-    contraindications: 'Strictly contraindicated in patients with known severe penicillin hypersensitivity.'
-  },
-  {
-    genericName: 'Amoxicillin/Clavulanic Acid',
-    brandName: 'Augmentin',
-    chemicalName: 'Penicillin Antibiotic + Beta-Lactamase Inhibitor',
-    category: 'General Medical',
-    defaultDosage: '875/125 mg Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 12 hours with meal or snack.',
-    contraindications: 'History of penicillin allergy or cholestatic jaundice associated with amoxicillin-clavulanate.'
-  },
-  {
-    genericName: 'Ciprofloxacin HCl',
-    brandName: 'Cipro',
-    chemicalName: 'Fluoroquinolone Antibiotic',
-    category: 'General Medical',
-    defaultDosage: '500 mg Tablet',
-    defaultUnit: 'Bottles',
-    defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 12 hours with plenty of water.',
-    contraindications: 'Black Box Warning: Increased risk of tendonitis and tendon rupture.'
-  },
-  {
-    genericName: 'Doxycycline Hyclate',
-    brandName: 'Vibramycin',
-    chemicalName: 'Tetracycline Class Broad-Spectrum Antibiotic',
-    category: 'General Medical',
     defaultDosage: '100 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth twice daily with full glass of water. Remain upright for 30 mins.',
-    contraindications: 'Avoid in pregnancy, lactation, and children under 8 years due to permanent tooth discoloration.'
+    typicalDirections: 'Take as directed by provider. For hypnotic or calming properties, take in evening or before bedtime.',
+    contraindications: 'Monitor metabolic profile (lipids, glucose, body weight) and assess for Tardive Dyskinesia or orthostatic hypotension.'
   },
   {
-    genericName: 'Epinephrine Injectable',
-    brandName: 'EpiPen / Adrenalin',
-    chemicalName: 'Alpha- and Beta-Adrenergic Receptor Agonist',
-    category: 'Allergy & Asthma',
-    defaultDosage: '1 mg/ml Auto-Injector (0.3 mg dose)',
-    defaultUnit: 'Vials',
-    defaultSubUnit: 'injectors',
-    typicalDirections: 'Inject IM directly into outer thigh immediately upon acute systemic allergic response.',
-    contraindications: 'No absolute contraindications in life-threatening anaphylaxis.'
+    genericName: 'Lurasidone HCl',
+    brandName: 'Latuda',
+    chemicalName: 'Atypical Antipsychotic',
+    category: 'Psychiatry',
+    defaultDosage: '40 mg Oral Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take once daily with food (at least 350 calories required for significant absorption).',
+    contraindications: 'Co-administration with strong CYP3A4 inhibitors (e.g., ketoconazole) or inducers (e.g., rifampin).'
   },
+  {
+    genericName: 'Gabapentin',
+    brandName: 'Neurontin',
+    chemicalName: 'GABA Analog / Voltage-Gated Calcium Channel Blocker',
+    category: 'Neurology',
+    defaultDosage: '300 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 300 mg by mouth 3 times daily as tolerated and directed for neuropathic pain or adjunct seizure control.',
+    contraindications: 'Monitor for CNS depression, ataxia, and respiratory depression when combined with opioids or sedatives.'
+  },
+  {
+    genericName: 'Pregabalin',
+    brandName: 'Lyrica',
+    chemicalName: 'GABA Analog / Alpha-2-Delta Ligand',
+    category: 'Neurology',
+    defaultDosage: '75 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 75 mg by mouth twice daily for neuropathic pain or fibromyalgia.',
+    contraindications: 'May cause dizziness, somnolence, and peripheral edema. Discontinue gradually over at least 1 week.'
+  },
+  {
+    genericName: 'Topiramate',
+    brandName: 'Topamax',
+    chemicalName: 'Anticonvulsant / Migraine Prophylaxis Agent',
+    category: 'Neurology',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth twice daily for migraine prophylaxis or seizure control.',
+    contraindications: 'Risk of metabolic acidosis, acute myopia, secondary angle-closure glaucoma, and nephrolithiasis (maintain adequate hydration).'
+  },
+  {
+    genericName: 'Sumatriptan Succinate',
+    brandName: 'Imitrex',
+    chemicalName: 'Selective 5-HT1B/1D Receptor Agonist (Triptan)',
+    category: 'Neurology',
+    defaultDosage: '100 mg Tablet',
+    defaultUnit: 'Packs',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet at onset of acute migraine symptom. May repeat dose in 2 hours if required (max 200 mg per day).',
+    contraindications: 'Ischemic coronary artery disease, peripheral vascular disease, history of stroke/TIA, or uncontrolled hypertension.'
+  },
+
+  // === ENDOCRINOLOGY / DIABETES & THYROID ===
+  {
+    genericName: 'Metformin HCl',
+    brandName: 'Glucophage / Glucophage XR',
+    chemicalName: 'Biguanide Antidiabetic',
+    category: 'Endocrinology',
+    defaultDosage: '500 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth twice daily with morning and evening meals to minimize GI distress.',
+    contraindications: 'Black Box Warning: Lactic acidosis. Contraindicated in severe renal impairment (eGFR < 30 mL/min/1.73m²).'
+  },
+  {
+    genericName: 'Glipizide',
+    brandName: 'Glucotrol',
+    chemicalName: 'Sulfonylurea Antidiabetic',
+    category: 'Endocrinology',
+    defaultDosage: '5 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth approximately 30 minutes before breakfast.',
+    contraindications: 'Type 1 diabetes, diabetic ketoacidosis; monitor closely for clinical signs of hypoglycemia.'
+  },
+  {
+    genericName: 'Empagliflozin',
+    brandName: 'Jardiance',
+    chemicalName: 'SGLT2 Inhibitor Antidiabetic',
+    category: 'Endocrinology',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 10 mg by mouth once daily in the morning.',
+    contraindications: 'Patients on dialyses or eGFR < 20 mL/min. Risk of mycotic genital infections and euglycemic diabetic ketoacidosis.'
+  },
+  {
+    genericName: 'Semaglutide',
+    brandName: 'Ozempic / Wegovy',
+    chemicalName: 'GLP-1 Receptor Agonist',
+    category: 'Endocrinology',
+    defaultDosage: '1 mg/0.75 mL Pre-filled Pen',
+    defaultUnit: 'Pens',
+    defaultSubUnit: 'pens',
+    typicalDirections: 'Inject subcutaneously once weekly on the same day each week, any time of day.',
+    contraindications: 'Personal or family history of Medullary Thyroid Carcinoma (MTC) or Multiple Endocrine Neoplasia syndrome type 2 (MEN 2).'
+  },
+  {
+    genericName: 'Insulin Glargine',
+    brandName: 'Lantus / Basaglar / Toujeo',
+    chemicalName: 'Long-Acting Basal Human Insulin Analog',
+    category: 'Endocrinology',
+    defaultDosage: '100 Units/mL (3 mL SoloStar Pen)',
+    defaultUnit: 'Pens',
+    defaultSubUnit: 'pens',
+    typicalDirections: 'Inject subcutaneously once daily at the same time each day.',
+    contraindications: 'During episodes of hypoglycemia or hypersensitivity to insulin glargine. Rotate injection sites regularly.'
+  },
+  {
+    genericName: 'Levothyroxine Sodium',
+    brandName: 'Synthroid / Levoxyl',
+    chemicalName: 'Synthetic Thyroid Hormone (T4)',
+    category: 'Endocrinology',
+    defaultDosage: '50 mcg (0.05 mg) Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet daily with a full glass of water at least 30 to 60 minutes before breakfast on an empty stomach.',
+    contraindications: 'Untreated subclinical or overt thyrotoxicosis, or acute myocardial infarction.'
+  },
+
+  // === PULMONOLOGY / ALLERGY & ASTHMA ===
   {
     genericName: 'Albuterol Sulfate Inhaler',
-    brandName: 'ProAir HFA / Ventolin HFA',
-    chemicalName: 'Short-Acting Beta2-Agonist (SABA)',
-    category: 'Allergy & Asthma',
-    defaultDosage: '90 mcg / actuation',
-    defaultUnit: 'Canisters',
+    brandName: 'ProAir HFA / Ventolin HFA / Proventil HFA',
+    chemicalName: 'Short-Acting Beta-2 Agonist (SABA)',
+    category: 'Pulmonology',
+    defaultDosage: '90 mcg/actuation Aerosol Inhaler',
+    defaultUnit: 'Inhalers',
     defaultSubUnit: 'inhalers',
-    typicalDirections: 'Inhale 1-2 puffs by mouth every 4-6 hours as needed for bronchospasm or wheezing.',
-    contraindications: 'Hypersensitivity to albuterol or milk proteins.'
+    typicalDirections: 'Inhale 2 puffs orally every 4 to 6 hours as needed for bronchospasm or wheezing.',
+    contraindications: 'May cause transient cardiovascular stimulation, tremors, or tachycardia; use caution in ischemic heart disease.'
+  },
+  {
+    genericName: 'Fluticasone Propionate / Salmeterol',
+    brandName: 'Advair Diskus / Advair HFA',
+    chemicalName: 'Inhaled Corticosteroid + Long-Acting Beta-2 Agonist (ICS + LABA)',
+    category: 'Pulmonology',
+    defaultDosage: '250/50 mcg Diskus Inhaler',
+    defaultUnit: 'Inhalers',
+    defaultSubUnit: 'inhalers',
+    typicalDirections: 'Inhale 1 blister twice daily approximately 12 hours apart. Rinse mouth and spit after each administration to prevent oral thrush.',
+    contraindications: 'Not indicated for acute asthma attack relief. Do not initiate during acute episodes of bronchospasm.'
+  },
+  {
+    genericName: 'Budesonide / Formoterol Fumarate',
+    brandName: 'Symbicort HFA',
+    chemicalName: 'Inhaled Corticosteroid + Long-Acting Beta-2 Agonist',
+    category: 'Pulmonology',
+    defaultDosage: '160/4.5 mcg Aerosol Inhaler',
+    defaultUnit: 'Inhalers',
+    defaultSubUnit: 'inhalers',
+    typicalDirections: 'Inhale 2 actuations twice daily every morning and evening. Rinse mouth thoroughly after inhaling.',
+    contraindications: 'Not for acute symptom therapy without concurrent quick-relief bronchodilator protocol.'
+  },
+  {
+    genericName: 'Montelukast Sodium',
+    brandName: 'Singulair',
+    chemicalName: 'Leukotriene Receptor Antagonist',
+    category: 'Pulmonology',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 10 mg by mouth once daily in the evening for chronic asthma or allergy prophylaxis.',
+    contraindications: 'Black Box Warning: Serious neuropsychiatric events including agitation, depression, dream abnormalities, and suicidal thoughts.'
+  },
+  {
+    genericName: 'Fluticasone Propionate Nasal Spray',
+    brandName: 'Flonase Allergy Relief',
+    chemicalName: 'Topical Corticosteroid Nasal Spray',
+    category: 'Over the Counter',
+    defaultDosage: '50 mcg/spray (120 metered sprays)',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'sprays',
+    typicalDirections: 'Spray 2 nostrils once daily in the morning.',
+    contraindications: 'Recent nasal septal ulceration, nasal surgery, or trauma until healed.'
+  },
+
+  // === GASTROENTEROLOGY / DIGESTIVE ===
+  {
+    genericName: 'Omeprazole',
+    brandName: 'Prilosec',
+    chemicalName: 'Proton Pump Inhibitor (PPI)',
+    category: 'Gastroenterology',
+    defaultDosage: '20 mg Delayed-Release Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 1 capsule daily before breakfast for 4 to 8 weeks.',
+    contraindications: 'Prolonged PPI therapy (>1 year) associated with increased risk of hip fracture, hypomagnesemia, and Clostridium difficile-associated diarrhea.'
+  },
+  {
+    genericName: 'Pantoprazole Sodium',
+    brandName: 'Protonix',
+    chemicalName: 'Proton Pump Inhibitor (PPI)',
+    category: 'Gastroenterology',
+    defaultDosage: '40 mg Delayed-Release Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 40 mg by mouth once daily before breakfast. Do not crush, split, or chew.',
+    contraindications: 'Known hypersensitivity to substituted benzimidazoles; monitor Vitamin B12 and bone density on chronic therapy.'
+  },
+  {
+    genericName: 'Famotidine',
+    brandName: 'Pepcid AC / Pepcid',
+    chemicalName: 'Histamine-2 (H2) Receptor Antagonist',
+    category: 'Gastroenterology',
+    defaultDosage: '20 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet twice daily or 1 tablet daily at bedtime for dyspepsia and reflux relief.',
+    contraindications: 'Adjust renal dosing in patients with moderate to severe renal impairment (CrCl < 50 mL/min).'
+  },
+  {
+    genericName: 'Ondansetron HCl',
+    brandName: 'Zofran / Zofran ODT',
+    chemicalName: 'Selective 5-HT3 Receptor Antagonist',
+    category: 'Gastroenterology',
+    defaultDosage: '4 mg Orally Disintegrating Tablet (ODT)',
+    defaultUnit: 'Boxes',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Dissolve 1 tablet on tongue every 8 hours as needed for nausea and vomiting.',
+    contraindications: 'Contraindicated with concomitant apomorphine administration due to profound hypotension and loss of consciousness; risk of QTc prolongation.'
+  },
+  {
+    genericName: 'Docusate Sodium',
+    brandName: 'Colace',
+    chemicalName: 'Stool Softener / Surfactant Laxative',
+    category: 'Over the Counter',
+    defaultDosage: '100 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 100 mg by mouth once or twice daily with a full glass of water.',
+    contraindications: 'Do not use when abdominal pain, nausea, or vomiting are present; do not co-administer with mineral oil.'
+  },
+  {
+    genericName: 'Polyethylene Glycol 3350',
+    brandName: 'Miralax',
+    chemicalName: 'Osmotic Laxative Powder',
+    category: 'Over the Counter',
+    defaultDosage: '17 grams per capful (Powder)',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'doses',
+    typicalDirections: 'Dissolve 1 capful (17 grams) in 8 ounces of water or juice and drink once daily.',
+    contraindications: 'Known or suspected bowel obstruction, ileus, or symptomatic toxic megacolon.'
+  },
+
+  // === RHEUMATOLOGY & PAIN MANAGEMENT ===
+  {
+    genericName: 'Acetaminophen / Paracetamol',
+    brandName: 'Tylenol Extra Strength',
+    chemicalName: 'Analgesic and Antipyretic',
+    category: 'Over the Counter',
+    defaultDosage: '500 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 to 2 tablets by mouth every 6 hours as needed for pain or fever (Do not exceed 3,000 mg per 24-hour cycle).',
+    contraindications: 'Severe hepatic impairment or active liver disease. Beware of overlapping acetaminophen toxicity in multi-ingredient combination formulas.'
   },
   {
     genericName: 'Ibuprofen',
-    brandName: 'Advil / Motrin',
-    chemicalName: 'NSAID Anti-Inflammatory',
-    category: 'Over-The-Counter (OTC)',
-    defaultDosage: '200 mg Tablet',
+    brandName: 'Advil / Motrin IB',
+    chemicalName: 'Non-Steroidal Anti-Inflammatory Drug (NSAID)',
+    category: 'Over the Counter',
+    defaultDosage: '400 mg Tablet',
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1-2 tablets by mouth every 4-6 hours with food as needed for pain or fever.',
-    contraindications: 'Avoid in active peptic ulcer disease, acute renal injury, or third-trimester pregnancy.'
+    typicalDirections: 'Take 1 tablet by mouth every 6 to 8 hours with food as needed for pain or inflammation.',
+    contraindications: 'Active gastroduodenal bleeding, severe renal failure, heart failure, and third trimester of pregnancy.'
   },
   {
-    genericName: 'Hydrocortisone Ointment',
-    brandName: 'Cortizone 10',
-    chemicalName: 'Low-Potency Topical Corticosteroid',
-    category: 'Over-The-Counter (OTC)',
-    defaultDosage: '1% Ointment',
-    defaultUnit: 'Tubes',
-    defaultSubUnit: 'tubes',
-    typicalDirections: 'Apply sparingly to affected skin up to 3-4 times daily.',
-    contraindications: 'Do not use on undiagnosed bacterial, fungal, or viral skin infection.'
+    genericName: 'Naproxen Sodium',
+    brandName: 'Aleve / Anaprox / Naprosyn',
+    chemicalName: 'Non-Steroidal Anti-Inflammatory Drug (NSAID)',
+    category: 'Over the Counter',
+    defaultDosage: '220 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 to 2 tablets by mouth every 12 hours with food or a full glass of water.',
+    contraindications: 'History of NSAID-induced bronchospasm, asthma, peptic ulcer disease, or advanced renal dysfunction.'
+  },
+  {
+    genericName: 'Meloxicam',
+    brandName: 'Mobic',
+    chemicalName: 'Selective COX-2 NSAID',
+    category: 'Rheumatology',
+    defaultDosage: '15 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet (15 mg) by mouth once daily with food for arthritis or musculoskeletal pain.',
+    contraindications: 'Black Box Warning: Increased risk of serious cardiovascular thrombotic events, myocardial infarction, stroke, and GI bleeding.'
+  },
+  {
+    genericName: 'Celecoxib',
+    brandName: 'Celebrex',
+    chemicalName: 'Selective COX-2 Inhibitor NSAID',
+    category: 'Rheumatology',
+    defaultDosage: '200 mg Capsule',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'capsules',
+    typicalDirections: 'Take 200 mg by mouth once daily or 100 mg twice daily with a general meal.',
+    contraindications: 'Known allergic reactions to sulfonamides, aspirin, or conventional NSAID drugs.'
+  },
+  {
+    genericName: 'Cyclobenzaprine HCl',
+    brandName: 'Flexeril / Amrix',
+    chemicalName: 'Centrally Acting Skeletal Muscle Relaxant',
+    category: 'Pain & Orthopedics',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth 3 times daily as needed for acute musculoskeletal spasms (limit therapy to 2-3 weeks).',
+    contraindications: 'Hyperthyroidism, recovery phase of myocardial infarction, or cardiac conduction disorders/arrhythmias.'
+  },
+  {
+    genericName: 'Lidocaine Topical Patch',
+    brandName: 'Lidoderm 5%',
+    chemicalName: 'Amide Local Anesthetic Patch',
+    category: 'Pain & Orthopedics',
+    defaultDosage: '5% Topical Patch',
+    defaultUnit: 'Boxes',
+    defaultSubUnit: 'patches',
+    typicalDirections: 'Apply up to 3 patches simultaneously to painful intact skin area for 12 hours per day (12 hours ON, 12 hours OFF).',
+    contraindications: 'Known sensitivity to amide-type local anesthetics; do not apply over broken or abraded skin.'
+  },
+
+  // === OVER THE COUNTER (OTC) & ALLERGY CLINICAL STANDBY ===
+  {
+    genericName: 'Cetirizine HCl',
+    brandName: 'Zyrtec Allergy',
+    chemicalName: 'Second-Generation Antihistamine',
+    category: 'Over the Counter',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily as needed for symptoms of seasonal allergies.',
+    contraindications: 'Known allergy to cetirizine or hydroxyzine; use caution with concurrent CNS depressants or alcohol.'
+  },
+  {
+    genericName: 'Diphenhydramine HCl',
+    brandName: 'Benadryl Allergy',
+    chemicalName: 'First-Generation Antihistamine / Sedative',
+    category: 'Over the Counter',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 to 2 tablets by mouth every 4 to 6 hours as needed for allergic reactions or itch relief.',
+    contraindications: 'May cause profound sedation. Avoid operating heavy machinery or driving. Use caution in urinary retention or glaucoma.'
+  },
+  {
+    genericName: 'Fexofenadine HCl',
+    brandName: 'Allegra Allergy 24-Hour',
+    chemicalName: 'Non-Sedating Second-Generation Antihistamine',
+    category: 'Over the Counter',
+    defaultDosage: '180 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet daily with water. Avoid drinking fruit juices within 2 hours of ingestion.',
+    contraindications: 'Impaired renal function requires dosage reductions.'
+  },
+  {
+    genericName: 'Loratadine',
+    brandName: 'Claritin 24-Hour',
+    chemicalName: 'Second-Generation H1 Receptor Antihistamine',
+    category: 'Over the Counter',
+    defaultDosage: '10 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 tablet by mouth once daily.',
+    contraindications: 'Hypersensitivity to loratadine or desloratadine.'
+  },
+  {
+    genericName: 'Meclizine HCl',
+    brandName: 'Bonine / Antivert / Dramamine Less Drowsy',
+    chemicalName: 'Antihistamine / Antiemetic / Antivertigo Agent',
+    category: 'Over the Counter',
+    defaultDosage: '25 mg Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 to 2 tablets daily as needed one hour prior to travel or motion exposure.',
+    contraindications: 'May cause drowsiness. Use with caution in asthmatics or patients with glaucoma/prostate enlargement.'
+  },
+  {
+    genericName: 'Guaiacolsulfonate / Guaifenesin',
+    brandName: 'Mucinex ER',
+    chemicalName: 'Expectorant',
+    category: 'Over the Counter',
+    defaultDosage: '600 mg Extended-Release Tablet',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'tablets',
+    typicalDirections: 'Take 1 to 2 tablets by mouth every 12 hours with plenty of fluids to thin and loosen mucus.',
+    contraindications: 'Do not crush, break, or chew extended-release formulation.'
+  },
+  {
+    genericName: 'Dextromethorphan HBr',
+    brandName: 'Robitussin / Delsym 12-Hour',
+    chemicalName: 'Centrally-Acting Antitussive (Cough Suppressant)',
+    category: 'Over the Counter',
+    defaultDosage: '10 mL Oral Suspension',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'doses',
+    typicalDirections: 'Take as measured with dosage cup every 12 hours as needed for dry, non-productive cough.',
+    contraindications: 'Do not use within 14 days of monoamine oxidase inhibitors (MAOIs). Risk of serotonin syndrome.'
+  },
+  {
+    genericName: 'Latanoprost Ophthalmic',
+    brandName: 'Xalatan',
+    chemicalName: 'Prostaglandin F2-Alpha Analog Eye Drops',
+    category: 'Ophthalmology',
+    defaultDosage: '0.005% Ophthalmic Solution',
+    defaultUnit: 'Bottles',
+    defaultSubUnit: 'drops',
+    typicalDirections: 'Instill 1 drop into the affected eye(s) once daily in the evening.',
+    contraindications: 'May cause irreversible increases in brown iris pigmentation and eyelash growth over prolonged use.'
   }
 ];
 
+/**
+ * Intelligent Multi-Tier Medical Relevancy Search Engine
+ * Sorts suggestions by:
+ * 1. Exact or prefix match on generic or brand name (top priority)
+ * 2. Word boundary match (e.g. "xl" matching "Toprol XL")
+ * 3. Substring inclusion on brand, generic, or chemical group
+ */
 export function searchMedicalKnowledge(query: string): MedicalDrugEntry[] {
-  if (!query || query.trim().length < 2) return [];
+  if (!query || query.trim().length < 1) return [];
   const normalized = query.toLowerCase().trim();
-  return MEDICAL_DICTIONARY.filter(
+
+  const matches = MEDICAL_DICTIONARY.filter(
     (item) =>
       item.genericName.toLowerCase().includes(normalized) ||
       item.brandName.toLowerCase().includes(normalized) ||
-      item.chemicalName.toLowerCase().includes(normalized)
+      item.chemicalName.toLowerCase().includes(normalized) ||
+      item.category.toLowerCase().includes(normalized) ||
+      item.defaultDosage.toLowerCase().includes(normalized)
   );
+
+  // Score & sort matches for instant clinical relevance
+  return matches.sort((a, b) => {
+    const aGen = a.genericName.toLowerCase();
+    const bGen = b.genericName.toLowerCase();
+    const aBrd = a.brandName.toLowerCase();
+    const bBrd = b.brandName.toLowerCase();
+
+    // 1. Prefix matches get highest score
+    const aStarts = aGen.startsWith(normalized) || aBrd.startsWith(normalized) || aBrd.includes(`/ ${normalized}`) ? 2 : 0;
+    const bStarts = bGen.startsWith(normalized) || bBrd.startsWith(normalized) || bBrd.includes(`/ ${normalized}`) ? 2 : 0;
+    if (aStarts !== bStarts) return bStarts - aStarts;
+
+    // 2. Word border match (e.g., searching "HFA" or "XL")
+    const aWord = aGen.includes(` ${normalized}`) || aBrd.includes(` ${normalized}`) ? 1 : 0;
+    const bWord = bGen.includes(` ${normalized}`) || bBrd.includes(` ${normalized}`) ? 1 : 0;
+    if (aWord !== bWord) return bWord - aWord;
+
+    // 3. Alphabetical fallback
+    return a.genericName.localeCompare(b.genericName);
+  }).slice(0, 15); // Return top 15 most relevant results for smooth UI
 }
 
 export function getExactMedicalMatch(name: string): MedicalDrugEntry | undefined {
@@ -256,16 +931,11 @@ export function getExactMedicalMatch(name: string): MedicalDrugEntry | undefined
 
 /**
  * Quizlet & Flashcard Parser Helper
- * Accepts raw Quizlet term/definition text, tab-delimited flashcard exports, or study lines.
- * Examples:
- *   "Lisinopril - 10 mg Tablet - Cardiology - Take 1 tablet daily"
- *   "Lipitor\tAtorvastatin 20mg - Cardiology - 1 tab daily"
  */
 export function parseQuizletText(text: string): Partial<MedicalDrugEntry> {
   if (!text || !text.trim()) return {};
   const cleaned = text.trim();
 
-  // Try tab-delimited Quizlet export format (Term \t Definition)
   if (cleaned.includes('\t')) {
     const parts = cleaned.split('\t').map((p) => p.trim()).filter(Boolean);
     const term = parts[0] || '';
@@ -275,14 +945,9 @@ export function parseQuizletText(text: string): Partial<MedicalDrugEntry> {
     if (match) {
       return { ...match, typicalDirections: def || match.typicalDirections };
     }
-
-    return {
-      genericName: term,
-      typicalDirections: def,
-    };
+    return { genericName: term, typicalDirections: def };
   }
 
-  // Try dash-separated or colon-separated Quizlet flashcard text
   const separators = [' - ', ' – ', ' : ', ':', '-'];
   for (const sep of separators) {
     if (cleaned.includes(sep)) {
@@ -295,14 +960,10 @@ export function parseQuizletText(text: string): Partial<MedicalDrugEntry> {
           typicalDirections: parts.slice(1).join(' | ') || match.typicalDirections,
         };
       }
-      return {
-        genericName: mainName,
-        typicalDirections: parts.slice(1).join(' | '),
-      };
+      return { genericName: mainName, typicalDirections: parts.slice(1).join(' | ') };
     }
   }
 
-  // Fallback: search dictionary directly
   const directMatch = searchMedicalKnowledge(cleaned)[0];
   if (directMatch) return directMatch;
 

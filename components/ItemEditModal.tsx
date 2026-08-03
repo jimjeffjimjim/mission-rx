@@ -18,7 +18,7 @@ import {
   BookOpen,
   Check
 } from 'lucide-react';
-import { searchMedicalKnowledge, parseQuizletText, MedicalDrugEntry } from '@/lib/medicalKnowledge';
+import { searchMedicalKnowledge, parseQuizletText, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { checkLASA } from '@/lib/lasa';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 
@@ -59,6 +59,9 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [quizletText, setQuizletText] = useState('');
   const [showQuizletTab, setShowQuizletTab] = useState(false);
   const [autofilledNotice, setAutofilledNotice] = useState(false);
+  const [showFormularyBrowser, setShowFormularyBrowser] = useState(false);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+  const [formularySearchQuery, setFormularySearchQuery] = useState('');
 
   // Dynamic specialties
   const [specialtyList, setSpecialtyList] = useState<{ id: string; name: string }[]>([]);
@@ -131,6 +134,9 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setQuizletText('');
     setShowQuizletTab(false);
     setAutofilledNotice(false);
+    setShowFormularyBrowser(false);
+    setSelectedCategoryFilter('All');
+    setFormularySearchQuery('');
   }, [item, isOpen]);
 
   if (!isOpen) return null;
@@ -143,7 +149,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
       // Instant Autocomplete Dropdown List (Exclusively for adding new medication)
       if (!item && autofillEnabled && (field === 'genericName' || field === 'brandName') && typeof value === 'string') {
-        if (value.trim().length >= 2) {
+        if (value.trim().length >= 1) {
           const matches = searchMedicalKnowledge(value);
           setSuggestions(matches);
           setShowDropdown(matches.length > 0);
@@ -263,12 +269,32 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
             {!item && (
               <>
                 <button
                   type="button"
-                  onClick={() => setShowQuizletTab(!showQuizletTab)}
+                  onClick={() => {
+                    setShowFormularyBrowser(!showFormularyBrowser);
+                    if (showQuizletTab) setShowQuizletTab(false);
+                  }}
+                  className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
+                    showFormularyBrowser
+                      ? 'bg-teal-600 text-white border-teal-700 shadow-md'
+                      : 'bg-teal-50 text-teal-950 border-teal-300 hover:bg-teal-100'
+                  }`}
+                  title="Browse full 100+ drug clinical database"
+                >
+                  <Sparkles className="w-4 h-4 text-teal-600 stroke-[2.5]" />
+                  <span>Browse 100+ Drugs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQuizletTab(!showQuizletTab);
+                    if (showFormularyBrowser) setShowFormularyBrowser(false);
+                  }}
                   className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
                     showQuizletTab
                       ? 'bg-purple-600 text-white border-purple-700'
@@ -314,6 +340,92 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
             </button>
           </div>
         </div>
+
+        {/* Quick-Select Medical Formulary Database Browser */}
+        {!item && showFormularyBrowser && (
+          <div className="mb-6 p-4.5 bg-teal-50/95 border-2 border-teal-500/50 rounded-3xl shadow-xl space-y-4 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-teal-200/60 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-teal-600 rounded-xl text-white shadow-xs">
+                  <Sparkles className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h4 className="text-sm sm:text-base font-black text-teal-950">
+                    Clinical Medication Formulary Explorer
+                  </h4>
+                  <p className="text-xs text-teal-800 font-bold">
+                    Click any medication below to instantly auto-fill all generic/brand names, chemical class, dosage strengths & clinical warnings.
+                  </p>
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Search 100+ drugs..."
+                value={formularySearchQuery}
+                onChange={(e) => setFormularySearchQuery(e.target.value)}
+                className="min-h-[42px] px-3.5 bg-white border border-teal-300 focus:border-teal-600 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden sm:w-64 shadow-2xs"
+              />
+            </div>
+
+            {/* Category Pill Filters */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              {['All', 'Infectious Disease', 'Cardiology', 'Psychiatry', 'Endocrinology', 'Pulmonology', 'Dermatology', 'Over the Counter', 'Gastroenterology', 'Neurology', 'Rheumatology'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                    selectedCategoryFilter === cat
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'bg-white/90 hover:bg-white text-teal-900 border border-teal-200 shadow-2xs'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Drug Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+              {(formularySearchQuery.trim() 
+                ? searchMedicalKnowledge(formularySearchQuery) 
+                : MEDICAL_DICTIONARY.filter(d => selectedCategoryFilter === 'All' || d.category.toLowerCase().includes(selectedCategoryFilter.toLowerCase()))
+              ).slice(0, 30).map((entry, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    applyMedicalEntry(entry);
+                    setShowFormularyBrowser(false);
+                  }}
+                  className="p-3.5 bg-white hover:bg-gradient-to-r hover:from-teal-50 hover:to-white border border-teal-200/80 hover:border-teal-500 rounded-2xl shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-black text-slate-900 text-sm group-hover:text-teal-800 transition-colors">
+                        {entry.genericName}
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-100 text-teal-900 shrink-0">
+                        {entry.category}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-extrabold mt-0.5">
+                      {entry.brandName ? `Brand: ${entry.brandName}` : 'Generic Formula'}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                    <span className="font-mono font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-100">
+                      {entry.defaultDosage}
+                    </span>
+                    <span className="font-black text-teal-700 bg-teal-50 group-hover:bg-teal-600 group-hover:text-white px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 fill-current" />
+                      Auto-fill ✨
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quizlet Flashcard Paste Drawer */}
         {showQuizletTab && (
@@ -397,7 +509,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   value={formData.genericName || ''}
                   onChange={(e) => handleChange('genericName', e.target.value)}
                   onFocus={() => {
-                    if (!item && autofillEnabled && formData.genericName && formData.genericName.length >= 2) {
+                    if (!item && autofillEnabled && formData.genericName && formData.genericName.length >= 1) {
                       const matches = searchMedicalKnowledge(formData.genericName);
                       setSuggestions(matches);
                       setShowDropdown(matches.length > 0);
@@ -409,22 +521,37 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
                 {/* Instant Autocomplete Suggestions Dropdown Box */}
                 {!item && autofillEnabled && showDropdown && activeDropdownField === 'generic' && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-teal-500 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border-2 border-teal-500 rounded-2xl shadow-2xl z-40 max-h-72 overflow-y-auto divide-y divide-slate-100 ring-4 ring-teal-500/10">
+                    <div className="p-2.5 bg-teal-900 text-white text-[11px] font-black flex items-center justify-between px-3.5 sticky top-0 z-10 shadow-xs">
+                      <span>✨ INSTANT FORMULARY AUTO-COMPLETE ({suggestions.length} FOUND)</span>
+                      <span className="text-[10px] text-teal-200 uppercase tracking-wide font-extrabold">Click to fill all fields</span>
+                    </div>
                     {suggestions.map((entry, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => applyMedicalEntry(entry)}
-                        className="w-full p-3 text-left hover:bg-teal-50 transition-colors flex items-center justify-between gap-2"
+                        className="w-full p-3 text-left hover:bg-teal-50 transition-all flex items-start justify-between gap-2.5 group"
                       >
-                        <div>
-                          <div className="font-black text-slate-900 text-xs">{entry.genericName}</div>
-                          <div className="text-[11px] text-slate-500 font-bold">
-                            {entry.brandName ? `Brand: ${entry.brandName}` : entry.category} • {entry.defaultDosage}
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-slate-900 text-sm group-hover:text-teal-900">
+                              {entry.genericName}
+                            </span>
+                            <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
+                              {entry.category}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-600 font-extrabold">
+                            {entry.brandName ? `Brand: ${entry.brandName}` : 'Generic Form'} • <span className="text-teal-700 font-mono font-black">{entry.defaultDosage}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium truncate">
+                            Class: {entry.chemicalName}
                           </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full shrink-0">
-                          Autofill
+                        <span className="text-[11px] font-black uppercase bg-teal-100 group-hover:bg-teal-600 group-hover:text-white text-teal-900 px-2.5 py-1 rounded-xl transition-colors shrink-0 flex items-center gap-1 mt-0.5">
+                          <Sparkles className="w-3 h-3 fill-current" />
+                          <span>Autofill</span>
                         </span>
                       </button>
                     ))}
@@ -442,7 +569,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   value={formData.brandName || ''}
                   onChange={(e) => handleChange('brandName', e.target.value)}
                   onFocus={() => {
-                    if (!item && autofillEnabled && formData.brandName && formData.brandName.length >= 2) {
+                    if (!item && autofillEnabled && formData.brandName && formData.brandName.length >= 1) {
                       const matches = searchMedicalKnowledge(formData.brandName);
                       setSuggestions(matches);
                       setShowDropdown(matches.length > 0);
@@ -453,22 +580,37 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 />
 
                 {!item && autofillEnabled && showDropdown && activeDropdownField === 'brand' && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border-2 border-teal-500 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border-2 border-teal-500 rounded-2xl shadow-2xl z-40 max-h-72 overflow-y-auto divide-y divide-slate-100 ring-4 ring-teal-500/10">
+                    <div className="p-2.5 bg-teal-900 text-white text-[11px] font-black flex items-center justify-between px-3.5 sticky top-0 z-10 shadow-xs">
+                      <span>✨ BRAND & COMMERCIAL MATCHES ({suggestions.length} FOUND)</span>
+                      <span className="text-[10px] text-teal-200 uppercase tracking-wide font-extrabold">Click to fill all fields</span>
+                    </div>
                     {suggestions.map((entry, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => applyMedicalEntry(entry)}
-                        className="w-full p-3 text-left hover:bg-teal-50 transition-colors flex items-center justify-between gap-2"
+                        className="w-full p-3 text-left hover:bg-teal-50 transition-all flex items-start justify-between gap-2.5 group"
                       >
-                        <div>
-                          <div className="font-black text-slate-900 text-xs">{entry.brandName || entry.genericName}</div>
-                          <div className="text-[11px] text-slate-500 font-bold">
-                            Generic: {entry.genericName} • {entry.defaultDosage}
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-slate-900 text-sm group-hover:text-teal-900">
+                              {entry.brandName || entry.genericName}
+                            </span>
+                            <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
+                              {entry.category}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-600 font-extrabold">
+                            Generic: {entry.genericName} • <span className="text-teal-700 font-mono font-black">{entry.defaultDosage}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium truncate">
+                            Class: {entry.chemicalName}
                           </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full shrink-0">
-                          Autofill
+                        <span className="text-[11px] font-black uppercase bg-teal-100 group-hover:bg-teal-600 group-hover:text-white text-teal-900 px-2.5 py-1 rounded-xl transition-colors shrink-0 flex items-center gap-1 mt-0.5">
+                          <Sparkles className="w-3 h-3 fill-current" />
+                          <span>Autofill</span>
                         </span>
                       </button>
                     ))}
