@@ -14,10 +14,9 @@ import {
   CheckCircle2, 
   ToggleLeft, 
   ToggleRight, 
-  BookOpen,
   Check
 } from 'lucide-react';
-import { searchMedicalKnowledge, parseQuizletText, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
+import { searchMedicalKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 
 interface ItemEditModalProps {
@@ -54,8 +53,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [suggestions, setSuggestions] = useState<MedicalDrugEntry[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeDropdownField, setActiveDropdownField] = useState<'generic' | 'brand' | null>(null);
-  const [quizletText, setQuizletText] = useState('');
-  const [showQuizletTab, setShowQuizletTab] = useState(false);
   const [autofilledNotice, setAutofilledNotice] = useState(false);
   const [showFormularyBrowser, setShowFormularyBrowser] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
@@ -129,8 +126,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setSuggestions([]);
     setShowDropdown(false);
     setActiveDropdownField(null);
-    setQuizletText('');
-    setShowQuizletTab(false);
     setAutofilledNotice(false);
     setShowFormularyBrowser(false);
     setSelectedCategoryFilter('All');
@@ -175,26 +170,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     }));
     setShowDropdown(false);
     setActiveDropdownField(null);
-    setAutofilledNotice(true);
-    setTimeout(() => setAutofilledNotice(false), 4000);
-  };
-
-  const applyQuizletParse = () => {
-    if (!quizletText.trim()) return;
-    const parsed = parseQuizletText(quizletText);
-    setFormData((prev) => ({
-      ...prev,
-      genericName: parsed.genericName || prev.genericName,
-      brandName: parsed.brandName || prev.brandName,
-      chemicalName: parsed.chemicalName || prev.chemicalName,
-      shelfLocation: parsed.category || prev.shelfLocation,
-      dosage: parsed.defaultDosage || prev.dosage,
-      stockUnit: parsed.defaultUnit || prev.stockUnit,
-      subUnit: parsed.defaultSubUnit || prev.subUnit,
-      directions: parsed.typicalDirections || prev.directions,
-    }));
-    setShowQuizletTab(false);
-    setQuizletText('');
     setAutofilledNotice(true);
     setTimeout(() => setAutofilledNotice(false), 4000);
   };
@@ -272,7 +247,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   type="button"
                   onClick={() => {
                     setShowFormularyBrowser(!showFormularyBrowser);
-                    if (showQuizletTab) setShowQuizletTab(false);
                   }}
                   className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
                     showFormularyBrowser
@@ -283,23 +257,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 >
                   <Sparkles className="w-4 h-4 text-teal-600 stroke-[2.5]" />
                   <span>Browse 100+ Drugs</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuizletTab(!showQuizletTab);
-                    if (showFormularyBrowser) setShowFormularyBrowser(false);
-                  }}
-                  className={`min-h-[40px] px-3 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 border active:scale-95 shadow-2xs ${
-                    showQuizletTab
-                      ? 'bg-purple-600 text-white border-purple-700'
-                      : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-                  }`}
-                  title="Parse Quizlet flashcard or study terms"
-                >
-                  <BookOpen className="w-4 h-4 stroke-[2.5]" />
-                  <span>Quizlet Import</span>
                 </button>
 
                 <button
@@ -420,36 +377,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Quizlet Flashcard Paste Drawer */}
-        {showQuizletTab && (
-          <div className="mb-5 p-4 bg-purple-50 border-2 border-purple-300 rounded-2xl space-y-3 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-purple-700 stroke-[2.5]" />
-              <h4 className="text-xs font-black uppercase text-purple-900 tracking-wider">
-                Quizlet & Flashcard Autofill Parser
-              </h4>
-            </div>
-            <p className="text-xs text-purple-800 font-medium">
-              Paste a Quizlet term/definition block, tab-delimited flashcard export, or medical note below:
-            </p>
-            <textarea
-              rows={2}
-              value={quizletText}
-              onChange={(e) => setQuizletText(e.target.value)}
-              placeholder="e.g., Lisinopril - Zestril - 10 mg Tablet - Take 1 tablet daily"
-              className="w-full p-3 bg-white border border-purple-300 focus:border-purple-600 rounded-xl text-xs font-mono text-slate-900 focus:outline-hidden"
-            />
-            <button
-              type="button"
-              onClick={applyQuizletParse}
-              className="w-full min-h-[42px] bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              <Zap className="w-4 h-4 fill-white" />
-              <span>Parse & Autofill Form</span>
-            </button>
           </div>
         )}
 
