@@ -285,7 +285,7 @@ export default function Home() {
             }
             delete auditLogAccumulatorsRef.current[itemKey];
             delete auditLogTimersRef.current[itemKey];
-          }, 600);
+          }, 100);
         }
       }
 
@@ -299,7 +299,7 @@ export default function Home() {
       return updated;
     });
 
-    // Debounce database sync by 400ms to eliminate out-of-order network race conditions during rapid clicking
+    // Debounce database sync to eliminate out-of-order network race conditions during rapid clicking
     if (stockUpdateTimersRef.current[id]) {
       clearTimeout(stockUpdateTimersRef.current[id]);
     }
@@ -313,7 +313,7 @@ export default function Home() {
         body: JSON.stringify(payload),
       }).catch((e) => console.error('Failed to sync stock update', e));
       delete stockUpdateTimersRef.current[id];
-    }, 400);
+    }, 150);
   };
 
   // Delta adjustment for rapid multi-click "spamming" without closure or state batching race conditions
@@ -374,7 +374,7 @@ export default function Home() {
         }
         delete auditLogAccumulatorsRef.current[itemKey];
         delete auditLogTimersRef.current[itemKey];
-      }, 600);
+      }, 100);
 
       const updatedItem = { ...target, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose };
       itemsRef.current = itemsRef.current.map((item) => (item.id === id ? updatedItem : item));
@@ -395,7 +395,7 @@ export default function Home() {
         }).catch((e) => console.error('Failed to sync stock update', e));
       }
       delete stockUpdateTimersRef.current[id];
-    }, 400);
+    }, 150);
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {

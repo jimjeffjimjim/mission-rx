@@ -242,8 +242,13 @@ export default function AdminPortal({
     }
     setIsResettingInventory(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('mission_rx_audit_queue');
+      }
+      await fetch('/api/logs', { method: 'DELETE' });
       const res = await fetch('/api/inventory/reset', { method: 'POST' });
       if (res.ok) {
+        if (activeTab === 'USAGE') fetchAnalytics(timeframe);
         if (onRefreshData) onRefreshData();
       }
     } catch (e) {

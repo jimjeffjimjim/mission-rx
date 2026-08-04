@@ -5,17 +5,19 @@ import { originalSpreadsheetInventory } from '@/lib/spreadsheetFormulary';
 
 export async function POST() {
   try {
-    // 1. Clear Supabase Cloud Postgres table
+    // 1. Clear Supabase Cloud Postgres tables (inventory and audit logs)
     if (supabase) {
       try {
         await supabase.from('inventory_items').delete().neq('id', 'none');
+        await supabase.from('dispense_logs').delete().neq('id', 'none');
       } catch (e) {
         console.warn('Supabase reset clear warning:', e);
       }
     }
 
-    // 2. Clear local Prisma SQLite database
+    // 2. Clear local Prisma SQLite database tables
     await prisma.inventoryItem.deleteMany({}).catch(() => null);
+    await prisma.dispenseLog.deleteMany({}).catch(() => null);
 
     const cloudRows = originalSpreadsheetInventory.map((item) => ({
       id: item.id,
