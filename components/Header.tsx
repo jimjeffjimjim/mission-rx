@@ -31,23 +31,15 @@ export default function Header({
     if (currentRole === 'ADMIN') {
       onSwitchRole('STAFF');
     } else {
-      const isAuthorized = typeof window !== 'undefined' && sessionStorage.getItem('mission_rx_admin_authorized') === 'true';
-      if (isAuthorized) {
-        onSwitchRole('ADMIN');
-      } else {
-        setShowAdminPrompt(true);
-        setAdminPinInput('');
-        setError(false);
-      }
+      setShowAdminPrompt(true);
+      setAdminPinInput('');
+      setError(false);
     }
   };
 
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminPinInput === '8888') {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('mission_rx_admin_authorized', 'true');
-      }
       onSwitchRole('ADMIN');
       setShowAdminPrompt(false);
       setAdminPinInput('');
@@ -63,6 +55,11 @@ export default function Header({
     onSwitchRole('STAFF');
   };
 
+  const handleLockApp = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSwitchRole('LOCKED');
+  };
 
   return (
     <>
@@ -119,14 +116,26 @@ export default function Header({
                 </button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={handleRoleToggle}
-                className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 cursor-pointer"
-              >
-                <Shield className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
-                <span>Switch to Admin</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleRoleToggle}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 cursor-pointer"
+                >
+                  <Shield className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
+                  <span>Switch to Admin</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLockApp}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-300 hover:border-rose-300 cursor-pointer"
+                  title="Lock application access"
+                >
+                  <LogOut className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Lock</span>
+                </button>
+              </>
             )}
           </div>
         </div>

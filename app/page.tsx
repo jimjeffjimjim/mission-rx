@@ -48,11 +48,6 @@ export default function Home() {
         setIsAutofillEnabled(savedAutofill === 'true');
       }
 
-      const savedRole = localStorage.getItem('mission_rx_active_role') as AuthRole | null;
-      if (savedRole === 'ADMIN' || savedRole === 'STAFF') {
-        setRole(savedRole);
-      }
-
       // Check local cache for immediate render
       const localCached = localStorage.getItem(LOCAL_CACHE_KEY);
       if (localCached) {
@@ -88,14 +83,6 @@ export default function Home() {
 
   const handleSwitchRole = (newRole: AuthRole) => {
     setRole(newRole);
-    if (typeof window !== 'undefined') {
-      if (newRole !== 'LOCKED') {
-        localStorage.setItem('mission_rx_active_role', newRole);
-      }
-      if (newRole === 'ADMIN') {
-        sessionStorage.setItem('mission_rx_admin_authorized', 'true');
-      }
-    }
   };
 
   // Process pending audit logs sequentially in bulk batches to prevent dropping events during rapid clicking
