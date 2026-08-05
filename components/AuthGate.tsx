@@ -14,10 +14,12 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (pin.length === 4) {
+    if (currentRole === 'LOCKED' && pin.length === 4) {
       if (pin === '1234') {
+        setPin('');
         onAuthenticate('STAFF');
       } else if (pin === '8888') {
+        setPin('');
         onAuthenticate('ADMIN');
       } else {
         setError(true);
@@ -28,7 +30,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
         return () => clearTimeout(timer);
       }
     }
-  }, [pin, onAuthenticate]);
+  }, [pin, currentRole, onAuthenticate]);
 
   if (currentRole !== 'LOCKED') return null;
 

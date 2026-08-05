@@ -31,8 +31,7 @@ import {
   Clock,
   ShieldAlert,
   CheckCircle,
-  HardDrive,
-  LogOut
+  HardDrive
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
@@ -47,7 +46,6 @@ interface AdminPortalProps {
   onOpenCreateModal: () => void;
   onOpenAuditLogs?: () => void;
   onRefreshData?: () => void;
-  onExitAdmin?: () => void;
 }
 
 export default function AdminPortal({
@@ -59,7 +57,6 @@ export default function AdminPortal({
   onOpenCreateModal,
   onOpenAuditLogs,
   onRefreshData,
-  onExitAdmin,
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
@@ -409,18 +406,6 @@ export default function AdminPortal({
                 >
                   <Activity className="w-4 h-4 text-amber-400 stroke-[2.5]" />
                   <span>Audit Logs</span>
-                </button>
-              )}
-
-              {onExitAdmin && (
-                <button
-                  type="button"
-                  onClick={onExitAdmin}
-                  className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-slate-700 cursor-pointer"
-                  title="Exit Admin Portal and return to Doctor View"
-                >
-                  <LogOut className="w-4 h-4 text-amber-400 stroke-[2.5]" />
-                  <span>Exit Admin</span>
                 </button>
               )}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { InventoryItem, AuthRole, FilterCategory, StatusFilter } from '@/types/inventory';
 import AuthGate from '@/components/AuthGate';
 import Header from '@/components/Header';
@@ -81,9 +81,9 @@ export default function Home() {
     }
   };
 
-  const handleSwitchRole = (newRole: AuthRole) => {
+  const handleSwitchRole = useCallback((newRole: AuthRole) => {
     setRole(newRole);
-  };
+  }, []);
 
   // Process pending audit logs sequentially in bulk batches to prevent dropping events during rapid clicking
   const processAuditQueue = async () => {
@@ -580,7 +580,6 @@ export default function Home() {
           onOpenCreateModal={openCreateModal}
           onOpenAuditLogs={() => setIsAuditModalOpen(true)}
           onRefreshData={fetchInventory}
-          onExitAdmin={() => handleSwitchRole('STAFF')}
         />
       </div>
 
