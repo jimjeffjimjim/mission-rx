@@ -580,6 +580,7 @@ export default function Home() {
           onOpenCreateModal={openCreateModal}
           onOpenAuditLogs={() => setIsAuditModalOpen(true)}
           onRefreshData={fetchInventory}
+          onExitAdmin={() => handleSwitchRole('STAFF')}
         />
       </div>
 

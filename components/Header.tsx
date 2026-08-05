@@ -49,15 +49,11 @@ export default function Header({
     }
   };
 
-  const handleExitAdmin = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleExitAdmin = () => {
     onSwitchRole('STAFF');
   };
 
-  const handleLockApp = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleLockApp = () => {
     onSwitchRole('LOCKED');
   };
 
