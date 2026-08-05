@@ -3,9 +3,13 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log('Checking database inventory item count before seeding...');
+  const existingCount = await prisma.inventoryItem.count();
+  if (existingCount > 0) {
+    console.log(`Database currently has ${existingCount} items. Skipping seed to preserve custom medications.`);
+    return;
+  }
   console.log('Seeding full Meyer Center Community Clinic Medication Formulary...');
-
-  await prisma.inventoryItem.deleteMany();
 
   const fullMeyerClinicItems = [
     // 1. Clobetasol Propionate

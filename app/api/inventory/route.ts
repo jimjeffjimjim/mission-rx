@@ -114,7 +114,7 @@ export async function POST(request: Request) {
   // Insert into Supabase Cloud Postgres
   if (supabase) {
     try {
-      await supabase.from('inventory_items').insert([
+      const { error: insertError } = await supabase.from('inventory_items').insert([
         {
           id: payload.id,
           shelf_location: payload.shelfLocation,
@@ -133,8 +133,13 @@ export async function POST(request: Request) {
           directions: payload.directions,
         },
       ]);
-    } catch (e) {
-      console.warn('Supabase Cloud POST insert error:', e);
+      if (insertError) {
+        console.error('Supabase Cloud POST insert error:', insertError);
+        return NextResponse.json({ error: `Failed to save to Supabase cloud DB: ${insertError.message}` }, { status: 500 });
+      }
+    } catch (e: any) {
+      console.warn('Supabase Cloud POST insert exception:', e);
+      return NextResponse.json({ error: e?.message || 'Exception during cloud database insertion' }, { status: 500 });
     }
   }
 

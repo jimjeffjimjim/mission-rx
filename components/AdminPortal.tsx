@@ -237,7 +237,7 @@ export default function AdminPortal({
   }, [activeTab, timeframe]);
 
   const handleResetInventoryToStart = async () => {
-    if (!confirm('Are you sure you want to reset all drugs in inventory to their initial starting stock levels?')) {
+    if (!confirm('Are you sure you want to reset default drug stock counts to initial levels? (Your newly added custom medications will be preserved and will NOT be deleted)')) {
       return;
     }
     setIsResettingInventory(true);
@@ -337,10 +337,10 @@ export default function AdminPortal({
             onClick={handleResetInventoryToStart}
             disabled={isResettingInventory}
             className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-            title="Reset all inventory items to original starting stock"
+            title="Reset default item stock counts to initial levels (custom medications are preserved)"
           >
             <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
-            <span>Reset Inventory to Start</span>
+            <span>Reset Stock Counts to Start</span>
           </button>
 
           <button

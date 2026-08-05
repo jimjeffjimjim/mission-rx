@@ -445,9 +445,15 @@ export default function Home() {
             actionType: 'CREATE',
             details: `Created new clinic drug formulation in ${newItem.shelfLocation || 'General Medical'}.`,
           });
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          alert(`Failed to save medication to database: ${errData.error || res.statusText || 'Unknown error'}`);
+          return;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error creating item', e);
+        alert(`Network or connection error while saving medication: ${e?.message || 'Unknown exception'}`);
+        return;
       }
     }
   };
