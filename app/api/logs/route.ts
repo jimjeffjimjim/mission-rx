@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { DispenseLog } from '@/types/inventory';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 let logsFallbackCache: DispenseLog[] = [];
 
 export async function GET() {
