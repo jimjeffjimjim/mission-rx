@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { InventoryItem, AuthRole, FilterCategory, StatusFilter } from '@/types/inventory';
 import AuthGate from '@/components/AuthGate';
 import Header from '@/components/Header';
@@ -668,6 +669,24 @@ export default function Home() {
         onDelete={handleDeleteItem}
         isAutofillEnabled={isAutofillEnabled}
       />
+
+      {/* Footer Legal & Compliance Navigation Bar */}
+      <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-16 pt-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
+        <div className="flex items-center gap-2">
+          <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
+          <span className="text-slate-300">•</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.4 Live</span>
+        </div>
+        <div className="flex items-center gap-4 font-bold text-slate-600">
+          <Link href="/privacy" className="hover:text-teal-700 transition-colors">
+            Privacy Policy
+          </Link>
+          <span className="text-slate-300">•</span>
+          <Link href="/terms" className="hover:text-amber-700 transition-colors">
+            Terms of Service
+          </Link>
+        </div>
+      </footer>
 
       {/* Regulatory Compliance & Dispense Audit Log Viewer */}
       <AuditLogModal

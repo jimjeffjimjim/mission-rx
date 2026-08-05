@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { AuthRole } from '@/types/inventory';
 import { Lock, AlertCircle, KeyRound } from 'lucide-react';
 
@@ -132,6 +133,17 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
           >
             Delete
           </button>
+        </div>
+
+        {/* Footer Legal Links */}
+        <div className="mt-5 pt-4 border-t border-slate-200/80 flex items-center justify-center gap-3 text-xs font-bold text-slate-500">
+          <Link href="/privacy" className="hover:text-teal-700 transition-colors">
+            Privacy Policy
+          </Link>
+          <span className="text-slate-300">•</span>
+          <Link href="/terms" className="hover:text-amber-700 transition-colors">
+            Terms of Service
+          </Link>
         </div>
       </div>
     </div>
