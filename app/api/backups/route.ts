@@ -90,6 +90,24 @@ export async function POST(request: Request) {
 
       if (cloudError) {
         console.warn('Supabase backup creation error:', cloudError);
+      } else {
+        // Automatic Storage Maintenance: Prune older snapshots beyond the newest 5 to prevent exceeding Supabase storage space!
+        try {
+          const { data: existingBackups } = await supabase
+            .from('inventory_backups')
+            .select('id')
+            .order('created_at', { ascending: false });
+
+          if (existingBackups && existingBackups.length > 5) {
+            const idsToDelete = existingBackups.slice(5).map(b => b.id);
+            await supabase
+              .from('inventory_backups')
+              .delete()
+              .in('id', idsToDelete);
+          }
+        } catch (pruneErr) {
+          console.warn('Failed to prune older backups:', pruneErr);
+        }
       }
     }
 
@@ -122,7 +140,7 @@ export async function POST(request: Request) {
       notes: cleanNotes,
     };
 
-    backupsFallbackCache = [newBackup, ...backupsFallbackCache];
+    backupsFallbackCache = [newBackup, ...backupsFallbackCache].slice(0, 5);
     return NextResponse.json({ success: true, backup: newBackup }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating weekly backup:', error);

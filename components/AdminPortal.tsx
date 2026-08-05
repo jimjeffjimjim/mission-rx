@@ -312,7 +312,11 @@ export default function AdminPortal({
 
   return (
     <div className="space-y-6 pb-16 select-none max-w-full overflow-x-hidden">
-      {/* Dev & Testing Utilities Section (Grouped for easy removal before production) */}
+      {/* ======================================================================================================= */}
+      {/* [TESTING & DEV UTILITIES BLOCK - REMOVE BEFORE FINAL PRODUCTION DEPLOYMENT]                              */}
+      {/* This entire section is tightly coupled here so you can delete or comment out this single div block      */}
+      {/* to remove all testing hints, PIN reminders, Reset Stock Counts, and Clear Audit Logs features at once.  */}
+      {/* ======================================================================================================= */}
       <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30">

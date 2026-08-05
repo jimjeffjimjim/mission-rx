@@ -66,13 +66,16 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
             Protected Medical Inventory Access
           </p>
 
-          {/* Access PIN Badge */}
+          {/* ======================================================================================= */}
+          {/* [TESTING MODE FEATURE - PIN HINTS - DELETE OR HIDE BEFORE FINAL PRODUCTION DEPLOYMENT]  */}
+          {/* ======================================================================================= */}
           <div className="mt-2 flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
             <KeyRound className="w-3.5 h-3.5 text-teal-600 shrink-0 stroke-[2.5]" />
             <span>Doctor PIN: <strong className="font-mono text-teal-700 font-black">1234</strong></span>
             <span className="text-slate-300">|</span>
             <span>Admin PIN: <strong className="font-mono text-amber-700 font-black">8888</strong></span>
           </div>
+          {/* ======================================================================================= */}
         </div>
 
         {/* PIN Dots Indicator */}
