@@ -172,6 +172,27 @@ export default function AdminPortal({
   const [isSpreadsheetModalOpen, setIsSpreadsheetModalOpen] = useState(false);
   const [isResettingInventory, setIsResettingInventory] = useState(false);
 
+  // Testing mode and admin alert filter states
+  const [isTestingMode, setIsTestingMode] = useState(true);
+  const [adminStatusFilter, setAdminStatusFilter] = useState<'ALL' | 'LOW_STOCK' | 'EXPIRING'>('ALL');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('mission_rx_testing_mode');
+      if (stored === 'false') setIsTestingMode(false);
+    }
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('mission_rx_testing_mode');
+      setIsTestingMode(stored !== 'false');
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('mission_rx_testing_mode_change', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('mission_rx_testing_mode_change', handleStorageChange);
+    };
+  }, []);
+
   // Analytics State
   const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('week');
   const [analyticsLogs, setAnalyticsLogs] = useState<DispenseLog[]>([]);
@@ -305,6 +326,21 @@ export default function AdminPortal({
         return false;
       }
     }
+
+    if (adminStatusFilter === 'LOW_STOCK') {
+      const isLow = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
+      if (!isLow) return false;
+    }
+    if (adminStatusFilter === 'EXPIRING') {
+      try {
+        const expDate = parseISO(item.expirationDate);
+        const days = differenceInDays(expDate, new Date());
+        if (isNaN(days) || days > 30) return false;
+      } catch (e) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -317,47 +353,49 @@ export default function AdminPortal({
       {/* This entire section is tightly coupled here so you can delete or comment out this single div block      */}
       {/* to remove all testing hints, PIN reminders, Reset Stock Counts, and Clear Audit Logs features at once.  */}
       {/* ======================================================================================================= */}
-      <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30">
-            <Wrench className="w-4 h-4 stroke-[2.5]" />
+      {isTestingMode && (
+        <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30">
+              <Wrench className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                <span>Dev & Testing Utilities</span>
+                <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">Temporary</span>
+              </span>
+              <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
+                <span>Doctor PIN: <strong className="font-mono text-teal-400">1234</strong></span>
+                <span>|</span>
+                <span>Admin PIN: <strong className="font-mono text-amber-400">8888</strong></span>
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
-              <span>Dev & Testing Utilities</span>
-              <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">Temporary</span>
-            </span>
-            <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
-              <span>Doctor PIN: <strong className="font-mono text-teal-400">1234</strong></span>
-              <span>|</span>
-              <span>Admin PIN: <strong className="font-mono text-amber-400">8888</strong></span>
-            </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetInventoryToStart}
+              disabled={isResettingInventory}
+              className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="Reset default item stock counts to initial levels (custom medications are preserved)"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
+              <span>Reset Stock Counts to Start</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearAuditLogs}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              title="Reset all audit log entries"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Audit Logs</span>
+            </button>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleResetInventoryToStart}
-            disabled={isResettingInventory}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-            title="Reset default item stock counts to initial levels (custom medications are preserved)"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
-            <span>Reset Stock Counts to Start</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleClearAuditLogs}
-            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-            title="Reset all audit log entries"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Reset Audit Logs</span>
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Admin Portal Banner Header */}
       <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 rounded-3xl p-5 sm:p-6 text-slate-950 shadow-lg relative overflow-hidden">
@@ -431,15 +469,39 @@ export default function AdminPortal({
               <span className="font-mono text-2xl font-black text-slate-900">{totalItems}</span>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3.5 border border-amber-400/40 shadow-xs select-text">
-              <span className="text-[11px] font-black uppercase text-rose-700 block">Low Stock Alerts</span>
-              <span className="font-mono text-2xl font-black text-rose-700">{lowStockCount}</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('TABLE');
+                setAdminStatusFilter(adminStatusFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK');
+              }}
+              className={`text-left transition-all rounded-2xl p-3.5 border shadow-xs cursor-pointer ${
+                adminStatusFilter === 'LOW_STOCK'
+                  ? 'bg-rose-600 border-rose-700 text-white shadow-md shadow-rose-500/30 scale-[1.02]'
+                  : 'bg-white/90 backdrop-blur-md border-amber-400/40 hover:bg-white'
+              }`}
+              title="Click to view and filter low stock formulations"
+            >
+              <span className={`text-[11px] font-black uppercase block ${adminStatusFilter === 'LOW_STOCK' ? 'text-rose-100' : 'text-rose-700'}`}>Low Stock Alerts</span>
+              <span className={`font-mono text-2xl font-black ${adminStatusFilter === 'LOW_STOCK' ? 'text-white' : 'text-rose-700'}`}>{lowStockCount}</span>
+            </button>
 
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3.5 border border-amber-400/40 shadow-xs select-text">
-              <span className="text-[11px] font-black uppercase text-amber-900 block">Expiring Within 30d</span>
-              <span className="font-mono text-2xl font-black text-amber-900">{expiringCount}</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('TABLE');
+                setAdminStatusFilter(adminStatusFilter === 'EXPIRING' ? 'ALL' : 'EXPIRING');
+              }}
+              className={`text-left transition-all rounded-2xl p-3.5 border shadow-xs cursor-pointer ${
+                adminStatusFilter === 'EXPIRING'
+                  ? 'bg-amber-500 border-amber-600 text-slate-950 shadow-md shadow-amber-500/30 scale-[1.02]'
+                  : 'bg-white/90 backdrop-blur-md border-amber-400/40 hover:bg-white'
+              }`}
+              title="Click to view formulations expiring within 30 days"
+            >
+              <span className={`text-[11px] font-black uppercase block ${adminStatusFilter === 'EXPIRING' ? 'text-slate-900' : 'text-amber-900'}`}>Expiring Within 30d</span>
+              <span className={`font-mono text-2xl font-black ${adminStatusFilter === 'EXPIRING' ? 'text-slate-950' : 'text-amber-900'}`}>{expiringCount}</span>
+            </button>
 
             <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3.5 border border-amber-400/40 shadow-xs select-text">
               <span className="text-[11px] font-black uppercase text-teal-800 block">Total Sealed Bottles</span>
@@ -504,6 +566,34 @@ export default function AdminPortal({
                 placeholder="Search formulations to edit, update counts, or modify lot numbers..."
                 className="w-full pl-10 pr-4 min-h-[48px] bg-slate-50 border border-slate-300 focus:border-amber-600 focus:bg-white rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden select-text"
               />
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setAdminStatusFilter(adminStatusFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
+                className={`flex items-center gap-2 min-h-[48px] px-4 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 cursor-pointer ${
+                  adminStatusFilter === 'LOW_STOCK'
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-500/25 scale-[1.02]'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <AlertTriangle className={`w-4 h-4 stroke-[2.5] ${adminStatusFilter === 'LOW_STOCK' ? 'text-white animate-bounce' : 'text-rose-600'}`} />
+                <span>Low Stock Alerts ({lowStockCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdminStatusFilter(adminStatusFilter === 'EXPIRING' ? 'ALL' : 'EXPIRING')}
+                className={`flex items-center gap-2 min-h-[48px] px-4 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 cursor-pointer ${
+                  adminStatusFilter === 'EXPIRING'
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md shadow-amber-500/25 scale-[1.02]'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <Clock className={`w-4 h-4 stroke-[2.5] ${adminStatusFilter === 'EXPIRING' ? 'text-slate-950 animate-spin' : 'text-amber-600'}`} />
+                <span>Expiring Within 30d ({expiringCount})</span>
+              </button>
             </div>
           </div>
 

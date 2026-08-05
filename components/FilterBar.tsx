@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { FilterCategory, StatusFilter } from '@/types/inventory';
 import { getSpecialtyColor, getCustomSpecialties } from '@/lib/specialtyColors';
-import { Search, AlertTriangle, Clock, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 interface FilterBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -59,33 +59,6 @@ export default function FilterBar({
                 <X className="w-4 h-4 stroke-[3]" />
               </button>
             )}
-          </div>
-
-          {/* Quick Critical Alerts */}
-          <div className="flex items-center gap-2.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
-            <button
-              onClick={() => onStatusChange(selectedStatus === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
-              className={`flex items-center gap-2 min-h-[48px] px-4 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 ${
-                selectedStatus === 'LOW_STOCK'
-                  ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-500/25 scale-[1.02]'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-rose-200'
-              }`}
-            >
-              <AlertTriangle className={`w-4 h-4 stroke-[2.5] ${selectedStatus === 'LOW_STOCK' ? 'text-white animate-bounce' : 'text-rose-600'}`} />
-              <span>Low Stock Alerts</span>
-            </button>
-
-            <button
-              onClick={() => onStatusChange(selectedStatus === 'EXPIRING' ? 'ALL' : 'EXPIRING')}
-              className={`flex items-center gap-2 min-h-[48px] px-4 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 ${
-                selectedStatus === 'EXPIRING'
-                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md shadow-amber-500/25 scale-[1.02]'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-amber-200'
-              }`}
-            >
-              <Clock className={`w-4 h-4 stroke-[2.5] ${selectedStatus === 'EXPIRING' ? 'text-slate-950 animate-spin' : 'text-amber-600'}`} />
-              <span>Expiring Within 30d</span>
-            </button>
           </div>
         </div>
 
