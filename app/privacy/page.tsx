@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Shield, ArrowLeft, Lock, FileText, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Shield, ArrowLeft, Lock, FileText, Sparkles, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -33,16 +33,16 @@ export default function PrivacyPolicyPage() {
           <div className="relative z-10 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-bold uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Healthcare Data Protection Compliance</span>
+              <span>Healthcare Data Protection & System Disclaimers</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight">MissionRx Privacy Policy</h1>
             <p className="text-sm sm:text-base text-teal-100/90 font-medium max-w-2xl">
-              Learn how MissionRx handles hospital formulary data, security encryption, local cache safeguards, and clinical audit logging.
+              Data protection standards, local cache handling, zero-liability disclaimers, and clinical audit logging practices for MissionRx.
             </p>
             <div className="pt-2 text-xs font-bold text-teal-200/80 flex items-center gap-4">
               <span>Effective Date: August 2026</span>
               <span>•</span>
-              <span>Version 2.4</span>
+              <span>Version 2.5 (Ironclad Legal Edition)</span>
             </div>
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function PrivacyPolicyPage() {
               <span>Overview & Scope</span>
             </h2>
             <p>
-              MissionRx ("System", "We", "Our") is a specialized pharmaceutical inventory management platform designed for hospital clinics, emergency dispensaries, and health centers. This Privacy Policy details our operational practices regarding data collection, storage, access control, and security compliance.
+              MissionRx ("System", "We", "Our") is a specialized pharmaceutical inventory management platform designed for hospital clinics, emergency dispensaries, and health centers. This Privacy Policy details our operational practices regarding data collection, storage, access control, security compliance, and liability disclaimers.
             </p>
           </section>
 
@@ -67,7 +67,7 @@ export default function PrivacyPolicyPage() {
               <span>HIPAA & Protected Health Information (PHI)</span>
             </h2>
             <p>
-              MissionRx operates primarily as a <strong>pharmaceutical stock tracking system</strong>. The core application tracks medication names, dosages, lot numbers, shelf locations, expiration dates, and sealed bottle counts.
+              MissionRx operates as a <strong>pharmaceutical stock tracking system</strong>. The core application tracks medication names, dosages, lot numbers, shelf locations, expiration dates, and sealed bottle counts.
             </p>
             <div className="p-4 rounded-2xl bg-teal-50 border border-teal-200 text-teal-900 text-xs sm:text-sm font-semibold space-y-2">
               <div className="flex items-center gap-2 font-bold text-teal-950">
@@ -126,15 +126,21 @@ export default function PrivacyPolicyPage() {
             </div>
           </section>
 
-          {/* Section 5 */}
+          {/* Section 5 - CREATOR & ADMIN ZERO LIABILITY DISCLAIMER */}
           <section className="space-y-3">
             <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-              <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-teal-100 text-teal-800 text-xs font-black">5</span>
-              <span>Data Sharing & Third-Party Disclosure</span>
+              <span className="flex items-center justify-center w-7 h-7 rounded-xl bg-rose-600 text-white text-xs font-black">5</span>
+              <span>Software Creator & Administrator Disclaimer of Liability</span>
             </h2>
-            <p>
-              <strong>MissionRx never sells, rents, monetizes, or shares hospital inventory data with third-party advertisers or commercial entities.</strong> Data is stored securely in your designated cloud PostgreSQL database and is accessed solely for hospital operational purposes.
-            </p>
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs sm:text-sm font-semibold space-y-2">
+              <div className="flex items-center gap-2 font-bold text-rose-950">
+                <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0" />
+                <span>Absolute Limitation of Liability</span>
+              </div>
+              <p className="text-rose-900">
+                The software creator(s), system developers, clinic directors, and system administrators assume ZERO liability for any data loss, patient outcomes, dosing miscalculations, inventory miscounts, or clinical actions resulting from the use of MissionRx. All data is managed and verified at the sole responsibility of active medical users.
+              </p>
+            </div>
           </section>
 
           {/* Section 6 */}
