@@ -145,7 +145,7 @@ export default function TermsOfServicePage() {
               <span>Workstation PIN Credentials & Lock Mandate</span>
             </h2>
             <p>
-              Access is governed by 4-digit PIN credentials (<code>1234</code> Doctor View, <code>8888</code> Admin Control Portal). Users are strictly obligated to click <strong>"Lock"</strong> or close the browser session before leaving any workstation unattended. Sharing PIN codes with unauthorized individuals is grounds for immediate access termination.
+              Access is governed by secure role-based 4-digit PIN credentials. Users are strictly obligated to click <strong>"Lock"</strong> or close the browser session before leaving any workstation unattended. Sharing PIN codes with unauthorized individuals is grounds for immediate access termination.
             </p>
           </section>
 

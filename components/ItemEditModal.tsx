@@ -551,11 +551,11 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
             <div className="pt-1">
               <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                Directions / Clinical Notes
+                Directions, Storage & Clinical Notes
               </label>
               <textarea
                 rows={2}
-                placeholder="e.g. Take 1 tablet by mouth once daily as needed."
+                placeholder="e.g. Apply thin layer as directed. [Storage: Store at Room Temp (20-25°C) / Do Not Freeze / Protect from Light]"
                 value={formData.directions || ''}
                 onChange={(e) => handleChange('directions', e.target.value)}
                 className="w-full p-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden leading-relaxed"
@@ -574,9 +574,10 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   Specialty Category *
                 </label>
                 <select
+                  required
                   value={formData.shelfLocation || 'General Medical'}
                   onChange={(e) => handleChange('shelfLocation', e.target.value)}
-                  className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-black text-slate-900 transition-all focus:outline-hidden"
+                  className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-extrabold text-slate-900 transition-all focus:outline-hidden"
                 >
                   {specialtyList.map((s) => (
                     <option key={s.id} value={s.name}>
@@ -600,30 +601,34 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   onChange={(e) => handleChange('stockUnit', e.target.value)}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 >
-                  <option value="Bottles">🍼 Bottles</option>
-                  <option value="Tubes">🧴 Tubes</option>
-                  <option value="Boxes / Packs">📦 Boxes / Packs</option>
-                  <option value="Vials">🧪 Vials</option>
-                  <option value="Inhalers / Canisters">💨 Inhalers / Canisters</option>
-                  <option value="Packs">🎒 Packs</option>
+                  <option value="Bottles">🍼 Bottles (Tablets/Liquids)</option>
+                  <option value="Tubes">🧴 Tubes (Creams/Ointments)</option>
+                  <option value="Vials">🧪 Vials (Injectables/Drops)</option>
+                  <option value="Inhalers">💨 Inhalers / Canisters</option>
+                  <option value="Boxes / Packs">📦 Boxes / Cartons / Packs</option>
+                  <option value="Ampoules">💉 Ampoules / Syringes</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                  Sub-Unit Type (Loose)
+                  Sub-Unit Type (Loose/Vol)
                 </label>
                 <select
                   value={formData.subUnit || 'tablets'}
                   onChange={(e) => handleChange('subUnit', e.target.value)}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 >
+                  <option value="g">⚖️ g (Grams - Ointments/Creams)</option>
+                  <option value="mL">💧 mL (Milliliters - Liquids)</option>
                   <option value="tablets">💊 Tablets</option>
                   <option value="capsules">💊 Capsules</option>
-                  <option value="mL">💧 mL (Liquid)</option>
-                  <option value="tubes">🧴 Tubes</option>
+                  <option value="puffs">💨 Puffs / Actuations (Inhalers)</option>
+                  <option value="drops">💧 Drops / gtt (Otic/Ophthalmic)</option>
                   <option value="strips">🩸 Test Strips</option>
-                  <option value="units">🔢 Individual Units</option>
+                  <option value="units">🔢 Individual Units / Doses</option>
+                  <option value="packets">🎒 Packets / Sachets</option>
+                  <option value="suppositories">💊 Suppositories</option>
                   <option value="needles">💉 Needles</option>
                 </select>
               </div>
@@ -633,7 +638,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           {/* Section 3: Physical Stock Count & Expiration */}
           <div className="space-y-3">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
-              3. Physical Stock Counts & Expiration
+              3. Physical Stock Counts & Container Volume / Size
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
@@ -650,6 +655,19 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               </div>
 
               <div>
+                <label className="block text-[11px] font-black uppercase tracking-tight text-teal-800 mb-1 truncate" title="The exact number of grams, mL, tablets, or actuations inside 1 sealed container">
+                  Pack Size ({formData.subUnit || 'pills'}/{formData.stockUnit ? formData.stockUnit.replace(/s$/, '').toLowerCase() : 'btl'})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.pillsPerBottle || 100}
+                  onChange={(e) => handleChange('pillsPerBottle', parseInt(e.target.value, 10) || 0)}
+                  className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-bold text-center text-slate-700 font-mono transition-all"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
                   Loose {formData.subUnit || 'Units'}
                 </label>
@@ -659,19 +677,6 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   value={formData.looseUnitsAvailable || 0}
                   onChange={(e) => handleChange('looseUnitsAvailable', parseInt(e.target.value, 10) || 0)}
                   className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-black text-center text-slate-900 font-mono transition-all shadow-inner"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                  Units Per Box/Btl
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.pillsPerBottle || 100}
-                  onChange={(e) => handleChange('pillsPerBottle', parseInt(e.target.value, 10) || 0)}
-                  className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-bold text-center text-slate-700 font-mono transition-all"
                 />
               </div>
 

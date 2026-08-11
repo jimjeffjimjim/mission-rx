@@ -222,8 +222,8 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
         <div className="grid grid-cols-2 gap-3">
           {/* Primary Stock Container */}
           <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors rounded-2xl p-3 sm:p-3.5 border border-slate-200 flex flex-col justify-between shadow-2xs">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate">
-              {containerLabel}
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate" title={`Container size: ${item.pillsPerBottle || 0} ${subUnitLabel} per ${containerLabel.toLowerCase().replace(/s$/, '')}`}>
+              {containerLabel} {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel})` : ''}
             </span>
             
             {role === 'ADMIN' ? (
@@ -273,7 +273,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
                   {item.bottlesAvailable}
                 </span>
                 <span className="text-xs text-slate-500 font-extrabold lowercase truncate">
-                  {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle}/${containerLabel.toLowerCase().slice(0, -1)})` : 'sealed'}
+                  {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel} / ${containerLabel.toLowerCase().replace(/s$/, '')})` : 'sealed'}
                 </span>
               </div>
             )}

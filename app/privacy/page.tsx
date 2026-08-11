@@ -121,7 +121,7 @@ export default function PrivacyPolicyPage() {
                   <Shield className="w-4 h-4 text-teal-600" />
                   <span>4-Digit PIN Access Controls</span>
                 </div>
-                <p className="text-xs text-slate-600">Role-based access locks prevent unauthorized access to Doctor View (1234) and Admin Control Portal (8888).</p>
+                <p className="text-xs text-slate-600">Role-based access lock codes prevent unauthorized access to Doctor View and the Admin Control Portal.</p>
               </div>
             </div>
           </section>

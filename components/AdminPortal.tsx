@@ -604,8 +604,8 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4">Category</th>
                   <th className="py-3.5 px-4">Generic & Brand Name</th>
                   <th className="py-3.5 px-4">Dosage / Form</th>
-                  <th className="py-3.5 px-4 text-center">Bottles Count</th>
-                  <th className="py-3.5 px-4 text-center">Loose Units</th>
+                  <th className="py-3.5 px-4 text-center">Sealed Packs (Volume)</th>
+                  <th className="py-3.5 px-4 text-center">Open / Loose Stock</th>
                   <th className="py-3.5 px-4">Expiry Date</th>
                   <th className="py-3.5 px-4">Lot Numbers</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -657,18 +657,25 @@ export default function AdminPortal({
                               type="button"
                               onClick={() => item.bottlesAvailable > 0 && (onAdjustStock ? onAdjustStock(item.id, -1, 0) : onUpdateStock(item.id, Math.max(0, item.bottlesAvailable - 1), item.looseUnitsAvailable))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Dispense 1 Bottle (-1)"
+                              title="Dispense 1 Container (-1)"
                             >
                               <Minus className="w-3.5 h-3.5 stroke-[3]" />
                             </button>
-                            <span className="font-mono font-black text-base w-8 text-center text-slate-900 select-text">
-                              {item.bottlesAvailable}
-                            </span>
+                            <div className="flex flex-col items-center justify-center min-w-[80px] px-1">
+                              <span className="font-mono font-black text-sm text-slate-900 select-text">
+                                {item.bottlesAvailable} {item.stockUnit || 'Bottles'}
+                              </span>
+                              {item.pillsPerBottle > 0 && (
+                                <span className="text-[10px] text-slate-500 font-bold tracking-tight">
+                                  ({item.pillsPerBottle} {item.subUnit || 'pills'}/{(item.stockUnit || 'bottle').toLowerCase().replace(/s$/, '')})
+                                </span>
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() => (onAdjustStock ? onAdjustStock(item.id, 1, 0) : onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable))}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Restock 1 Bottle (+1)"
+                              title="Restock 1 Container (+1)"
                             >
                               <Plus className="w-3.5 h-3.5 stroke-[3]" />
                             </button>
@@ -685,9 +692,11 @@ export default function AdminPortal({
                             >
                               <Minus className="w-3.5 h-3.5 stroke-[3]" />
                             </button>
-                            <span className="font-mono font-black text-base w-8 text-center text-slate-900 select-text">
-                              {item.looseUnitsAvailable}
-                            </span>
+                            <div className="flex flex-col items-center justify-center min-w-[60px] px-1">
+                              <span className="font-mono font-black text-sm text-slate-900 select-text">
+                                {item.looseUnitsAvailable} {item.subUnit || 'pills'}
+                              </span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => (onAdjustStock ? onAdjustStock(item.id, 0, 1) : onUpdateStock(item.id, item.bottlesAvailable, item.looseUnitsAvailable + 1))}

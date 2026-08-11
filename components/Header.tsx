@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthRole } from '@/types/inventory';
 import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft, ToggleRight, LogOut } from 'lucide-react';
 
@@ -24,6 +24,22 @@ export default function Header({
   const [showAdminPrompt, setShowAdminPrompt] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
   const [error, setError] = useState(false);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(true);
+
+  useEffect(() => {
+    const checkTestingMode = () => {
+      const stored = localStorage.getItem('mission_rx_testing_mode');
+      setIsTestingMode(stored !== 'false');
+    };
+    checkTestingMode();
+    const handleStorageChange = () => checkTestingMode();
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('testingModeChanged', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('testingModeChanged', handleStorageChange);
+    };
+  }, []);
 
   const handleRoleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -155,7 +171,9 @@ export default function Header({
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Admin Control PIN</h3>
-                <p className="text-xs text-slate-500 font-medium">Enter PIN 8888 to access Admin Portal</p>
+                <p className="text-xs text-slate-500 font-medium">
+                  {isTestingMode ? 'Enter PIN 8888 to access Admin Portal' : 'Enter security authorization code'}
+                </p>
               </div>
             </div>
 
@@ -172,7 +190,7 @@ export default function Header({
 
               {error && (
                 <p className="text-xs text-rose-600 font-bold text-center animate-bounce">
-                  Access Denied. Only Admin PIN (8888) is authorized.
+                  {isTestingMode ? 'Access Denied. Only Admin PIN (8888) is authorized.' : 'Access Denied. Incorrect authorization code.'}
                 </p>
               )}
 
