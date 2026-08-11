@@ -173,13 +173,19 @@ export default function TermsOfServicePage() {
         </div>
 
         {/* Back Link Footer */}
-        <div className="text-center pt-4">
+        <div className="text-center pt-4 flex items-center justify-center gap-3">
+          <Link
+            href="/instructions"
+            className="inline-flex items-center gap-2 text-xs font-black text-teal-800 bg-teal-50 border border-teal-300 px-5 py-3 rounded-2xl shadow-xs hover:shadow-md transition-all"
+          >
+            <span>📖 User Manual & Instructions</span>
+          </Link>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs font-black text-amber-800 hover:text-amber-900 bg-white border border-amber-200 px-5 py-3 rounded-2xl shadow-xs hover:shadow-md transition-all"
+            className="inline-flex items-center gap-2 text-xs font-black text-slate-800 hover:text-slate-900 bg-white border border-slate-300 px-5 py-3 rounded-2xl shadow-xs hover:shadow-md transition-all"
           >
             <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
-            <span>Return to MissionRx Main Formulary</span>
+            <span>Return to Main App</span>
           </Link>
         </div>
       </main>

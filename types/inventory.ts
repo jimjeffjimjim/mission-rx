@@ -11,6 +11,8 @@ export interface InventoryItem {
   bottlesAvailable: number;
   pillsPerBottle: number;
   looseUnitsAvailable: number;
+  initialBottlesAvailable?: number;
+  initialLooseUnitsAvailable?: number;
   expirationDate: string; // YYYY-MM-DD
   lotNumbers: string | string[]; // JSON string array or array of strings
   directions?: string | null; // Directions / Provider Notes from Excel

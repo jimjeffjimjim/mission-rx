@@ -8,7 +8,7 @@ export async function POST() {
     // NON-DESTRUCTIVE RESET: Only reset stock counts of default formulary items. 
     // Do NOT delete custom user-added medications!
 
-    // 1. Reset counts in Supabase Cloud Postgres
+    // 1. Reset counts in Supabase Cloud Postgres (Dynamic Baseline Restoration)
     if (supabase) {
       try {
         const { data: existingItems, error: fetchErr } = await supabase
@@ -16,22 +16,41 @@ export async function POST() {
           .select('*');
 
         if (!fetchErr && existingItems) {
-          // Update default items back to initial counts; leave custom medications intact
+          // Reset all existing items back to their baseline stock
+          for (const item of existingItems) {
+            const orig = originalSpreadsheetInventory.find(
+              (o) => o.id === item.id || (o.genericName === item.generic_name && o.shelfLocation === item.shelf_location)
+            );
+
+            const targetBottles = orig 
+              ? orig.bottlesAvailable 
+              : (item.initial_bottles_available !== null && item.initial_bottles_available !== undefined 
+                  ? item.initial_bottles_available 
+                  : item.bottles_available);
+
+            const targetLoose = orig 
+              ? orig.looseUnitsAvailable 
+              : (item.initial_loose_units_available !== null && item.initial_loose_units_available !== undefined 
+                  ? item.initial_loose_units_available 
+                  : item.loose_units_available);
+
+            await supabase
+              .from('inventory_items')
+              .update({
+                bottles_available: targetBottles,
+                loose_units_available: targetLoose,
+                initial_bottles_available: targetBottles,
+                initial_loose_units_available: targetLoose,
+              })
+              .eq('id', item.id);
+          }
+
+          // If default item was deleted or missing from database, insert it
           for (const orig of originalSpreadsheetInventory) {
-            const existing = existingItems.find(
+            const exists = existingItems.some(
               (i: any) => i.id === orig.id || (i.generic_name === orig.genericName && i.shelf_location === orig.shelfLocation)
             );
-            if (existing) {
-              await supabase
-                .from('inventory_items')
-                .update({
-                  bottles_available: orig.bottlesAvailable,
-                  loose_units_available: orig.looseUnitsAvailable,
-                  pills_per_bottle: orig.pillsPerBottle,
-                })
-                .eq('id', existing.id);
-            } else {
-              // If default item was missing from database, insert it
+            if (!exists) {
               await supabase.from('inventory_items').insert([{
                 id: orig.id,
                 shelf_location: orig.shelfLocation,
@@ -44,6 +63,8 @@ export async function POST() {
                 sub_unit: orig.subUnit,
                 bottles_available: orig.bottlesAvailable,
                 loose_units_available: orig.looseUnitsAvailable,
+                initial_bottles_available: orig.bottlesAvailable,
+                initial_loose_units_available: orig.looseUnitsAvailable,
                 pills_per_bottle: orig.pillsPerBottle,
                 expiration_date: orig.expirationDate,
                 lot_numbers: orig.lotNumbers,
@@ -60,40 +81,33 @@ export async function POST() {
     // 2. Reset counts in local Prisma SQLite without deleting user-added medications
     try {
       const existingPrismaItems = await prisma.inventoryItem.findMany();
-      for (const orig of originalSpreadsheetInventory) {
-        const existing = existingPrismaItems.find(
-          (i) => i.id === orig.id || (i.genericName === orig.genericName && i.shelfLocation === orig.shelfLocation)
+      for (const item of existingPrismaItems) {
+        const itemAny = item as any;
+        const orig = originalSpreadsheetInventory.find(
+          (o) => o.id === item.id || (o.genericName === item.genericName && o.shelfLocation === item.shelfLocation)
         );
-        if (existing) {
-          await prisma.inventoryItem.update({
-            where: { id: existing.id },
-            data: {
-              bottlesAvailable: orig.bottlesAvailable,
-              looseUnitsAvailable: orig.looseUnitsAvailable,
-              pillsPerBottle: orig.pillsPerBottle,
-            },
-          });
-        } else {
-          await prisma.inventoryItem.create({
-            data: {
-              id: orig.id,
-              genericName: orig.genericName,
-              brandName: orig.brandName || null,
-              chemicalName: orig.chemicalName || null,
-              dosage: orig.dosage,
-              itemType: orig.itemType as any,
-              shelfLocation: orig.shelfLocation,
-              stockUnit: orig.stockUnit,
-              subUnit: orig.subUnit,
-              bottlesAvailable: orig.bottlesAvailable,
-              looseUnitsAvailable: orig.looseUnitsAvailable,
-              pillsPerBottle: orig.pillsPerBottle,
-              expirationDate: orig.expirationDate,
-              lotNumbers: orig.lotNumbers,
-              directions: orig.directions,
-            },
-          });
-        }
+
+        const targetBottles = orig 
+          ? orig.bottlesAvailable 
+          : (itemAny.initialBottlesAvailable !== null && itemAny.initialBottlesAvailable !== undefined 
+              ? itemAny.initialBottlesAvailable 
+              : item.bottlesAvailable);
+
+        const targetLoose = orig 
+          ? orig.looseUnitsAvailable 
+          : (itemAny.initialLooseUnitsAvailable !== null && itemAny.initialLooseUnitsAvailable !== undefined 
+              ? itemAny.initialLooseUnitsAvailable 
+              : item.looseUnitsAvailable);
+
+        await prisma.inventoryItem.update({
+          where: { id: item.id },
+          data: {
+            bottlesAvailable: targetBottles,
+            looseUnitsAvailable: targetLoose,
+            initialBottlesAvailable: targetBottles,
+            initialLooseUnitsAvailable: targetLoose,
+          } as any,
+        });
       }
     } catch (e) {
       // Expected on read-only serverless runtimes

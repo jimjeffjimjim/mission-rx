@@ -213,6 +213,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
       looseUnitsAvailable: Number(formData.looseUnitsAvailable) || 0,
       pillsPerBottle: Number(formData.pillsPerBottle) || 0,
       lotNumbers: JSON.stringify(formData.lotNumbers || []),
+      isFullEdit: true,
     };
 
     onSave(cleanedData);
@@ -527,7 +528,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. ACE Inhibitor, SSRI"
+                  placeholder="e.g. ACE Inhibitor, SSRI, Corticosteroid"
                   value={formData.chemicalName || ''}
                   onChange={(e) => handleChange('chemicalName', e.target.value)}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
@@ -535,17 +536,30 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               </div>
 
               <div>
-                <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                  Strength & Dosage Form *
+                <label className="block text-xs font-extrabold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Strength & Dosage Form *</span>
+                  <span className="text-[10px] text-teal-700 font-bold">Quick suggestions below</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 10 mg Oral Tablet"
+                  placeholder="e.g. 10 mg Oral Tablet, 0.05% Cream (30g Tube)"
                   value={formData.dosage || ''}
                   onChange={(e) => handleChange('dosage', e.target.value)}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
                 />
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {['10 mg Tablet', '20 mg Capsule', '0.05% Cream (30g)', '15 mL Solution', 'Medical Device / Supply'].map((formChip) => (
+                    <button
+                      key={formChip}
+                      type="button"
+                      onClick={() => handleChange('dosage', formChip)}
+                      className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all cursor-pointer"
+                    >
+                      + {formChip}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -637,9 +651,14 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
           {/* Section 3: Physical Stock Count & Expiration */}
           <div className="space-y-3">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
-              3. Physical Stock Counts & Container Volume / Size
-            </h3>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                3. Physical Stock Counts & Container Volume
+              </h3>
+              <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
+                Total Stock: {(((Number(formData.bottlesAvailable) || 0) * (Number(formData.pillsPerBottle) || 0)) + (Number(formData.looseUnitsAvailable) || 0)).toLocaleString()} {formData.subUnit || 'units'}
+              </span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
@@ -648,8 +667,9 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 <input
                   type="number"
                   min="0"
-                  value={formData.bottlesAvailable || 0}
-                  onChange={(e) => handleChange('bottlesAvailable', parseInt(e.target.value, 10) || 0)}
+                  placeholder="0"
+                  value={(formData.bottlesAvailable as any) === '' ? '' : (formData.bottlesAvailable ?? 0)}
+                  onChange={(e) => handleChange('bottlesAvailable', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
                   className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-black text-center text-slate-900 font-mono transition-all shadow-inner"
                 />
               </div>
@@ -661,21 +681,24 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 <input
                   type="number"
                   min="0"
-                  value={formData.pillsPerBottle || 100}
-                  onChange={(e) => handleChange('pillsPerBottle', parseInt(e.target.value, 10) || 0)}
+                  placeholder="100"
+                  value={(formData.pillsPerBottle as any) === '' ? '' : (formData.pillsPerBottle ?? 100)}
+                  onChange={(e) => handleChange('pillsPerBottle', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
                   className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-bold text-center text-slate-700 font-mono transition-all"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                  Loose {formData.subUnit || 'Units'}
+                  Loose {formData.subUnit || 'Units'} (Decimals OK)
                 </label>
                 <input
                   type="number"
+                  step="any"
                   min="0"
-                  value={formData.looseUnitsAvailable || 0}
-                  onChange={(e) => handleChange('looseUnitsAvailable', parseInt(e.target.value, 10) || 0)}
+                  placeholder="0"
+                  value={(formData.looseUnitsAvailable as any) === '' ? '' : (formData.looseUnitsAvailable ?? 0)}
+                  onChange={(e) => handleChange('looseUnitsAvailable', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
                   className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-black text-center text-slate-900 font-mono transition-all shadow-inner"
                 />
               </div>
@@ -686,11 +709,32 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 </label>
                 <input
                   type="date"
-                  required
-                  value={formData.expirationDate || ''}
+                  required={formData.expirationDate !== '3000-01-01'}
+                  disabled={formData.expirationDate === '3000-01-01'}
+                  value={formData.expirationDate === '3000-01-01' ? '' : (formData.expirationDate || '')}
                   onChange={(e) => handleChange('expirationDate', e.target.value)}
-                  className="w-full min-h-[48px] px-2.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-xs font-bold text-slate-900 font-mono transition-all"
+                  className="w-full min-h-[48px] px-2.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-xs font-bold text-slate-900 font-mono transition-all disabled:opacity-50"
                 />
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <input
+                    type="checkbox"
+                    id="doesNotExpire"
+                    checked={formData.expirationDate === '3000-01-01'}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        handleChange('expirationDate', '3000-01-01');
+                      } else {
+                        const defaultExp = new Date();
+                        defaultExp.setFullYear(defaultExp.getFullYear() + 2);
+                        handleChange('expirationDate', defaultExp.toISOString().split('T')[0]);
+                      }
+                    }}
+                    className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  />
+                  <label htmlFor="doesNotExpire" className="text-[11px] font-bold text-slate-700 cursor-pointer select-none">
+                    N/A - Does Not Expire (Supplies / Devices)
+                  </label>
+                </div>
               </div>
             </div>
           </div>

@@ -70,6 +70,9 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
   // Expiration date evaluation
   const expStatus = React.useMemo(() => {
+    if (item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') || item.expirationDate === 'N/A') {
+      return { type: 'NON_EXPIRING', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold shadow-2xs', label: '🛡️ N/A - Non-Expiring' };
+    }
     try {
       const expDate = parseISO(item.expirationDate);
       const daysRemaining = differenceInDays(expDate, new Date());
@@ -87,6 +90,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
   // Low stock check
   const isLowStock = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
+  const totalUnits = ((item.bottlesAvailable || 0) * (item.pillsPerBottle || 0)) + (item.looseUnitsAvailable || 0);
 
   // Stock mutation helpers
   const incrementBottles = () => {
@@ -149,7 +153,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
   const commitLooseInput = () => {
     setEditingLoose(false);
-    const parsed = parseInt(looseInput, 10);
+    const parsed = parseFloat(looseInput);
     const val = isNaN(parsed) ? 0 : Math.max(0, parsed);
     setLooseInput(val.toString());
     if (val !== item.looseUnitsAvailable) {
@@ -161,16 +165,22 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     <div className={`relative overflow-hidden rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md card-hover p-4 sm:p-6 flex flex-col justify-between select-none ${specialtyStyle.borderLeft} ${specialtyStyle.cardGlow}`}>
       {/* Top Header Row */}
       <div>
-        <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs uppercase tracking-wider border shadow-2xs ${specialtyStyle.badge}`}>
             <Layers className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
             <span>{specialtyStyle.label}</span>
           </span>
 
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs uppercase tracking-wider border ${expStatus.color}`}>
-            <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
-            <span>{expStatus.label}</span>
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs" title="Calculated Total Units (Sealed Container Packs + Open Loose Stock)">
+              Total Stock: {totalUnits.toLocaleString()} {subUnitLabel}
+            </span>
+
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs uppercase tracking-wider border ${expStatus.color}`}>
+              <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+              <span>{expStatus.label}</span>
+            </span>
+          </div>
         </div>
 
         {/* Drug Names & Clinical Strength */}

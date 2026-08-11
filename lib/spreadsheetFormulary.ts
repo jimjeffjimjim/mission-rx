@@ -11,6 +11,8 @@ export interface FormularyItem {
   bottlesAvailable: number;
   pillsPerBottle: number;
   looseUnitsAvailable: number;
+  initialBottlesAvailable?: number;
+  initialLooseUnitsAvailable?: number;
   expirationDate: string;
   lotNumbers: string;
   directions: string;

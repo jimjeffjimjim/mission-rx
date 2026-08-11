@@ -30,6 +30,8 @@ export const DEFAULT_SPECIALTIES: CustomSpecialtyConfig[] = [
   { id: 'pulmonology', name: 'Pulmonology', color: 'blue' },
   { id: 'over-the-counter (otc)', name: 'Over-The-Counter (OTC)', color: 'emerald' },
   { id: 'supplies', name: 'Supplies', color: 'amber' },
+  { id: 'mobility aid', name: 'Mobility Aid', color: 'indigo' },
+  { id: 'medical devices', name: 'Medical Devices', color: 'purple' },
 ];
 
 export function getCustomSpecialties(): CustomSpecialtyConfig[] {
@@ -311,6 +313,8 @@ export function getSpecialtyColor(category: string): SpecialtyColorScheme {
   if (norm.includes('allergy') || norm.includes('asthma')) return buildSchemeForColor('teal', 'Allergy & Asthma');
   if (norm.includes('cardio')) return buildSchemeForColor('rose', 'Cardiology');
   if (norm.includes('derm')) return buildSchemeForColor('pink', 'Dermatology');
+  if (norm.includes('mobility')) return buildSchemeForColor('indigo', 'Mobility Aid');
+  if (norm.includes('device')) return buildSchemeForColor('purple', 'Medical Devices');
 
   return buildSchemeForColor('slate', category || 'General');
 }

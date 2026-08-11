@@ -18,10 +18,12 @@ model InventoryItem {
   itemType            String
   stockUnit           String        @default("Bottles")
   subUnit             String        @default("pills")
-  bottlesAvailable    Int           @default(0)
-  pillsPerBottle      Int           @default(0)
-  looseUnitsAvailable Int           @default(0)
-  expirationDate      String
+  bottlesAvailable           Int           @default(0)
+  pillsPerBottle             Int           @default(0)
+  looseUnitsAvailable        Float         @default(0)
+  initialBottlesAvailable    Int?          @default(0)
+  initialLooseUnitsAvailable Float?        @default(0)
+  expirationDate             String
   lotNumbers          String        @default("[]")
   directions          String?
   createdAt           DateTime      @default(now())
@@ -33,7 +35,7 @@ model DispenseLog {
   id              String        @id @default(uuid())
   itemId          String
   item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  quantityChanged Int
+  quantityChanged Float
   actionType      String        // 'DISPENSE' | 'RESTOCK' | 'EDIT'
   createdAt       DateTime      @default(now())
 }

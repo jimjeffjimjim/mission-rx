@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { AuthRole } from '@/types/inventory';
-import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft, ToggleRight, LogOut } from 'lucide-react';
+import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft, ToggleRight, LogOut, BookOpen } from 'lucide-react';
 
 interface HeaderProps {
   currentRole: AuthRole;
@@ -137,6 +138,15 @@ export default function Header({
                   <Shield className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
                   <span>Switch to Admin</span>
                 </button>
+
+                <Link
+                  href="/instructions"
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-3.5 rounded-2xl text-xs font-extrabold transition-all touch-manipulation border active:scale-95 shadow-2xs bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-300"
+                  title="View User Instructions & Operating Guide"
+                >
+                  <BookOpen className="w-4 h-4 text-teal-700 shrink-0 stroke-[2.5]" />
+                  <span className="font-extrabold">User Guide</span>
+                </Link>
 
                 <button
                   type="button"

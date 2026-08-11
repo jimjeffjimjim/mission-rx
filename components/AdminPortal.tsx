@@ -606,6 +606,7 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4">Dosage / Form</th>
                   <th className="py-3.5 px-4 text-center">Sealed Packs (Volume)</th>
                   <th className="py-3.5 px-4 text-center">Open / Loose Stock</th>
+                  <th className="py-3.5 px-4 text-center">Total Volume / Units</th>
                   <th className="py-3.5 px-4">Expiry Date</th>
                   <th className="py-3.5 px-4">Lot Numbers</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -614,7 +615,7 @@ export default function AdminPortal({
               <tbody className="divide-y divide-slate-200 text-sm font-medium">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-500 font-bold text-sm">
+                    <td colSpan={9} className="py-12 text-center text-slate-500 font-bold text-sm">
                       No medication formulations found matching your query.
                     </td>
                   </tr>
@@ -708,8 +709,20 @@ export default function AdminPortal({
                           </div>
                         </td>
 
+                        <td className="py-3.5 px-4 whitespace-nowrap text-center select-text">
+                          <span className="font-mono font-black text-xs text-slate-900 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
+                            {(((item.bottlesAvailable || 0) * (item.pillsPerBottle || 0)) + (item.looseUnitsAvailable || 0)).toLocaleString()} {item.subUnit || 'units'}
+                          </span>
+                        </td>
+
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-700 select-text">
-                          {item.expirationDate}
+                          {item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') || item.expirationDate === 'N/A' ? (
+                            <span className="font-extrabold text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                              🛡️ N/A (Non-Expiring)
+                            </span>
+                          ) : (
+                            item.expirationDate
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 select-text">

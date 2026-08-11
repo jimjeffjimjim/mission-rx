@@ -32,6 +32,10 @@ export async function PUT(
     if (data.bottlesAvailable !== undefined) updatePayload.bottlesAvailable = Number(data.bottlesAvailable) || 0;
     if (data.pillsPerBottle !== undefined) updatePayload.pillsPerBottle = Number(data.pillsPerBottle) || 0;
     if (data.looseUnitsAvailable !== undefined) updatePayload.looseUnitsAvailable = Number(data.looseUnitsAvailable) || 0;
+    if (data.isFullEdit) {
+      if (data.bottlesAvailable !== undefined) updatePayload.initialBottlesAvailable = Number(data.bottlesAvailable) || 0;
+      if (data.looseUnitsAvailable !== undefined) updatePayload.initialLooseUnitsAvailable = Number(data.looseUnitsAvailable) || 0;
+    }
     if (data.expirationDate !== undefined) updatePayload.expirationDate = data.expirationDate;
     if (data.lotNumbers !== undefined) {
       updatePayload.lotNumbers = typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers);
@@ -53,6 +57,10 @@ export async function PUT(
         if (data.bottlesAvailable !== undefined) supabasePayload.bottles_available = Number(data.bottlesAvailable) || 0;
         if (data.pillsPerBottle !== undefined) supabasePayload.pills_per_bottle = Number(data.pillsPerBottle) || 0;
         if (data.looseUnitsAvailable !== undefined) supabasePayload.loose_units_available = Number(data.looseUnitsAvailable) || 0;
+        if (data.isFullEdit) {
+          if (data.bottlesAvailable !== undefined) supabasePayload.initial_bottles_available = Number(data.bottlesAvailable) || 0;
+          if (data.looseUnitsAvailable !== undefined) supabasePayload.initial_loose_units_available = Number(data.looseUnitsAvailable) || 0;
+        }
         if (data.expirationDate !== undefined) supabasePayload.expiration_date = data.expirationDate;
         if (data.lotNumbers !== undefined) {
           supabasePayload.lot_numbers = typeof data.lotNumbers === 'string' ? data.lotNumbers : JSON.stringify(data.lotNumbers);
