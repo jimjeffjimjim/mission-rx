@@ -436,7 +436,7 @@ export default function InstructionsPage() {
           </div>
 
           <p className="text-xs font-medium leading-relaxed">
-            MissionRx is provided strictly as an administrative organizational software tool. System creators, software developers, and clinic administrative personnel assume <b>ZERO LIABILITY</b> for clinical dispensing decisions, medication administration, medical dosage accuracy, patient outcomes, or regulatory compliance. Licensed healthcare providers remain solely responsible for verifying physical drug labels, lot numbers, and expiration dates prior to dispensing.
+            MissionRx is provided strictly as an administrative organizational software tool. System creators, software developers, clinic administrative personnel, volunteer doctors, volunteer healthcare providers, volunteer nurses, and clinic volunteers assume <b>ZERO LIABILITY</b> for clinical dispensing decisions, medication administration, medical dosage accuracy, patient outcomes, or regulatory compliance. Licensed healthcare providers remain solely responsible for verifying physical drug labels, lot numbers, and expiration dates prior to dispensing.
           </p>
         </section>
 

@@ -61,7 +61,7 @@ export default function TermsOfServicePage() {
             </div>
           </div>
           <p className="text-xs sm:text-sm text-rose-100/90 leading-relaxed font-mono">
-            BY USING MISSIONRX, ALL USERS, CLINICS, AND MEDICAL PERSONNEL AGREE THAT THE SOFTWARE CREATOR(S), SYSTEM DEVELOPERS, CLINIC DIRECTORS, AND SYSTEM ADMINISTRATORS SHALL HAVE ZERO LEGAL OR FINANCIAL LIABILITY WHATSOEVER FOR ANY CLINICAL DECISIONS, DOSING ERRORS, PHYSICAL INVENTORY MISCOUNTS, EXPIRED MEDICATION DISPENSING, DATA LOSS, OR PATIENT OUTCOMES.
+            BY USING MISSIONRX, ALL USERS, CLINICS, AND MEDICAL PERSONNEL AGREE THAT THE SOFTWARE CREATOR(S), SYSTEM DEVELOPERS, CLINIC DIRECTORS, SYSTEM ADMINISTRATORS, VOLUNTEER DOCTORS, VOLUNTEER HEALTHCARE PROVIDERS, VOLUNTEER NURSES, AND CLINIC VOLUNTEERS SHALL HAVE ZERO LEGAL OR FINANCIAL LIABILITY WHATSOEVER FOR ANY CLINICAL DECISIONS, DOSING ERRORS, PHYSICAL INVENTORY MISCOUNTS, EXPIRED MEDICATION DISPENSING, DATA LOSS, OR PATIENT OUTCOMES.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export default function TermsOfServicePage() {
               <span>Acceptance of Terms</span>
             </h2>
             <p>
-              By accessing or using the MissionRx Pharmaceutical Inventory Management System ("System"), hospital staff, attending physicians, nurses, pharmacists, clinic directors, and administrators ("Users") unconditionally agree to be bound by these Terms of Service. If you do not agree to every clause herein, you are strictly prohibited from using the system.
+              By accessing or using the MissionRx Pharmaceutical Inventory Management System ("System"), hospital staff, attending physicians, volunteer doctors, volunteer healthcare providers, nurses, pharmacists, clinic directors, and administrators ("Users") unconditionally agree to be bound by these Terms of Service. If you do not agree to every clause herein, you are strictly prohibited from using the system.
             </p>
           </section>
 
@@ -85,7 +85,7 @@ export default function TermsOfServicePage() {
               <span>Zero Liability & Complete Release of Protected Parties</span>
             </h2>
             <p>
-              To the maximum extent permitted under applicable law, the Software Creator(s), Lead Developers, System Administrators, Clinic Directors, Clinic Management, and Affiliates (collectively, the <strong>"Protected Parties"</strong>) shall be held completely immune and free from any and all legal, financial, regulatory, civil, or criminal liability arising from the operation, maintenance, or use of MissionRx.
+              To the maximum extent permitted under applicable law, the Software Creator(s), Lead Developers, System Administrators, Clinic Directors, Clinic Management, Volunteer Doctors, Volunteer Healthcare Providers, Volunteer Nurses, Clinic Volunteers, and Affiliates (collectively, the <strong>"Protected Parties"</strong>) shall be held completely immune and free from any and all legal, financial, regulatory, civil, or criminal liability arising from the operation, maintenance, or use of MissionRx.
             </p>
             
             <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 space-y-2 text-xs font-mono">
@@ -110,7 +110,7 @@ export default function TermsOfServicePage() {
               <span>Mandatory Hold Harmless & Indemnification</span>
             </h2>
             <p>
-              All Users, clinics, and medical facilities using MissionRx explicitly covenant and agree to <strong>defend, indemnify, and hold harmless</strong> the Software Creator(s), System Developers, Clinic Directors, and System Administrators against any and all third-party claims, lawsuits, administrative actions, damages, liabilities, settlements, costs, and attorney's fees resulting from:
+              All Users, clinics, and medical facilities using MissionRx explicitly covenant and agree to <strong>defend, indemnify, and hold harmless</strong> the Software Creator(s), System Developers, Clinic Directors, System Administrators, Volunteer Doctors, Volunteer Healthcare Providers, Volunteer Nurses, and Clinic Volunteers against any and all third-party claims, lawsuits, administrative actions, damages, liabilities, settlements, costs, and attorney's fees resulting from:
             </p>
             <ul className="list-disc pl-5 space-y-2 text-slate-700">
               <li>Any clinical decision, diagnosis, prescription, or drug administration performed by medical staff.</li>

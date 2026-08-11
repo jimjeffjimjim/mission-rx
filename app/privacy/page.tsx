@@ -138,7 +138,7 @@ export default function PrivacyPolicyPage() {
                 <span>Absolute Limitation of Liability</span>
               </div>
               <p className="text-rose-900">
-                The software creator(s), system developers, clinic directors, and system administrators assume ZERO liability for any data loss, patient outcomes, dosing miscalculations, inventory miscounts, or clinical actions resulting from the use of MissionRx. All data is managed and verified at the sole responsibility of active medical users.
+                The software creator(s), system developers, clinic directors, system administrators, volunteer doctors, volunteer healthcare providers, volunteer nurses, and clinic volunteers assume ZERO liability for any data loss, patient outcomes, dosing miscalculations, inventory miscounts, or clinical actions resulting from the use of MissionRx. All data is managed and verified at the sole responsibility of active medical users.
               </p>
             </div>
           </section>
