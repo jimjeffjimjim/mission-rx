@@ -57,6 +57,8 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [showFormularyBrowser, setShowFormularyBrowser] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [formularySearchQuery, setFormularySearchQuery] = useState('');
+  const [dosageOptionsList, setDosageOptionsList] = useState<string[]>([]);
+  const [isCustomDosageSelected, setIsCustomDosageSelected] = useState(false);
 
   // Dynamic specialties
   const [specialtyList, setSpecialtyList] = useState<{ id: string; name: string }[]>([]);
@@ -102,6 +104,15 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         lotNumbers: parsedLots,
         directions: item.directions || '',
       });
+
+      // Check if item has known dosage options
+      const match = searchMedicalKnowledge(item.genericName || '')[0] || searchMedicalKnowledge(item.brandName || '')[0];
+      if (match && match.dosageOptions && match.dosageOptions.length > 0) {
+        setDosageOptionsList(match.dosageOptions);
+      } else {
+        setDosageOptionsList([]);
+      }
+      setIsCustomDosageSelected(false);
     } else {
       const defaultExp = new Date();
       defaultExp.setFullYear(defaultExp.getFullYear() + 2);
@@ -120,6 +131,8 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         lotNumbers: ['LOT-1001'],
         directions: '',
       });
+      setDosageOptionsList([]);
+      setIsCustomDosageSelected(false);
     }
     setErrorMsg('');
     setNewLotInput('');
@@ -145,6 +158,10 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           setSuggestions(matches);
           setShowDropdown(matches.length > 0);
           setActiveDropdownField(field === 'genericName' ? 'generic' : 'brand');
+
+          if (matches.length > 0 && matches[0].dosageOptions) {
+            setDosageOptionsList(matches[0].dosageOptions);
+          }
         } else {
           setSuggestions([]);
           setShowDropdown(false);
@@ -157,13 +174,20 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   };
 
   const applyMedicalEntry = (entry: MedicalDrugEntry) => {
+    const opts = entry.dosageOptions && entry.dosageOptions.length > 0
+      ? entry.dosageOptions
+      : [entry.defaultDosage];
+
+    setDosageOptionsList(opts);
+    setIsCustomDosageSelected(false);
+
     setFormData((prev) => ({
       ...prev,
       genericName: entry.genericName,
       brandName: entry.brandName,
       chemicalName: entry.chemicalName,
       shelfLocation: entry.category,
-      dosage: prev.dosage || entry.defaultDosage,
+      dosage: opts[0],
       stockUnit: entry.defaultUnit,
       subUnit: entry.defaultSubUnit,
       directions: prev.directions || `${entry.typicalDirections} [Contraindications: ${entry.contraindications}]`,
@@ -538,22 +562,64 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1 flex items-center justify-between">
                   <span>Strength & Dosage Form *</span>
-                  <span className="text-[10px] text-teal-700 font-bold">Quick suggestions below</span>
+                  {dosageOptionsList.length > 0 ? (
+                    <span className="text-[10px] text-teal-800 font-black bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200 shadow-2xs">
+                      ✨ {dosageOptionsList.length} Dosage Varieties Found
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-teal-700 font-bold">Preset suggestions below</span>
+                  )}
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 10 mg Oral Tablet, 0.05% Cream (30g Tube)"
-                  value={formData.dosage || ''}
-                  onChange={(e) => handleChange('dosage', e.target.value)}
-                  className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
-                />
+
+                {/* Dosage Strength Varieties Selector Dropdown */}
+                {dosageOptionsList.length > 0 && (
+                  <div className="mb-2">
+                    <select
+                      value={isCustomDosageSelected ? 'CUSTOM' : (formData.dosage || dosageOptionsList[0])}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'CUSTOM') {
+                          setIsCustomDosageSelected(true);
+                          handleChange('dosage', '');
+                        } else {
+                          setIsCustomDosageSelected(false);
+                          handleChange('dosage', val);
+                        }
+                      }}
+                      className="w-full min-h-[46px] px-3 bg-teal-50 border border-teal-300 focus:border-teal-600 rounded-xl text-xs font-black text-teal-950 shadow-2xs cursor-pointer focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Select Dosage Strength Variety --</option>
+                      {dosageOptionsList.map((opt) => (
+                        <option key={opt} value={opt}>
+                          💊 {opt}
+                        </option>
+                      ))}
+                      <option value="CUSTOM">✏️ Custom Dosage / Manual Entry...</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Manual Text Input (for Custom Dosage or when no preset list exists) */}
+                {(dosageOptionsList.length === 0 || isCustomDosageSelected || !dosageOptionsList.includes(formData.dosage || '')) && (
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 200 mg Tablet, 400 mg Tablet, 0.05% Cream (30g Tube)"
+                    value={formData.dosage || ''}
+                    onChange={(e) => handleChange('dosage', e.target.value)}
+                    className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden"
+                  />
+                )}
+
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {['10 mg Tablet', '20 mg Capsule', '0.05% Cream (30g)', '15 mL Solution', 'Medical Device / Supply'].map((formChip) => (
+                  {['200 mg Tablet', '400 mg Tablet', '500 mg Capsule', '10 mg Tablet', 'Medical Device / Supply'].map((formChip) => (
                     <button
                       key={formChip}
                       type="button"
-                      onClick={() => handleChange('dosage', formChip)}
+                      onClick={() => {
+                        setIsCustomDosageSelected(false);
+                        handleChange('dosage', formChip);
+                      }}
                       className="text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all cursor-pointer"
                     >
                       + {formChip}

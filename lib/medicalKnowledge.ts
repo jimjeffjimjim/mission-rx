@@ -4,6 +4,7 @@ export interface MedicalDrugEntry {
   chemicalName: string;
   category: string;
   defaultDosage: string;
+  dosageOptions?: string[];
   defaultUnit: string;
   defaultSubUnit: string;
   typicalDirections: string;
@@ -710,13 +711,20 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
   // === RHEUMATOLOGY & PAIN MANAGEMENT ===
   {
     genericName: 'Acetaminophen / Paracetamol',
-    brandName: 'Tylenol Extra Strength',
+    brandName: 'Tylenol / Tylenol Extra Strength',
     chemicalName: 'Analgesic and Antipyretic',
     category: 'Over the Counter',
-    defaultDosage: '500 mg Tablet',
+    defaultDosage: '500 mg Extra Strength Tablet',
+    dosageOptions: [
+      '325 mg Regular Strength Tablet',
+      '500 mg Extra Strength Tablet',
+      '650 mg Extended Release Tablet',
+      '160 mg/5 mL Children Oral Liquid',
+      '80 mg Infant Oral Drops'
+    ],
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 to 2 tablets by mouth every 6 hours as needed for pain or fever (Do not exceed 3,000 mg per 24-hour cycle).',
+    typicalDirections: 'Take by mouth as directed by healthcare provider for pain or fever relief. Do not exceed maximum daily limits.',
     contraindications: 'Severe hepatic impairment or active liver disease. Beware of overlapping acetaminophen toxicity in multi-ingredient combination formulas.'
   },
   {
@@ -724,10 +732,18 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     brandName: 'Advil / Motrin IB',
     chemicalName: 'Non-Steroidal Anti-Inflammatory Drug (NSAID)',
     category: 'Over the Counter',
-    defaultDosage: '400 mg Tablet',
+    defaultDosage: '200 mg Tablet',
+    dosageOptions: [
+      '200 mg Tablet',
+      '400 mg Prescription Strength Tablet',
+      '600 mg Prescription Strength Tablet',
+      '800 mg Prescription Strength Tablet',
+      '100 mg/5 mL Children Oral Suspension',
+      '50 mg/1.25 mL Infant Concentrated Drops'
+    ],
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 tablet by mouth every 6 to 8 hours with food as needed for pain or inflammation.',
+    typicalDirections: 'Take by mouth with food or milk as directed by healthcare provider for pain, fever, or inflammation.',
     contraindications: 'Active gastroduodenal bleeding, severe renal failure, heart failure, and third trimester of pregnancy.'
   },
   {
@@ -736,9 +752,16 @@ export const MEDICAL_DICTIONARY: MedicalDrugEntry[] = [
     chemicalName: 'Non-Steroidal Anti-Inflammatory Drug (NSAID)',
     category: 'Over the Counter',
     defaultDosage: '220 mg Tablet',
+    dosageOptions: [
+      '220 mg OTC Tablet',
+      '275 mg Tablet',
+      '375 mg Tablet',
+      '500 mg Prescription Tablet',
+      '550 mg Tablet'
+    ],
     defaultUnit: 'Bottles',
     defaultSubUnit: 'tablets',
-    typicalDirections: 'Take 1 to 2 tablets by mouth every 12 hours with food or a full glass of water.',
+    typicalDirections: 'Take by mouth with food or a full glass of water as directed by provider.',
     contraindications: 'History of NSAID-induced bronchospasm, asthma, peptic ulcer disease, or advanced renal dysfunction.'
   },
   {
