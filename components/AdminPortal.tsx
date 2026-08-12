@@ -685,30 +685,10 @@ export default function AdminPortal({
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => item.looseUnitsAvailable > 0 && (onAdjustStock ? onAdjustStock(item.id, 0, -1) : onUpdateStock(item.id, item.bottlesAvailable, Math.max(0, item.looseUnitsAvailable - 1)))}
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Dispense 1 Loose Unit (-1)"
-                            >
-                              <Minus className="w-3.5 h-3.5 stroke-[3]" />
-                            </button>
-                            <div className="flex flex-col items-center justify-center min-w-[60px] px-1">
-                              <span className="font-mono font-black text-sm text-slate-900 select-text">
-                                {item.looseUnitsAvailable} {item.subUnit || 'pills'}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => (onAdjustStock ? onAdjustStock(item.id, 0, 1) : onUpdateStock(item.id, item.bottlesAvailable, item.looseUnitsAvailable + 1))}
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Restock 1 Loose Unit (+1)"
-                            >
-                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                            </button>
-                          </div>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-center select-text">
+                          <span className="font-mono font-bold text-xs text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
+                            {item.looseUnitsAvailable || 0} {item.subUnit || 'pills'} loose
+                          </span>
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">

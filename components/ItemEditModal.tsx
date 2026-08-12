@@ -856,17 +856,11 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                  Loose {formData.subUnit || 'Units'} (Decimals OK)
+                  Loose {formData.subUnit || 'Units'} (Auto-Calculated)
                 </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="0"
-                  value={(formData.looseUnitsAvailable as any) === '' ? '' : (formData.looseUnitsAvailable ?? 0)}
-                  onChange={(e) => handleChange('looseUnitsAvailable', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full min-h-[48px] px-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-base font-black text-center text-slate-900 font-mono transition-all shadow-inner"
-                />
+                <div className="w-full min-h-[48px] px-3 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center font-mono font-black text-sm text-slate-700 select-text">
+                  {formData.looseUnitsAvailable || 0} {formData.subUnit || 'units'}
+                </div>
               </div>
 
               <div>
