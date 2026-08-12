@@ -14,13 +14,24 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [isTestingModalOpen, setIsTestingModalOpen] = useState(false);
-  const [isTestingMode, setIsTestingMode] = useState(true);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(true);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('mission_rx_testing_mode');
-      if (stored === 'false') setIsTestingMode(false);
-    }
+    const syncTestingMode = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('mission_rx_testing_mode');
+        setIsTestingMode(stored !== 'false');
+      }
+    };
+    syncTestingMode();
+    window.addEventListener('storage', syncTestingMode);
+    window.addEventListener('mission_rx_testing_mode_change', syncTestingMode);
+    window.addEventListener('testingModeChanged', syncTestingMode);
+    return () => {
+      window.removeEventListener('storage', syncTestingMode);
+      window.removeEventListener('mission_rx_testing_mode_change', syncTestingMode);
+      window.removeEventListener('testingModeChanged', syncTestingMode);
+    };
   }, []);
 
   const handleToggleTestingMode = () => {
@@ -29,6 +40,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
     if (typeof window !== 'undefined') {
       localStorage.setItem('mission_rx_testing_mode', nextVal ? 'true' : 'false');
       window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+      window.dispatchEvent(new Event('testingModeChanged'));
     }
   };
 

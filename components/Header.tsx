@@ -36,9 +36,11 @@ export default function Header({
     const handleStorageChange = () => checkTestingMode();
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('testingModeChanged', handleStorageChange);
+    window.addEventListener('mission_rx_testing_mode_change', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('testingModeChanged', handleStorageChange);
+      window.removeEventListener('mission_rx_testing_mode_change', handleStorageChange);
     };
   }, []);
 
