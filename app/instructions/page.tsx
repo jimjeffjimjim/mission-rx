@@ -86,6 +86,14 @@ export default function InstructionsPage() {
           </div>
         </section>
 
+        {/* Short Italicized Clinical Judgment Disclaimer */}
+        <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 font-bold text-xs sm:text-sm flex items-center gap-3 shadow-2xs">
+          <Info className="w-5 h-5 text-amber-700 shrink-0 stroke-[2.5]" />
+          <p className="italic leading-relaxed">
+            * Note: Reference information provided in this manual and software may not be completely accurate. Please use your own clinical judgment.
+          </p>
+        </div>
+
         {/* Navigation Tabs for Beginner Sections */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-slate-200">
           <button

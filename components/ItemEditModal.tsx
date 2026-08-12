@@ -21,6 +21,29 @@ import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_D
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 
+const DEFAULT_DOSAGE_VARIETIES = [
+  '200 mg Tablet',
+  '400 mg Tablet',
+  '500 mg Capsule',
+  '600 mg Tablet',
+  '800 mg Tablet',
+  '10 mg/5 mL Liquid',
+  '250 mg Capsule',
+  '0.05% Topical Cream'
+];
+
+function getDosageVarieties(genericName?: string | null, brandName?: string | null): string[] {
+  const g = genericName || undefined;
+  const b = brandName || undefined;
+  if (g || b) {
+    const matches = searchMedicalKnowledge(g || b || '');
+    if (matches.length > 0 && matches[0].dosageOptions && matches[0].dosageOptions.length > 0) {
+      return matches[0].dosageOptions;
+    }
+  }
+  return DEFAULT_DOSAGE_VARIETIES;
+}
+
 interface ItemEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -109,13 +132,9 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
       });
 
       // Check if item has known dosage options
-      const match = searchMedicalKnowledge(item.genericName || '')[0] || searchMedicalKnowledge(item.brandName || '')[0];
-      if (match && match.dosageOptions && match.dosageOptions.length > 0) {
-        setDosageOptionsList(match.dosageOptions);
-      } else {
-        setDosageOptionsList([]);
-      }
-      setIsCustomDosageSelected(false);
+      const opts = getDosageVarieties(item.genericName, item.brandName);
+      setDosageOptionsList(opts);
+      setIsCustomDosageSelected(!opts.includes(item.dosage || ''));
     } else {
       const defaultExp = new Date();
       defaultExp.setFullYear(defaultExp.getFullYear() + 2);
@@ -123,7 +142,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         genericName: '',
         brandName: '',
         chemicalName: '',
-        dosage: '',
+        dosage: '200 mg Tablet',
         shelfLocation: 'General Medical',
         stockUnit: 'Bottles',
         subUnit: 'tablets',
@@ -134,7 +153,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         lotNumbers: ['LOT-1001'],
         directions: '',
       });
-      setDosageOptionsList([]);
+      setDosageOptionsList(DEFAULT_DOSAGE_VARIETIES);
       setIsCustomDosageSelected(false);
     }
     setErrorMsg('');
@@ -154,6 +173,11 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const handleChange = (field: keyof InventoryItem, value: any) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
+
+      if ((field === 'genericName' || field === 'brandName') && typeof value === 'string') {
+        const opts = getDosageVarieties(field === 'genericName' ? value : updated.genericName, field === 'brandName' ? value : updated.brandName);
+        setDosageOptionsList(opts);
+      }
 
       // Instant Autocomplete Dropdown List (Exclusively for adding new medication)
       if (!item && autofillEnabled && (field === 'genericName' || field === 'brandName') && typeof value === 'string') {
