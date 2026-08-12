@@ -14,9 +14,10 @@ import {
   CheckCircle2, 
   ToggleLeft, 
   ToggleRight, 
-  Check
+  Check,
+  Globe
 } from 'lucide-react';
-import { searchMedicalKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
+import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 
 interface ItemEditModalProps {
@@ -59,6 +60,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [formularySearchQuery, setFormularySearchQuery] = useState('');
   const [dosageOptionsList, setDosageOptionsList] = useState<string[]>([]);
   const [isCustomDosageSelected, setIsCustomDosageSelected] = useState(false);
+  const [isSearchingFda, setIsSearchingFda] = useState(false);
 
   // Dynamic specialties
   const [specialtyList, setSpecialtyList] = useState<{ id: string; name: string }[]>([]);
@@ -143,6 +145,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setShowFormularyBrowser(false);
     setSelectedCategoryFilter('All');
     setFormularySearchQuery('');
+    setIsSearchingFda(false);
   }, [item, isOpen]);
 
   if (!isOpen) return null;
@@ -153,19 +156,40 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
       // Instant Autocomplete Dropdown List (Exclusively for adding new medication)
       if (!item && autofillEnabled && (field === 'genericName' || field === 'brandName') && typeof value === 'string') {
-        if (value.trim().length >= 1) {
-          const matches = searchMedicalKnowledge(value);
-          setSuggestions(matches);
-          setShowDropdown(matches.length > 0);
+        const queryText = value.trim();
+        if (queryText.length >= 1) {
+          const localMatches = searchMedicalKnowledge(queryText);
+          setSuggestions(localMatches);
+          setShowDropdown(true);
           setActiveDropdownField(field === 'genericName' ? 'generic' : 'brand');
 
-          if (matches.length > 0 && matches[0].dosageOptions) {
-            setDosageOptionsList(matches[0].dosageOptions);
+          if (localMatches.length > 0 && localMatches[0].dosageOptions) {
+            setDosageOptionsList(localMatches[0].dosageOptions);
+          }
+
+          // Trigger live openFDA API lookup for broader coverage
+          if (queryText.length >= 2) {
+            setIsSearchingFda(true);
+            searchFdaKnowledge(queryText).then((fdaResults) => {
+              setIsSearchingFda(false);
+              if (fdaResults.length > 0) {
+                setSuggestions((current) => {
+                  const existingNames = new Set(current.map(c => c.genericName.toLowerCase()));
+                  const newFdaEntries = fdaResults.filter(f => !existingNames.has(f.genericName.toLowerCase()));
+                  const merged = [...current, ...newFdaEntries];
+                  if (merged.length > 0 && merged[0].dosageOptions) {
+                    setDosageOptionsList(merged[0].dosageOptions);
+                  }
+                  return merged;
+                });
+              }
+            }).catch(() => setIsSearchingFda(false));
           }
         } else {
           setSuggestions([]);
           setShowDropdown(false);
           setActiveDropdownField(null);
+          setIsSearchingFda(false);
         }
       }
 
@@ -451,8 +475,16 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 {!item && autofillEnabled && showDropdown && activeDropdownField === 'generic' && suggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border-2 border-teal-500 rounded-2xl shadow-2xl z-40 max-h-72 overflow-y-auto divide-y divide-slate-100 ring-4 ring-teal-500/10">
                     <div className="p-2.5 bg-teal-900 text-white text-[11px] font-black flex items-center justify-between px-3.5 sticky top-0 z-10 shadow-xs">
-                      <span>✨ INSTANT FORMULARY AUTO-COMPLETE ({suggestions.length} FOUND)</span>
-                      <span className="text-[10px] text-teal-200 uppercase tracking-wide font-extrabold">Click to fill all fields</span>
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-teal-300 fill-current" />
+                        <span>FORMULARY & FDA LOOKUP ({suggestions.length} FOUND)</span>
+                        {isSearchingFda && (
+                          <span className="text-[10px] text-amber-300 font-bold animate-pulse flex items-center gap-1 ml-1">
+                            <Globe className="w-3 h-3 animate-spin" /> Live FDA Search...
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-teal-200 uppercase tracking-wide font-extrabold">Click to fill</span>
                     </div>
                     {suggestions.map((entry, idx) => (
                       <button
@@ -469,6 +501,11 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                             <span className="text-[10px] font-black uppercase bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
                               {entry.category}
                             </span>
+                            {entry.brandName.includes('(FDA)') && (
+                              <span className="text-[9px] font-black uppercase bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-md border border-amber-300 flex items-center gap-0.5">
+                                <Globe className="w-3 h-3 text-amber-700" /> FDA DB
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-600 font-extrabold">
                             {entry.brandName ? `Brand: ${entry.brandName}` : 'Generic Form'} • <span className="text-teal-700 font-mono font-black">{entry.defaultDosage}</span>
