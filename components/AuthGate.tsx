@@ -13,6 +13,36 @@ interface AuthGateProps {
 export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [isTestingModalOpen, setIsTestingModalOpen] = useState(false);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const syncTestingMode = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('mission_rx_testing_mode');
+        setIsTestingMode(stored === 'true');
+      }
+    };
+    syncTestingMode();
+    window.addEventListener('storage', syncTestingMode);
+    window.addEventListener('mission_rx_testing_mode_change', syncTestingMode);
+    window.addEventListener('testingModeChanged', syncTestingMode);
+    return () => {
+      window.removeEventListener('storage', syncTestingMode);
+      window.removeEventListener('mission_rx_testing_mode_change', syncTestingMode);
+      window.removeEventListener('testingModeChanged', syncTestingMode);
+    };
+  }, []);
+
+  const handleToggleTestingMode = () => {
+    const nextVal = !isTestingMode;
+    setIsTestingMode(nextVal);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mission_rx_testing_mode', nextVal ? 'true' : 'false');
+      window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+      window.dispatchEvent(new Event('testingModeChanged'));
+    }
+  };
 
   useEffect(() => {
     if (currentRole === 'LOCKED' && pin.length === 4) {
@@ -22,6 +52,9 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
       } else if (pin === '8888') {
         setPin('');
         onAuthenticate('ADMIN');
+      } else if (pin === '9110') {
+        setPin('');
+        setIsTestingModalOpen(true);
       } else {
         setError(true);
         const timer = setTimeout(() => {
@@ -53,6 +86,63 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-100 px-4 text-slate-900 font-sans selection:bg-teal-500 select-none">
+      {/* Secret PIN 9110 Testing Mode Configuration Menu */}
+      {isTestingModalOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-6 text-slate-900 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-700 border border-amber-500/30">
+                <KeyRound className="w-7 h-7 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Testing Mode Control</h3>
+                <p className="text-xs font-bold text-slate-500">Secret Administrator Menu (PIN 9110)</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-sm font-black text-slate-900 block">System Testing Mode</span>
+                  <span className="text-xs font-medium text-slate-500">
+                    {isTestingMode
+                      ? 'PIN reminders and database dev tools are visible.'
+                      : 'Testing tools hidden. Clean production operational mode.'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleTestingMode}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                    isTestingMode ? 'bg-amber-500' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isTestingMode ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs font-semibold text-slate-600 bg-teal-50 border border-teal-200/80 rounded-xl p-3">
+              ℹ️ When turned <b>OFF</b>, all PIN reminder hints on the lock screen and dev/reset controls in the Admin portal are hidden for clinical safety and production readiness.
+            </p>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsTestingModalOpen(false)}
+                className="w-full py-3 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                Close & Return to Lock Screen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Ambient clinical background bloom */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-500/10 via-slate-100 to-slate-100 pointer-events-none" />
       
@@ -65,6 +155,30 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
           <p className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
             Protected Medical Inventory Access
           </p>
+
+          {/* User Manual Instructions Link (Only visible when 9110 Testing Toggle is ON) */}
+          {isTestingMode && (
+            <Link
+              href="/instructions"
+              className="w-full mt-2 py-2 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-300 text-teal-900 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4 text-teal-700 stroke-[2.5]" />
+              <span>📖 Read User Manual & Instructions</span>
+            </Link>
+          )}
+
+          {/* ======================================================================================= */}
+          {/* [TESTING MODE FEATURE - PIN HINTS - DELETE OR HIDE BEFORE FINAL PRODUCTION DEPLOYMENT]  */}
+          {/* ======================================================================================= */}
+          {isTestingMode && (
+            <div className="mt-2 flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+              <KeyRound className="w-3.5 h-3.5 text-teal-600 shrink-0 stroke-[2.5]" />
+              <span>Doctor PIN: <strong className="font-mono text-teal-700 font-black">1234</strong></span>
+              <span className="text-slate-300">|</span>
+              <span>Admin PIN: <strong className="font-mono text-amber-700 font-black">8888</strong></span>
+            </div>
+          )}
+          {/* ======================================================================================= */}
         </div>
 
         {/* PIN Dots Indicator */}
@@ -89,11 +203,11 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
         {error && (
           <div className="flex items-center justify-center gap-2 mb-4 text-xs font-bold text-rose-700 bg-rose-50 py-2.5 px-3 rounded-xl border border-rose-200 shadow-2xs">
             <AlertCircle className="w-4 h-4 shrink-0 stroke-[2.5]" />
-            <span>Invalid Access PIN. Please try again.</span>
+            <span>{isTestingMode ? 'Invalid PIN. Try Doctor (1234) or Admin (8888)' : 'Invalid Access PIN. Please try again.'}</span>
           </div>
         )}
 
-        {/* Ergonomic Keypad Buttons */}
+        {/* 48x48px Ergonomic Keypad Buttons */}
         <div className="grid grid-cols-3 gap-3">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
             <button
@@ -129,6 +243,14 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
+          {isTestingMode && (
+            <>
+              <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
+                <span>📖 User Manual</span>
+              </Link>
+              <span className="text-slate-300">•</span>
+            </>
+          )}
           <Link href="/privacy" className="hover:text-teal-700 transition-colors">
             Privacy Policy
           </Link>
