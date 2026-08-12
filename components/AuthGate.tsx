@@ -144,6 +144,17 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
             Protected Medical Inventory Access
           </p>
 
+          {/* User Manual Instructions Link (Only visible when 9110 Testing Toggle is ON) */}
+          {isTestingMode && (
+            <Link
+              href="/instructions"
+              className="w-full mt-2 py-2 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-300 text-teal-900 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4 text-teal-700 stroke-[2.5]" />
+              <span>📖 Read User Manual & Instructions</span>
+            </Link>
+          )}
+
           {/* ======================================================================================= */}
           {/* [TESTING MODE FEATURE - PIN HINTS - DELETE OR HIDE BEFORE FINAL PRODUCTION DEPLOYMENT]  */}
           {/* ======================================================================================= */}
@@ -220,6 +231,14 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
+          {isTestingMode && (
+            <>
+              <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
+                <span>📖 User Manual</span>
+              </Link>
+              <span className="text-slate-300">•</span>
+            </>
+          )}
           <Link href="/privacy" className="hover:text-teal-700 transition-colors">
             Privacy Policy
           </Link>
