@@ -388,7 +388,7 @@ export default function Home() {
         fetch(`/api/inventory/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(latestItem),
+          body: JSON.stringify({ ...latestItem, isFullEdit: false }),
         }).catch((e) => console.error('Failed to sync stock update', e));
       }
       delete stockUpdateTimersRef.current[id];
