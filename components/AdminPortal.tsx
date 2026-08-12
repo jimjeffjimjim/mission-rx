@@ -34,6 +34,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
+import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
@@ -710,10 +711,45 @@ export default function AdminPortal({
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-4 whitespace-nowrap text-center select-text">
-                          <span className="font-mono font-black text-xs text-slate-900 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
-                            {(((item.bottlesAvailable || 0) * (item.pillsPerBottle || 0)) + (item.looseUnitsAvailable || 0)).toLocaleString()} {item.subUnit || 'units'}
-                          </span>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+                                if (currentTotal > 0) {
+                                  const newTotal = currentTotal - 1;
+                                  const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
+                                  onUpdateStock(item.id, bottles, loose);
+                                }
+                              }}
+                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                              title="Decrement 1 Total Unit (-1)"
+                            >
+                              <Minus className="w-3 h-3 stroke-[3]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onEditItem(item)}
+                              className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                              title="Click to edit total units or medication details"
+                            >
+                              {calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0).toLocaleString()} {item.subUnit || 'units'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+                                const newTotal = currentTotal + 1;
+                                const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
+                                onUpdateStock(item.id, bottles, loose);
+                              }}
+                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                              title="Increment 1 Total Unit (+1)"
+                            >
+                              <Plus className="w-3 h-3 stroke-[3]" />
+                            </button>
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-700 select-text">

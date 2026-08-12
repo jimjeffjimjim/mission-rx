@@ -234,7 +234,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
               {containerLabel} {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel})` : ''}
             </span>
             
-            {role === 'ADMIN' ? (
+            {role !== 'LOCKED' ? (
               <div className="flex items-center justify-between gap-1 mt-1">
                 <button
                   onClick={decrementBottles}
@@ -293,7 +293,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
               Total Units ({subUnitLabel})
             </span>
 
-            {role === 'ADMIN' ? (
+            {role !== 'LOCKED' ? (
               <div className="flex flex-col gap-1 mt-1">
                 <div className="flex items-center justify-between gap-1">
                   <button
