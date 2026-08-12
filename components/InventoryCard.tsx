@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   FileText
 } from 'lucide-react';
+import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 
 interface InventoryCardProps {
   item: InventoryItem;
@@ -29,8 +30,9 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   const [editingBottles, setEditingBottles] = useState(false);
   const [bottlesInput, setBottlesInput] = useState(item.bottlesAvailable.toString());
   
-  const [editingLoose, setEditingLoose] = useState(false);
-  const [looseInput, setLooseInput] = useState(item.looseUnitsAvailable.toString());
+  const totalUnits = calculateTotalUnits(item.bottlesAvailable, item.pillsPerBottle, item.looseUnitsAvailable);
+  const [editingTotalUnits, setEditingTotalUnits] = useState(false);
+  const [totalUnitsInput, setTotalUnitsInput] = useState(totalUnits.toString());
 
   useEffect(() => {
     if (!editingBottles) {
@@ -39,10 +41,10 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   }, [item.bottlesAvailable, editingBottles]);
 
   useEffect(() => {
-    if (!editingLoose) {
-      setLooseInput(item.looseUnitsAvailable.toString());
+    if (!editingTotalUnits) {
+      setTotalUnitsInput(totalUnits.toString());
     }
-  }, [item.looseUnitsAvailable, editingLoose]);
+  }, [totalUnits, editingTotalUnits]);
 
   // Dynamic Units of Measure (UOM)
   const containerLabel = item.stockUnit || 'Bottles';
@@ -90,7 +92,6 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
   // Low stock check
   const isLowStock = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
-  const totalUnits = ((item.bottlesAvailable || 0) * (item.pillsPerBottle || 0)) + (item.looseUnitsAvailable || 0);
 
   // Stock mutation helpers
   const incrementBottles = () => {
@@ -117,28 +118,19 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     }
   };
 
-  const incrementLoose = () => {
-    if (onAdjustStock) {
-      onAdjustStock(item.id, 0, 1);
-      setLooseInput((prev) => (Number(prev || item.looseUnitsAvailable || 0) + 1).toString());
-    } else {
-      const newVal = item.looseUnitsAvailable + 1;
-      onUpdateStock(item.id, item.bottlesAvailable, newVal);
-      setLooseInput(newVal.toString());
-    }
+  const incrementTotalUnits = () => {
+    const nextTotal = totalUnits + 1;
+    const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
+    onUpdateStock(item.id, bottles, loose);
+    setTotalUnitsInput(nextTotal.toString());
   };
 
-  const decrementLoose = () => {
-    const currentVal = Number(looseInput !== undefined ? looseInput : item.looseUnitsAvailable || 0);
-    if (currentVal <= 0 && item.looseUnitsAvailable <= 0) return;
-    if (onAdjustStock) {
-      onAdjustStock(item.id, 0, -1);
-      setLooseInput((prev) => Math.max(0, Number(prev || item.looseUnitsAvailable || 0) - 1).toString());
-    } else {
-      const newVal = Math.max(0, item.looseUnitsAvailable - 1);
-      onUpdateStock(item.id, item.bottlesAvailable, newVal);
-      setLooseInput(newVal.toString());
-    }
+  const decrementTotalUnits = () => {
+    if (totalUnits <= 0) return;
+    const nextTotal = Math.max(0, totalUnits - 1);
+    const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
+    onUpdateStock(item.id, bottles, loose);
+    setTotalUnitsInput(nextTotal.toString());
   };
 
   const commitBottlesInput = () => {
@@ -151,13 +143,14 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     }
   };
 
-  const commitLooseInput = () => {
-    setEditingLoose(false);
-    const parsed = parseFloat(looseInput);
+  const commitTotalUnitsInput = () => {
+    setEditingTotalUnits(false);
+    const parsed = parseInt(totalUnitsInput, 10);
     const val = isNaN(parsed) ? 0 : Math.max(0, parsed);
-    setLooseInput(val.toString());
-    if (val !== item.looseUnitsAvailable) {
-      onUpdateStock(item.id, item.bottlesAvailable, val);
+    setTotalUnitsInput(val.toString());
+    if (val !== totalUnits) {
+      const { bottles, loose } = convertTotalUnitsToStock(val, item.pillsPerBottle);
+      onUpdateStock(item.id, bottles, loose);
     }
   };
 
@@ -172,7 +165,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
           </span>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs" title="Calculated Total Units (Sealed Container Packs + Open Loose Stock)">
+            <span className="text-[11px] font-black text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs" title="Calculated Total Stock (Sealed Containers + Loose Units)">
               Total Stock: {totalUnits.toLocaleString()} {subUnitLabel}
             </span>
 
@@ -294,59 +287,69 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
             )}
           </div>
 
-          {/* Sub-Unit Stock Counter */}
+          {/* Total Stock Units Counter */}
           <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors rounded-2xl p-3 sm:p-3.5 border border-slate-200 flex flex-col justify-between shadow-2xs">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate">
-              {subUnitLabel}
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate" title="Total amount of units. Editing this auto-adjusts sealed containers & loose units!">
+              Total Units ({subUnitLabel})
             </span>
 
             {role === 'ADMIN' ? (
-              <div className="flex items-center justify-between gap-1 mt-1">
-                <button
-                  onClick={decrementLoose}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
-                  title={`Decrement ${subUnitLabel}`}
-                >
-                  <Minus className="w-5 h-5 stroke-[3]" />
-                </button>
-
-                {editingLoose ? (
-                  <input
-                    type="number"
-                    value={looseInput}
-                    onChange={(e) => setLooseInput(e.target.value)}
-                    onBlur={commitLooseInput}
-                    onKeyDown={(e) => e.key === 'Enter' && commitLooseInput()}
-                    autoFocus
-                    className="w-14 text-center h-12 bg-white border-2 border-teal-600 rounded-xl text-lg font-black text-teal-700 font-mono focus:outline-hidden shadow-inner"
-                  />
-                ) : (
+              <div className="flex flex-col gap-1 mt-1">
+                <div className="flex items-center justify-between gap-1">
                   <button
-                    onClick={() => {
-                      setLooseInput(item.looseUnitsAvailable.toString());
-                      setEditingLoose(true);
-                    }}
-                    className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80 cursor-pointer"
-                    title="Tap to type exact number"
+                    onClick={decrementTotalUnits}
+                    className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 active:bg-rose-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
+                    title={`Decrement Total ${subUnitLabel}`}
                   >
-                    {item.looseUnitsAvailable}
+                    <Minus className="w-5 h-5 stroke-[3]" />
                   </button>
-                )}
 
-                <button
-                  onClick={incrementLoose}
-                  className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
-                  title={`Increment ${subUnitLabel}`}
-                >
-                  <Plus className="w-5 h-5 text-emerald-600 stroke-[3]" />
-                </button>
+                  {editingTotalUnits ? (
+                    <input
+                      type="number"
+                      value={totalUnitsInput}
+                      onChange={(e) => setTotalUnitsInput(e.target.value)}
+                      onBlur={commitTotalUnitsInput}
+                      onKeyDown={(e) => e.key === 'Enter' && commitTotalUnitsInput()}
+                      autoFocus
+                      className="w-16 text-center h-12 bg-white border-2 border-teal-600 rounded-xl text-lg font-black text-teal-700 font-mono focus:outline-hidden shadow-inner"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setTotalUnitsInput(totalUnits.toString());
+                        setEditingTotalUnits(true);
+                      }}
+                      className="flex-1 min-h-[48px] text-center font-mono font-black text-2xl text-slate-900 hover:text-teal-700 transition-colors py-1 rounded-lg hover:bg-white/80 cursor-pointer"
+                      title="Tap to type exact total units"
+                    >
+                      {totalUnits}
+                    </button>
+                  )}
+
+                  <button
+                    onClick={incrementTotalUnits}
+                    className="min-w-[48px] min-h-[48px] rounded-xl bg-white hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 active:bg-emerald-600 active:text-white text-slate-700 font-black text-lg border border-slate-300 flex items-center justify-center transition-all touch-manipulation shadow-2xs active:scale-95 cursor-pointer"
+                    title={`Increment Total ${subUnitLabel}`}
+                  >
+                    <Plus className="w-5 h-5 text-emerald-600 stroke-[3]" />
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-500 font-extrabold text-center block pt-0.5 truncate">
+                  ({item.bottlesAvailable} {containerLabel.toLowerCase().replace(/s$/, '')}s + {item.looseUnitsAvailable} loose)
+                </span>
               </div>
             ) : (
-              <div className="flex items-baseline gap-1.5 mt-1 select-text">
-                <span className="font-mono text-2xl font-black text-slate-900">
-                  {item.looseUnitsAvailable}
+              <div className="flex flex-col gap-0.5 mt-1 select-text">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-2xl font-black text-slate-900">
+                    {totalUnits}
+                  </span>
+                  <span className="text-xs text-slate-500 font-extrabold lowercase truncate">{subUnitLabel}</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-bold block truncate">
+                  ({item.bottlesAvailable} sealed + {item.looseUnitsAvailable} loose)
                 </span>
-                <span className="text-xs text-slate-500 font-extrabold lowercase truncate">{subUnitLabel}</span>
               </div>
             )}
           </div>

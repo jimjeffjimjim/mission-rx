@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
+import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 
 interface ItemEditModalProps {
   isOpen: boolean;
@@ -762,9 +763,44 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 3. Physical Stock Counts & Container Volume
               </h3>
               <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
-                Total Stock: {(((Number(formData.bottlesAvailable) || 0) * (Number(formData.pillsPerBottle) || 0)) + (Number(formData.looseUnitsAvailable) || 0)).toLocaleString()} {formData.subUnit || 'units'}
+                Total Stock: {calculateTotalUnits(Number(formData.bottlesAvailable) || 0, Number(formData.pillsPerBottle) || 0, Number(formData.looseUnitsAvailable) || 0).toLocaleString()} {formData.subUnit || 'units'}
               </span>
             </div>
+
+            {/* Total Units Input - Editing this auto-adjusts bottles and loose units */}
+            <div className="bg-teal-50/70 border border-teal-200/90 p-3 rounded-2xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="block text-xs font-black text-teal-950 uppercase tracking-wide">
+                    🎯 Total Stock Units ({formData.subUnit || 'units'})
+                  </label>
+                  <p className="text-[11px] font-semibold text-teal-700">
+                    Type total desired units here to auto-adjust full {formData.stockUnit ? formData.stockUnit.toLowerCase() : 'bottles'} and loose units.
+                  </p>
+                </div>
+                <div className="w-full sm:w-44">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={calculateTotalUnits(Number(formData.bottlesAvailable) || 0, Number(formData.pillsPerBottle) || 0, Number(formData.looseUnitsAvailable) || 0)}
+                    onChange={(e) => {
+                      const valStr = e.target.value;
+                      if (valStr === '') {
+                        setFormData((prev) => ({ ...prev, bottlesAvailable: 0, looseUnitsAvailable: 0 }));
+                        return;
+                      }
+                      const totalVal = Math.max(0, parseInt(valStr, 10) || 0);
+                      const packSize = Number(formData.pillsPerBottle) || 0;
+                      const { bottles, loose } = convertTotalUnitsToStock(totalVal, packSize);
+                      setFormData((prev) => ({ ...prev, bottlesAvailable: bottles, looseUnitsAvailable: loose }));
+                    }}
+                    className="w-full h-11 px-3 bg-white border-2 border-teal-600 focus:border-teal-700 rounded-xl text-base font-black text-center text-teal-900 font-mono transition-all shadow-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-extrabold text-slate-700 mb-1">
