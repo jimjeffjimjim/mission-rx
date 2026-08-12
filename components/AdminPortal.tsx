@@ -265,6 +265,7 @@ export default function AdminPortal({
     try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('mission_rx_audit_queue');
+        localStorage.removeItem('mission_rx_inventory_cache');
       }
       await fetch('/api/logs', { method: 'DELETE' });
       const res = await fetch('/api/inventory/reset', { method: 'POST' });

@@ -141,6 +141,15 @@ export default function Home() {
       const res = await fetch('/api/inventory');
       if (res.ok) {
         const data = await res.json();
+        // Clear any pending debounced stock updates to prevent race conditions during reset
+        Object.keys(stockUpdateTimersRef.current).forEach((key) => {
+          if (stockUpdateTimersRef.current[key]) {
+            clearTimeout(stockUpdateTimersRef.current[key]);
+            delete stockUpdateTimersRef.current[key];
+          }
+        });
+        isUpdatingStockRef.current = false;
+        itemsRef.current = data;
         setItems(data);
         saveLocalCache(data);
 

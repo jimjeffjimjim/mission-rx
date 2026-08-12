@@ -19,7 +19,7 @@ export async function POST() {
           // Reset all existing items back to their baseline stock
           for (const item of existingItems) {
             const orig = originalSpreadsheetInventory.find(
-              (o) => o.id === item.id || (o.genericName === item.generic_name && o.shelfLocation === item.shelf_location)
+              (o) => o.id === item.id || (o.genericName.toLowerCase().trim() === item.generic_name.toLowerCase().trim())
             );
 
             const targetBottles = orig 
@@ -84,7 +84,7 @@ export async function POST() {
       for (const item of existingPrismaItems) {
         const itemAny = item as any;
         const orig = originalSpreadsheetInventory.find(
-          (o) => o.id === item.id || (o.genericName === item.genericName && o.shelfLocation === item.shelfLocation)
+          (o) => o.id === item.id || (o.genericName.toLowerCase().trim() === item.genericName.toLowerCase().trim())
         );
 
         const targetBottles = orig 
