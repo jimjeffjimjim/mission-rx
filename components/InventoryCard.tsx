@@ -219,9 +219,14 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
           {/* Directions / Provider Notes from Excel */}
           {item.directions && (
-            <div className="pt-2 flex items-start gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200 select-text">
-              <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5] mt-0.5" />
-              <p className="font-medium text-slate-700 leading-relaxed">{item.directions}</p>
+            <div className="pt-2 flex flex-col gap-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200 select-text">
+              <div className="flex items-start gap-2">
+                <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5] mt-0.5" />
+                <p className="font-medium text-slate-700 leading-relaxed">{item.directions}</p>
+              </div>
+              <p className="text-[11px] italic font-semibold text-slate-500 pt-1 border-t border-slate-200/60 mt-1">
+                * Note: Reference information may not be completely accurate. Please use your own clinical judgment.
+              </p>
             </div>
           )}
         </div>

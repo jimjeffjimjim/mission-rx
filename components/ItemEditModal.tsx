@@ -640,6 +640,9 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                 onChange={(e) => handleChange('directions', e.target.value)}
                 className="w-full p-3 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-xs font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden leading-relaxed"
               />
+              <p className="text-[11px] italic font-semibold text-slate-500 mt-1 flex items-center gap-1">
+                <span>* Note: Reference information may not be completely accurate. Please use your own clinical judgment.</span>
+              </p>
             </div>
           </div>
 
