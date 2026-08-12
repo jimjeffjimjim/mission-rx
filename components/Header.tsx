@@ -25,12 +25,12 @@ export default function Header({
   const [showAdminPrompt, setShowAdminPrompt] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
   const [error, setError] = useState(false);
-  const [isTestingMode, setIsTestingMode] = useState<boolean>(true);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
 
   useEffect(() => {
     const checkTestingMode = () => {
       const stored = localStorage.getItem('mission_rx_testing_mode');
-      setIsTestingMode(stored !== 'false');
+      setIsTestingMode(stored === 'true');
     };
     checkTestingMode();
     const handleStorageChange = () => checkTestingMode();

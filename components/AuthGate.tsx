@@ -14,13 +14,13 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [isTestingModalOpen, setIsTestingModalOpen] = useState(false);
-  const [isTestingMode, setIsTestingMode] = useState<boolean>(true);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
 
   useEffect(() => {
     const syncTestingMode = () => {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('mission_rx_testing_mode');
-        setIsTestingMode(stored !== 'false');
+        setIsTestingMode(stored === 'true');
       }
     };
     syncTestingMode();
