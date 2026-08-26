@@ -33,6 +33,19 @@ export default function Header({
       setIsTestingMode(stored === 'true');
     };
     checkTestingMode();
+
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.testingMode === 'boolean') {
+          setIsTestingMode(data.testingMode);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mission_rx_testing_mode', data.testingMode ? 'true' : 'false');
+          }
+        }
+      })
+      .catch(() => {});
+
     const handleStorageChange = () => checkTestingMode();
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('testingModeChanged', handleStorageChange);

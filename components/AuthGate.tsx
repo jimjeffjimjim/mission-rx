@@ -24,6 +24,19 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
       }
     };
     syncTestingMode();
+
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.testingMode === 'boolean') {
+          setIsTestingMode(data.testingMode);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mission_rx_testing_mode', data.testingMode ? 'true' : 'false');
+          }
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener('storage', syncTestingMode);
     window.addEventListener('mission_rx_testing_mode_change', syncTestingMode);
     window.addEventListener('testingModeChanged', syncTestingMode);
@@ -42,6 +55,11 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
       window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
       window.dispatchEvent(new Event('testingModeChanged'));
     }
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testingMode: nextVal }),
+    }).catch(() => {});
   };
 
   useEffect(() => {

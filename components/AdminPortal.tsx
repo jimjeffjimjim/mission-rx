@@ -185,19 +185,33 @@ export default function AdminPortal({
   const [isResettingInventory, setIsResettingInventory] = useState(false);
 
   // Testing mode and admin alert filter states
-  const [isTestingMode, setIsTestingMode] = useState(true);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<'ALL' | 'LOW_STOCK' | 'EXPIRING'>('ALL');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('mission_rx_testing_mode');
-      const active = stored !== 'false';
+      const active = stored === 'true';
       setIsTestingMode(active);
       setIsLocalTestMode(active);
     }
+    // Fetch global system setting
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.testingMode === 'boolean') {
+          setIsTestingMode(data.testingMode);
+          setIsLocalTestMode(data.testingMode);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mission_rx_testing_mode', data.testingMode ? 'true' : 'false');
+          }
+        }
+      })
+      .catch(() => {});
+
     const handleStorageChange = () => {
       const stored = localStorage.getItem('mission_rx_testing_mode');
-      const active = stored !== 'false';
+      const active = stored === 'true';
       setIsTestingMode(active);
       setIsLocalTestMode(active);
       if (!active) {
@@ -519,6 +533,11 @@ export default function AdminPortal({
                       setIsTestingMode(true);
                       setIsLocalTestMode(true);
                       window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+                      fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ testingMode: true }),
+                      }).catch(() => {});
                     } else if (pin !== null) {
                       alert("Incorrect PIN. Access denied.");
                     }
@@ -528,6 +547,11 @@ export default function AdminPortal({
                     setIsLocalTestMode(false);
                     setTestItemsMap({});
                     window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+                    fetch('/api/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ testingMode: false }),
+                    }).catch(() => {});
                   }
                 }}
                 className={`min-h-[44px] px-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border cursor-pointer ${
