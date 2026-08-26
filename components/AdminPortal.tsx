@@ -569,30 +569,16 @@ export default function AdminPortal({
                   if (!isTestingMode) {
                     const pin = window.prompt("Enter Secret Admin Testing PIN:");
                     if (pin === '9110') {
-                      localStorage.setItem('mission_rx_testing_mode', 'true');
                       setIsTestingMode(true);
                       setIsLocalTestMode(true);
-                      window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
-                      fetch('/api/settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ testingMode: true }),
-                      }).catch(() => {});
                     } else if (pin !== null) {
                       alert("Incorrect PIN. Access denied.");
                     }
                   } else {
-                    localStorage.setItem('mission_rx_testing_mode', 'false');
                     setIsTestingMode(false);
                     setIsLocalTestMode(false);
                     setTestItemsMap({});
                     setTestSimulatedLogs([]);
-                    window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
-                    fetch('/api/settings', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ testingMode: false }),
-                    }).catch(() => {});
                     fetchAnalytics(timeframe);
                     if (onRefreshData) onRefreshData();
                   }
