@@ -15,7 +15,8 @@ import {
   ToggleLeft, 
   ToggleRight, 
   Check,
-  Globe
+  Globe,
+  AlertTriangle
 } from 'lucide-react';
 import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
@@ -792,6 +793,14 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
             </div>
 
             {/* Total Units Input - Editing this auto-adjusts bottles and loose units */}
+            {item && (
+              <div className="bg-amber-50/90 border border-amber-300 p-3 rounded-2xl flex items-start gap-2.5 shadow-xs mb-1">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 stroke-[2.5]" />
+                <p className="text-xs font-bold text-amber-950 leading-relaxed">
+                  ⚠️ <span className="font-black uppercase tracking-tight text-amber-900">Please Note:</span> To dispense or undispense medication, please click the <strong>'Total Volume / Units'</strong> column in the main inventory table. Modifying stock numbers here will bypass clinical dispense tracking logs.
+                </p>
+              </div>
+            )}
             <div className="bg-teal-50/70 border border-teal-200/90 p-3 rounded-2xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>

@@ -91,23 +91,7 @@ export async function POST(request: Request) {
       if (cloudError) {
         console.warn('Supabase backup creation error:', cloudError);
       } else {
-        // Automatic Storage Maintenance: Prune older snapshots beyond the newest 5 to prevent exceeding Supabase storage space!
-        try {
-          const { data: existingBackups } = await supabase
-            .from('inventory_backups')
-            .select('id')
-            .order('created_at', { ascending: false });
-
-          if (existingBackups && existingBackups.length > 5) {
-            const idsToDelete = existingBackups.slice(5).map(b => b.id);
-            await supabase
-              .from('inventory_backups')
-              .delete()
-              .in('id', idsToDelete);
-          }
-        } catch (pruneErr) {
-          console.warn('Failed to prune older backups:', pruneErr);
-        }
+        // Retain all historical regulatory weekly backups (unlimited retention)
       }
     }
 
@@ -140,7 +124,7 @@ export async function POST(request: Request) {
       notes: cleanNotes,
     };
 
-    backupsFallbackCache = [newBackup, ...backupsFallbackCache].slice(0, 5);
+    backupsFallbackCache = [newBackup, ...backupsFallbackCache];
     return NextResponse.json({ success: true, backup: newBackup }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating weekly backup:', error);
@@ -150,12 +134,25 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { backupId } = await request.json();
-    if (!backupId) {
-      return NextResponse.json({ error: 'Missing backupId to restore' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { backupId, rawBackup } = body;
 
     let targetBackup: any = null;
+
+    if (rawBackup && Array.isArray(rawBackup.inventory)) {
+      targetBackup = {
+        title: rawBackup.title || 'Uploaded JSON Backup File',
+        inventory: rawBackup.inventory,
+        logs: Array.isArray(rawBackup.logs) ? rawBackup.logs : (Array.isArray(rawBackup.logsSnapshot) ? rawBackup.logsSnapshot : []),
+      };
+    } else if (Array.isArray(rawBackup)) {
+      // Direct array of items uploaded
+      targetBackup = {
+        title: 'Uploaded JSON Inventory Items',
+        inventory: rawBackup,
+        logs: [],
+      };
+    } else if (backupId) {
 
     // 1. Find in Supabase
     if (supabase) {
@@ -193,6 +190,7 @@ export async function PUT(request: Request) {
         }
       }
     }
+  }
 
     if (!targetBackup || !Array.isArray(targetBackup.inventory)) {
       return NextResponse.json({ error: 'Backup record not found or invalid' }, { status: 404 });

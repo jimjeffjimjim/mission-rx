@@ -14,6 +14,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
+import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -529,7 +530,7 @@ export default function Home() {
     });
   }, [items, searchQuery, selectedCategory, selectedStatus]);
 
-  // Group inventory by categories for Doctor View
+  // Group and consolidate inventory by categories for Doctor View
   const groupedInventory = useMemo(() => {
     const groups: { [key: string]: InventoryItem[] } = {};
     const specialtyOrder = [
@@ -560,10 +561,59 @@ export default function Home() {
         if (idxB !== -1) return 1;
         return a.localeCompare(b);
       })
-      .map((category) => ({
-        category,
-        items: groups[category],
-      }));
+      .map((category) => {
+        const rawCategoryItems = groups[category] || [];
+        
+        // Merge identical medications for doctors (matching genericName + dosage + subUnit)
+        const consolidatedMap = new Map<string, InventoryItem>();
+
+        rawCategoryItems.forEach((item) => {
+          const key = `${(item.genericName || '').trim().toLowerCase()}_${(item.dosage || '').trim().toLowerCase()}_${(item.subUnit || 'units').trim().toLowerCase()}`;
+          
+          if (!consolidatedMap.has(key)) {
+            let itemLots: string[] = [];
+            try {
+              itemLots = Array.isArray(item.lotNumbers) 
+                ? item.lotNumbers 
+                : (typeof item.lotNumbers === 'string' ? JSON.parse(item.lotNumbers || '[]') : []);
+            } catch (e) {
+              itemLots = [];
+            }
+            consolidatedMap.set(key, { ...item, lotNumbers: itemLots });
+          } else {
+            const existing = consolidatedMap.get(key)!;
+            const existingTotal = calculateTotalUnits(existing.bottlesAvailable || 0, existing.pillsPerBottle || 0, existing.looseUnitsAvailable || 0);
+            const itemTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+            const combinedTotal = existingTotal + itemTotal;
+
+            const packSize = existing.pillsPerBottle || item.pillsPerBottle || 0;
+            const { bottles, loose } = convertTotalUnitsToStock(combinedTotal, packSize);
+
+            let existingLots: string[] = Array.isArray(existing.lotNumbers) ? existing.lotNumbers : [];
+            let itemLots: string[] = [];
+            try {
+              itemLots = Array.isArray(item.lotNumbers)
+                ? item.lotNumbers
+                : (typeof item.lotNumbers === 'string' ? JSON.parse(item.lotNumbers || '[]') : []);
+            } catch (e) {
+              itemLots = [];
+            }
+            const mergedLots = Array.from(new Set([...existingLots, ...itemLots]));
+
+            consolidatedMap.set(key, {
+              ...existing,
+              bottlesAvailable: bottles,
+              looseUnitsAvailable: loose,
+              lotNumbers: mergedLots,
+            });
+          }
+        });
+
+        return {
+          category,
+          items: Array.from(consolidatedMap.values()),
+        };
+      });
   }, [filteredItems]);
 
   return (

@@ -356,27 +356,27 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
         </div>
 
         {/* Clinical Section: Lot Numbers & Admin Edit Dialog */}
-        <div className="mt-4 pt-3.5 border-t border-slate-200/80 flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center gap-1.5 select-text">
-            <span className="text-xs font-black text-slate-700 flex items-center gap-1 mr-1">
-              <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5]" />
-              <span>Lots:</span>
-            </span>
-            {lotList.length > 0 ? (
-              lotList.map((lot: string, idx: number) => (
-                <span
-                  key={idx}
-                  className="font-mono text-xs font-bold text-slate-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 shadow-2xs"
-                >
-                  {lot}
-                </span>
-              ))
-            ) : (
-              <span className="text-xs text-slate-500 italic font-medium">No Lots attached</span>
-            )}
-          </div>
+        {role === 'ADMIN' && (
+          <div className="mt-4 pt-3.5 border-t border-slate-200/80 flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 select-text">
+              <span className="text-xs font-black text-slate-700 flex items-center gap-1 mr-1">
+                <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5]" />
+                <span>Lots:</span>
+              </span>
+              {lotList.length > 0 ? (
+                lotList.map((lot: string, idx: number) => (
+                  <span
+                    key={idx}
+                    className="font-mono text-xs font-bold text-slate-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 shadow-2xs"
+                  >
+                    {lot}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-slate-500 italic font-medium">No Lots attached</span>
+              )}
+            </div>
 
-          {role === 'ADMIN' && (
             <button
               onClick={() => onEditItem(item)}
               className="w-full mt-1 min-h-[48px] bg-slate-100 hover:bg-amber-50 hover:border-amber-400 text-slate-800 hover:text-amber-900 font-black text-xs sm:text-sm rounded-2xl border border-slate-300 flex items-center justify-center gap-2 transition-all touch-manipulation shadow-2xs active:scale-[0.98] animate-fadeIn cursor-pointer"
@@ -384,8 +384,8 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
               <Edit2 className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
               <span>Edit Medication Details & Lot History</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

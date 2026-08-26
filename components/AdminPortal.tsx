@@ -6,6 +6,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { 
   Plus, 
   Minus, 
+  X,
   Edit2, 
   Trash2, 
   Search, 
@@ -63,6 +64,15 @@ export default function AdminPortal({
   const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
+
+  // Test Mode & Dispense Modal State
+  const [isLocalTestMode, setIsLocalTestMode] = useState(false);
+  const [testItemsMap, setTestItemsMap] = useState<Record<string, { bottles: number; loose: number }>>({});
+  const [dispenseModalOpen, setDispenseModalOpen] = useState(false);
+  const [dispenseItem, setDispenseItem] = useState<InventoryItem | null>(null);
+  const [dispenseAmount, setDispenseAmount] = useState<string>('');
+  const [undispenseAmount, setUndispenseAmount] = useState<string>('');
+  const [dispensingAction, setDispensingAction] = useState(false);
 
   // Weekly Backups State
   const [backups, setBackups] = useState<any[]>([]);
@@ -181,11 +191,18 @@ export default function AdminPortal({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('mission_rx_testing_mode');
-      if (stored === 'false') setIsTestingMode(false);
+      const active = stored !== 'false';
+      setIsTestingMode(active);
+      setIsLocalTestMode(active);
     }
     const handleStorageChange = () => {
       const stored = localStorage.getItem('mission_rx_testing_mode');
-      setIsTestingMode(stored !== 'false');
+      const active = stored !== 'false';
+      setIsTestingMode(active);
+      setIsLocalTestMode(active);
+      if (!active) {
+        setTestItemsMap({});
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('mission_rx_testing_mode_change', handleStorageChange);
@@ -194,6 +211,38 @@ export default function AdminPortal({
       window.removeEventListener('mission_rx_testing_mode_change', handleStorageChange);
     };
   }, []);
+
+  const handleRestoreFromJSONFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!confirm(`Are you sure you want to restore from JSON file "${file.name}"? This will overwrite the current clinical database with the snapshot data.`)) {
+        e.target.value = '';
+        return;
+      }
+      setLoadingBackups(true);
+      const res = await fetch('/api/backups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawBackup: parsed }),
+      });
+      if (res.ok) {
+        alert('Database successfully restored from JSON backup file!');
+        if (onRefreshData) onRefreshData();
+        await fetchBackups();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to restore: ${errData.error || 'Invalid file format'}`);
+      }
+    } catch (err: any) {
+      alert(`Invalid JSON file: ${err.message}`);
+    } finally {
+      setLoadingBackups(false);
+      e.target.value = '';
+    }
+  };
 
   // Analytics State
   const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'all'>('week');
@@ -292,12 +341,18 @@ export default function AdminPortal({
     }
   };
 
+  // Apply Local Test Mode Sandbox Overlay
+  const displayItems = isLocalTestMode ? items.map(item => {
+    const testVal = testItemsMap[item.id];
+    return testVal ? { ...item, bottlesAvailable: testVal.bottles, looseUnitsAvailable: testVal.loose } : item;
+  }) : items;
+
   // Overall Stats
-  const totalItems = items.length;
-  const lowStockCount = items.filter(
+  const totalItems = displayItems.length;
+  const lowStockCount = displayItems.filter(
     (i) => i.bottlesAvailable < 2 || (i.bottlesAvailable === 0 && i.looseUnitsAvailable < 20)
   ).length;
-  const expiringCount = items.filter((i) => {
+  const expiringCount = displayItems.filter((i) => {
     try {
       const expDate = parseISO(i.expirationDate);
       const days = differenceInDays(expDate, new Date());
@@ -307,10 +362,10 @@ export default function AdminPortal({
     }
   }).length;
 
-  const totalBottles = items.reduce((acc, item) => acc + item.bottlesAvailable, 0);
+  const totalBottles = displayItems.reduce((acc, item) => acc + item.bottlesAvailable, 0);
 
   // Filter Table Items
-  const filtered = items.filter((item) => {
+  const filtered = displayItems.filter((item) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = item.genericName.toLowerCase().includes(q);
@@ -453,6 +508,38 @@ export default function AdminPortal({
                   <span>Audit Logs</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isTestingMode) {
+                    const pin = window.prompt("Enter Secret Admin Testing PIN (9110):");
+                    if (pin === '9110') {
+                      localStorage.setItem('mission_rx_testing_mode', 'true');
+                      setIsTestingMode(true);
+                      setIsLocalTestMode(true);
+                      window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+                    } else if (pin !== null) {
+                      alert("Incorrect PIN. Access denied.");
+                    }
+                  } else {
+                    localStorage.setItem('mission_rx_testing_mode', 'false');
+                    setIsTestingMode(false);
+                    setIsLocalTestMode(false);
+                    setTestItemsMap({});
+                    window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
+                  }
+                }}
+                className={`min-h-[44px] px-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border cursor-pointer ${
+                  isTestingMode
+                    ? 'bg-amber-400 border-amber-500 text-slate-950 shadow-amber-400/20'
+                    : 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
+                }`}
+                title={isTestingMode ? "Testing Sandbox Active - Click to Exit and Reset Local Changes" : "Click to enter Testing Sandbox Mode with PIN 9110"}
+              >
+                <Wrench className="w-4 h-4 stroke-[2.5]" />
+                <span>{isTestingMode ? 'Testing Mode ON' : 'Test Mode'}</span>
+              </button>
 
               <button
                 type="button"
@@ -701,32 +788,41 @@ export default function AdminPortal({
                                 if (currentTotal > 0) {
                                   const newTotal = currentTotal - 1;
                                   const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
-                                  onUpdateStock(item.id, bottles, loose);
+                                  if (isLocalTestMode) {
+                                    setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles, loose } }));
+                                  } else {
+                                    onUpdateStock(item.id, bottles, loose);
+                                  }
                                 }
                               }}
                               className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
-                              title="Decrement 1 Total Unit (-1)"
+                              title="Directly Dispense 1 Unit (-1)"
                             >
                               <Minus className="w-3 h-3 stroke-[3]" />
                             </button>
                             <button
                               type="button"
-                              onClick={() => onEditItem(item)}
+                              onClick={() => {
+                                setDispenseItem(item);
+                                setDispenseAmount('');
+                                setUndispenseAmount('');
+                                setDispenseModalOpen(true);
+                              }}
                               className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
-                              title="Click to edit total units or medication details"
+                              title="Click to open Dispense & Undispense pop-up"
                             >
                               {calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0).toLocaleString()} {item.subUnit || 'units'}
                             </button>
                             <button
                               type="button"
                               onClick={() => {
-                                const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
-                                const newTotal = currentTotal + 1;
-                                const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
-                                onUpdateStock(item.id, bottles, loose);
+                                setDispenseItem(item);
+                                setDispenseAmount('');
+                                setUndispenseAmount('');
+                                setDispenseModalOpen(true);
                               }}
                               className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
-                              title="Increment 1 Total Unit (+1)"
+                              title="Click to open Undispense / Restock pop-up (+)"
                             >
                               <Plus className="w-3 h-3 stroke-[3]" />
                             </button>
@@ -900,18 +996,20 @@ export default function AdminPortal({
                           <span className="font-mono text-rose-600 font-black">
                             {item.totalDispensed} units dispensed
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingDispenseItem(item);
-                              setNewDispenseAmt(item.totalDispensed);
-                              setIsDispenseWarningOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
-                            title="Edit total amount dispensed"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                          {isTestingMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingDispenseItem(item);
+                                setNewDispenseAmt(item.totalDispensed);
+                                setIsDispenseWarningOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
+                              title="Edit total amount dispensed"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -983,6 +1081,21 @@ export default function AdminPortal({
                   )}
                   <span>{creatingBackup ? 'Creating Snapshot...' : 'Create Backup Snapshot Now'}</span>
                 </button>
+
+                {isTestingMode && (
+                  <div className="pt-2 border-t border-slate-700/80">
+                    <label className="w-full min-h-[40px] px-4 rounded-xl bg-slate-900 hover:bg-slate-950 border border-amber-400/50 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+                      <Upload className="w-4 h-4 stroke-[2.5]" />
+                      <span>Restore from JSON File (Testing)</span>
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={handleRestoreFromJSONFile}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1147,6 +1260,177 @@ export default function AdminPortal({
           if (onRefreshData) onRefreshData();
         }}
       />
+
+      {/* Dispense & Undispense Pop-Up Modal */}
+      {dispenseModalOpen && dispenseItem && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-2 border-teal-600 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-900 relative">
+            <button
+              type="button"
+              onClick={() => {
+                setDispenseModalOpen(false);
+                setDispenseItem(null);
+              }}
+              className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5 stroke-[2.5]" />
+            </button>
+
+            <div className="flex items-start gap-4 pr-8">
+              <div className="p-3 rounded-2xl bg-teal-100 text-teal-700 border border-teal-300 shrink-0 shadow-inner">
+                <CheckCircle className="w-7 h-7 stroke-[2.5]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-slate-900 leading-snug">
+                  Dispense & Undispense Inventory
+                </h3>
+                <p className="text-xs font-semibold text-slate-600 leading-normal">
+                  Adjust formulation volume for <span className="font-bold text-slate-900">{dispenseItem.genericName}</span> ({dispenseItem.dosage}).
+                </p>
+                <div className="pt-1">
+                  <span className="font-mono text-xs font-black px-2.5 py-1 rounded-xl bg-teal-50 text-teal-900 border border-teal-200">
+                    Current Total: {calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0).toLocaleString()} {dispenseItem.subUnit || 'units'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Directions Banner */}
+            <div className="bg-slate-100/90 border border-slate-200 rounded-2xl p-3.5 space-y-1.5 text-xs">
+              <div className="font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-teal-700" />
+                <span>Dispensary Directions & Guidelines</span>
+              </div>
+              <p className="text-[11px] font-semibold text-slate-600 leading-relaxed">
+                • <strong>Dispense:</strong> Subtracts medication handed to patients and automatically logs usage in clinical compliance records.
+              </p>
+              <p className="text-[11px] font-semibold text-slate-600 leading-relaxed">
+                • <strong>Undispense / Restock:</strong> Returns medication back to stock and removes the quantity from Top Dispensed usage charts.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
+              {/* Section 1: Dispense */}
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-rose-700 block mb-1">
+                  1. How many did you dispense? (Subtract)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={dispenseAmount}
+                    onChange={(e) => setDispenseAmount(e.target.value)}
+                    className="flex-1 min-h-[46px] px-4 bg-white border border-slate-300 focus:border-rose-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
+                    placeholder={`e.g. 30 ${dispenseItem.subUnit || 'units'}`}
+                  />
+                  <button
+                    type="button"
+                    disabled={!dispenseAmount || Number(dispenseAmount) <= 0 || dispensingAction}
+                    onClick={async () => {
+                      const amount = parseInt(dispenseAmount, 10);
+                      if (isNaN(amount) || amount <= 0) return;
+                      setDispensingAction(true);
+                      try {
+                        const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
+                        const newTotal = Math.max(0, currentTotal - amount);
+                        const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
+
+                        if (isLocalTestMode) {
+                          setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
+                        } else {
+                          onUpdateStock(dispenseItem.id, bottles, loose);
+                          await fetch('/api/logs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              itemId: dispenseItem.id,
+                              itemGenericName: dispenseItem.genericName,
+                              quantityChanged: amount,
+                              actionType: 'DISPENSE',
+                              userRole: 'ADMIN',
+                              details: `Dispensed ${amount} ${dispenseItem.subUnit || 'units'} directly via Backdoor Inventory table.`,
+                              createdAt: new Date().toISOString(),
+                            }),
+                          }).catch(() => null);
+                          if (onRefreshData) onRefreshData();
+                        }
+                        setDispenseModalOpen(false);
+                        setDispenseItem(null);
+                      } finally {
+                        setDispensingAction(false);
+                      }
+                    }}
+                    className="px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4 stroke-[3]" />
+                    <span>Dispense</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 2: Undispense */}
+              <div className="pt-3 border-t border-slate-200">
+                <label className="text-xs font-black uppercase tracking-wider text-emerald-700 block mb-1">
+                  2. Undispense / Restock Amount (Add & Reverse Usage)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={undispenseAmount}
+                    onChange={(e) => setUndispenseAmount(e.target.value)}
+                    className="flex-1 min-h-[46px] px-4 bg-white border border-slate-300 focus:border-emerald-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
+                    placeholder={`e.g. 10 ${dispenseItem.subUnit || 'units'}`}
+                  />
+                  <button
+                    type="button"
+                    disabled={!undispenseAmount || Number(undispenseAmount) <= 0 || dispensingAction}
+                    onClick={async () => {
+                      const amount = parseInt(undispenseAmount, 10);
+                      if (isNaN(amount) || amount <= 0) return;
+                      setDispensingAction(true);
+                      try {
+                        const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
+                        const newTotal = currentTotal + amount;
+                        const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
+
+                        if (isLocalTestMode) {
+                          setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
+                        } else {
+                          onUpdateStock(dispenseItem.id, bottles, loose);
+                          await fetch('/api/logs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              itemId: dispenseItem.id,
+                              itemGenericName: dispenseItem.genericName,
+                              quantityChanged: -amount,
+                              actionType: 'DISPENSE',
+                              userRole: 'ADMIN',
+                              details: `Undispensed / Restocked ${amount} ${dispenseItem.subUnit || 'units'} back into inventory.`,
+                              createdAt: new Date().toISOString(),
+                            }),
+                          }).catch(() => null);
+                          if (onRefreshData) onRefreshData();
+                        }
+                        setDispenseModalOpen(false);
+                        setDispenseItem(null);
+                      } finally {
+                        setDispensingAction(false);
+                      }
+                    }}
+                    className="px-5 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>Undispense</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Warning Confirmation Pop-up Dialog for Editing Total Amount Dispensed */}
       {isDispenseWarningOpen && editingDispenseItem && (
