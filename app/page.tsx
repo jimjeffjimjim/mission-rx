@@ -33,6 +33,11 @@ export default function Home() {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
 
+  // Testing Sandbox Isolation State
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
+  const isTestingModeRef = useRef<boolean>(false);
+  const baselineItemsRef = useRef<InventoryItem[]>([]);
+
   // Interaction resilience refs for rapid clicking & network debouncing
   const isUpdatingStockRef = useRef(false);
   const stockUpdateTimersRef = useRef<{ [id: string]: any }>({});
@@ -63,6 +68,65 @@ export default function Home() {
         }
       }
     }
+
+    const checkTestingMode = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('mission_rx_testing_mode');
+        const active = stored === 'true';
+        const wasActive = isTestingModeRef.current;
+        isTestingModeRef.current = active;
+        setIsTestingMode(active);
+
+        // If exiting testing mode, cleanly revert to baseline or refetch from server
+        if (wasActive && !active) {
+          if (baselineItemsRef.current.length > 0) {
+            setItems(baselineItemsRef.current);
+            saveLocalCache(baselineItemsRef.current);
+            baselineItemsRef.current = [];
+          }
+          fetchInventory();
+        } else if (!wasActive && active) {
+          // Entering test mode: capture snapshot
+          if (itemsRef.current.length > 0) {
+            baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+          }
+        }
+      }
+    };
+
+    checkTestingMode();
+
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.testingMode === 'boolean') {
+          const active = data.testingMode;
+          const wasActive = isTestingModeRef.current;
+          isTestingModeRef.current = active;
+          setIsTestingMode(active);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mission_rx_testing_mode', active ? 'true' : 'false');
+          }
+          if (wasActive && !active) {
+            if (baselineItemsRef.current.length > 0) {
+              setItems(baselineItemsRef.current);
+              saveLocalCache(baselineItemsRef.current);
+              baselineItemsRef.current = [];
+            }
+            fetchInventory();
+          } else if (!wasActive && active && itemsRef.current.length > 0) {
+            baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+          }
+        }
+      })
+      .catch(() => {});
+
+    window.addEventListener('storage', checkTestingMode);
+    window.addEventListener('mission_rx_testing_mode_change', checkTestingMode);
+    return () => {
+      window.removeEventListener('storage', checkTestingMode);
+      window.removeEventListener('mission_rx_testing_mode_change', checkTestingMode);
+    };
   }, []);
 
   const saveLocalCache = (newItems: InventoryItem[]) => {
@@ -229,6 +293,19 @@ export default function Home() {
 
   // Rapid Optimistic stock updates with Debounced DB Sync & Instant Audit Queueing
   const handleUpdateStock = (id: string, newBottles: number, newLoose: number) => {
+    // If in Testing Sandbox mode, mutate ONLY in-memory state without database persistence
+    if (isTestingMode) {
+      if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
+        baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+      }
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
+        )
+      );
+      return;
+    }
+
     // Lock real-time subscription refreshes during active user interactions
     isUpdatingStockRef.current = true;
     if (lockResetTimerRef.current) clearTimeout(lockResetTimerRef.current);
@@ -316,6 +393,25 @@ export default function Home() {
 
   // Delta adjustment for rapid multi-click "spamming" without closure or state batching race conditions
   const handleAdjustStock = (id: string, bottleDelta: number, looseDelta: number) => {
+    // If in Testing Sandbox mode, mutate ONLY in-memory state without database persistence
+    if (isTestingMode) {
+      if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
+        baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+      }
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                bottlesAvailable: Math.max(0, item.bottlesAvailable + bottleDelta),
+                looseUnitsAvailable: Math.max(0, item.looseUnitsAvailable + looseDelta),
+              }
+            : item
+        )
+      );
+      return;
+    }
+
     isUpdatingStockRef.current = true;
     if (lockResetTimerRef.current) clearTimeout(lockResetTimerRef.current);
     lockResetTimerRef.current = setTimeout(() => {
@@ -397,6 +493,42 @@ export default function Home() {
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
+    // If in Testing Sandbox mode, save in-memory only without network requests
+    if (isTestingMode) {
+      if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
+        baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+      }
+      if (itemData.id) {
+        setItems((prev) =>
+          prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i))
+        );
+      } else {
+        const newItem: InventoryItem = {
+          id: `test-item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+          shelfLocation: itemData.shelfLocation || 'General Medical',
+          genericName: itemData.genericName || 'New Medication',
+          brandName: itemData.brandName || null,
+          chemicalName: itemData.chemicalName || null,
+          dosage: itemData.dosage || '10mg',
+          itemType: itemData.itemType || 'TABLET',
+          stockUnit: itemData.stockUnit || 'Bottles',
+          subUnit: itemData.subUnit || 'pills',
+          bottlesAvailable: Number(itemData.bottlesAvailable) || 0,
+          pillsPerBottle: Number(itemData.pillsPerBottle) || 100,
+          looseUnitsAvailable: Number(itemData.looseUnitsAvailable) || 0,
+          expirationDate: itemData.expirationDate || new Date().toISOString().split('T')[0],
+          lotNumbers: typeof itemData.lotNumbers === 'string' ? itemData.lotNumbers : JSON.stringify(itemData.lotNumbers || []),
+          directions: itemData.directions || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setItems((prev) => [...prev, newItem]);
+      }
+      setIsEditModalOpen(false);
+      setActiveItem(null);
+      return;
+    }
+
     if (itemData.id) {
       setItems((prev) => {
         const updated = prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i));
@@ -457,6 +589,15 @@ export default function Home() {
   };
 
   const handleDeleteItem = async (id: string) => {
+    // If in Testing Sandbox mode, delete from in-memory array ONLY without database calls
+    if (isTestingMode) {
+      if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
+        baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+      }
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      return;
+    }
+
     const target = items.find((i) => i.id === id);
     setItems((prev) => {
       const updated = prev.filter((i) => i.id !== id);

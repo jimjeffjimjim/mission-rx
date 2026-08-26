@@ -328,6 +328,12 @@ export default function AdminPortal({
     if (!confirm('Are you sure you want to reset default drug stock counts to initial levels? (Your newly added custom medications will be preserved and will NOT be deleted)')) {
       return;
     }
+    if (isTestingMode) {
+      setTestItemsMap({});
+      setTestSimulatedLogs([]);
+      if (onRefreshData) onRefreshData();
+      return;
+    }
     setIsResettingInventory(true);
     try {
       if (typeof window !== 'undefined') {
@@ -349,6 +355,11 @@ export default function AdminPortal({
 
   const handleClearAuditLogs = async () => {
     if (!confirm('Reset all audit logs?')) return;
+    if (isTestingMode) {
+      setTestSimulatedLogs([]);
+      setAnalyticsLogs([]);
+      return;
+    }
     try {
       await fetch('/api/logs', { method: 'DELETE' });
       if (activeTab === 'USAGE') fetchAnalytics(timeframe);
