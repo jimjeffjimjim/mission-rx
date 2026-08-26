@@ -114,7 +114,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900">Testing Mode Control</h3>
-                <p className="text-xs font-bold text-slate-500">Secret Administrator Menu (PIN 9110)</p>
+                <p className="text-xs font-bold text-slate-500">Secret Administrator Menu</p>
               </div>
             </div>
 

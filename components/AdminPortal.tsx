@@ -527,7 +527,7 @@ export default function AdminPortal({
                 type="button"
                 onClick={() => {
                   if (!isTestingMode) {
-                    const pin = window.prompt("Enter Secret Admin Testing PIN (9110):");
+                    const pin = window.prompt("Enter Secret Admin Testing PIN:");
                     if (pin === '9110') {
                       localStorage.setItem('mission_rx_testing_mode', 'true');
                       setIsTestingMode(true);
@@ -559,7 +559,7 @@ export default function AdminPortal({
                     ? 'bg-amber-400 border-amber-500 text-slate-950 shadow-amber-400/20'
                     : 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
                 }`}
-                title={isTestingMode ? "Testing Sandbox Active - Click to Exit and Reset Local Changes" : "Click to enter Testing Sandbox Mode with PIN 9110"}
+                title={isTestingMode ? "Testing Sandbox Active - Click to Exit and Reset Local Changes" : "Click to enter Testing Sandbox Mode"}
               >
                 <Wrench className="w-4 h-4 stroke-[2.5]" />
                 <span>{isTestingMode ? 'Testing Mode ON' : 'Test Mode'}</span>
