@@ -43,10 +43,17 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
       const res = await fetch('/api/logs');
       if (res.ok) {
         const data = await res.json();
-        setLogs(data);
+        if (Array.isArray(data)) {
+          setLogs(data);
+        } else {
+          setLogs([]);
+        }
+      } else {
+        setLogs([]);
       }
     } catch (e) {
       console.error('Failed to fetch audit logs', e);
+      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -58,14 +65,13 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleResetAuditLogs = async () => {
     if (!isTestingMode) {
       alert('Regulatory compliance protection: Real transaction audit logs are permanent and cannot be deleted.');
       return;
     }
     if (!confirm('Clear simulated test logs?')) return;
+    setLogs([]);
     if (onLogsCleared) onLogsCleared();
   };
 
@@ -84,8 +90,8 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingLog.id,
-          quantityChanged: Number(editQty),
-          details: `${editingLog.details} (Manual regulatory revision: quantity changed from ${editingLog.quantityChanged} to ${editQty})`,
+          quantityChanged: Number(editQty) || 0,
+          details: `${editingLog.details || ''} (Manual regulatory revision: quantity changed from ${editingLog.quantityChanged} to ${editQty})`,
         }),
       });
       if (res.ok) {
@@ -101,48 +107,74 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
     }
   };
 
-  const displayedLogs = React.useMemo(() => {
-    if (isTestingMode && testLogs && testLogs.length > 0) {
-      return [...testLogs, ...logs];
-    }
-    return logs;
-  }, [logs, testLogs, isTestingMode]);
+  const safeLogs = React.useMemo(() => (Array.isArray(logs) ? logs : []), [logs]);
+  const safeTestLogs = React.useMemo(() => (Array.isArray(testLogs) ? testLogs : []), [testLogs]);
 
-  const filteredLogs = displayedLogs.filter((log) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = (log.itemGenericName || '').toLowerCase().includes(q);
-      const matchDetails = (log.details || '').toLowerCase().includes(q);
-      const matchRole = (log.userRole || '').toLowerCase().includes(q);
-      if (!matchName && !matchDetails && !matchRole) return false;
+  const displayedLogs = React.useMemo(() => {
+    if (isTestingMode && safeTestLogs.length > 0) {
+      return [...safeTestLogs, ...safeLogs];
     }
-    if (selectedAction !== 'ALL' && log.actionType !== selectedAction) {
-      return false;
+    return safeLogs;
+  }, [safeLogs, safeTestLogs, isTestingMode]);
+
+  const filteredLogs = React.useMemo(() => {
+    const list = Array.isArray(displayedLogs) ? displayedLogs : [];
+    return list.filter((log) => {
+      if (!log || typeof log !== 'object') return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = String(log.itemGenericName || '').toLowerCase().includes(q);
+        const matchDetails = String(log.details || '').toLowerCase().includes(q);
+        const matchRole = String(log.userRole || '').toLowerCase().includes(q);
+        if (!matchName && !matchDetails && !matchRole) return false;
+      }
+      if (selectedAction !== 'ALL' && log.actionType !== selectedAction) {
+        return false;
+      }
+      return true;
+    });
+  }, [displayedLogs, searchQuery, selectedAction]);
+
+  const formatLogDate = (rawDate: any): string => {
+    if (!rawDate) return 'Recent';
+    try {
+      const parsed = typeof rawDate === 'string' ? parseISO(rawDate) : new Date(rawDate);
+      if (!isNaN(parsed.getTime())) {
+        return format(parsed, 'MMM dd, yyyy • h:mm:ss a');
+      }
+      return String(rawDate);
+    } catch (e) {
+      return String(rawDate || 'Recent');
     }
-    return true;
-  });
+  };
 
   const handleExportCSV = () => {
-    const headers = ['Timestamp', 'Action Type', 'Medication Name', 'Quantity Changed', 'User Role', 'Audit Details'];
-    const rows = filteredLogs.map((l) => [
-      l.createdAt,
-      l.actionType,
-      `"${(l.itemGenericName || '').replace(/"/g, '""')}"`,
-      l.quantityChanged,
-      l.isTestMode ? `${l.userRole || 'STAFF'} [TEST MODE - NOT REAL]` : (l.userRole || 'STAFF'),
-      `"${(l.details || '').replace(/"/g, '""')}"`,
-    ]);
+    try {
+      const headers = ['Timestamp', 'Action Type', 'Medication Name', 'Quantity Changed', 'User Role', 'Audit Details'];
+      const rows = filteredLogs.map((l) => [
+        l.createdAt ? `"${String(l.createdAt).replace(/"/g, '""')}"` : '""',
+        l.actionType ? `"${String(l.actionType).replace(/"/g, '""')}"` : '""',
+        `"${String(l.itemGenericName || '').replace(/"/g, '""')}"`,
+        Number(l.quantityChanged) || 0,
+        l.isTestMode ? `"${String(l.userRole || 'STAFF')} [TEST MODE - NOT REAL]"` : `"${String(l.userRole || 'STAFF')}"`,
+        `"${String(l.details || '').replace(/"/g, '""')}"`,
+      ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `mission_rx_audit_report_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `mission_rx_audit_report_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+    }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-3 sm:p-5 select-none overflow-x-hidden">
@@ -243,27 +275,30 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
               No clinical transaction audit records found matching your filter criteria.
             </div>
           ) : (
-            filteredLogs.map((log) => {
-              const isNegative = log.quantityChanged < 0 || log.actionType === 'DISPENSE';
-              const isPositive = log.quantityChanged > 0 || log.actionType === 'RESTOCK';
+            filteredLogs.map((log, index) => {
+              const qtyNum = Number(log.quantityChanged) || 0;
+              const isNegative = qtyNum < 0 || log.actionType === 'DISPENSE';
+              const isPositive = qtyNum > 0 || log.actionType === 'RESTOCK';
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
               if (log.actionType === 'DISPENSE') badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
               if (log.actionType === 'RESTOCK') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
               if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+              if (log.actionType === 'CREATE') badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
+              if (log.actionType === 'DELETE') badgeStyle = 'bg-red-50 text-red-800 border-red-300';
 
-              let formattedDate = log.createdAt;
-              try {
-                formattedDate = format(parseISO(log.createdAt), 'MMM dd, yyyy • h:mm:ss a');
-              } catch (e) {
-                formattedDate = log.createdAt;
-              }
+              const formattedDate = formatLogDate(log.createdAt);
+              const isTestRecord = Boolean(
+                log.isTestMode ||
+                (log.userRole && String(log.userRole).includes('(TEST)')) ||
+                (log.details && String(log.details).includes('TESTING MODE'))
+              );
 
-              const isTestRecord = log.isTestMode || (log.userRole && log.userRole.includes('(TEST)')) || (log.details && log.details.includes('TESTING MODE'));
+              const safeKey = log.id ? `log-${log.id}` : `log-${index}-${log.createdAt || Date.now()}`;
 
               return (
                 <div
-                  key={log.id}
+                  key={safeKey}
                   className={`p-4 rounded-2xl border shadow-2xs hover:shadow-sm transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-text ${
                     isTestRecord
                       ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/40'
@@ -292,7 +327,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                           </span>
                         )}
                         <span className={`font-mono text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${badgeStyle}`}>
-                          {log.actionType}
+                          {log.actionType || 'ACTIVITY'}
                         </span>
                         <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -313,7 +348,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                       </div>
 
                       <h4 className="text-sm sm:text-base font-black text-slate-900 truncate">
-                        {log.itemGenericName}
+                        {log.itemGenericName || 'Medication Transaction Record'}
                       </h4>
                       <p className="text-xs font-medium text-slate-600 leading-normal">
                         {log.details || 'Routine clinical dispensary action.'}
@@ -330,7 +365,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                           isNegative ? 'text-rose-600' : isPositive ? 'text-emerald-600' : 'text-slate-700'
                         }`}
                       >
-                        {isPositive ? `+${log.quantityChanged}` : log.quantityChanged}
+                        {isPositive ? `+${qtyNum}` : qtyNum}
                       </span>
                     </div>
                     <button
