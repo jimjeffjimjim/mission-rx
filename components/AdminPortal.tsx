@@ -49,6 +49,7 @@ interface AdminPortalProps {
   onOpenCreateModal: () => void;
   onOpenAuditLogs?: () => void;
   onRefreshData?: () => void;
+  userRole?: string;
 }
 
 export default function AdminPortal({
@@ -60,6 +61,7 @@ export default function AdminPortal({
   onOpenCreateModal,
   onOpenAuditLogs,
   onRefreshData,
+  userRole = 'ADMIN',
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
@@ -285,7 +287,7 @@ export default function AdminPortal({
           itemGenericName: editingDispenseItem.genericName,
           quantityChanged: -diff,
           actionType: 'EDIT',
-          userRole: 'ADMIN',
+          userRole: userRole || 'ADMIN',
           details: `Manual adjustment of total amount dispensed from ${currentVal} to ${targetVal} units via Usage Analytics.`,
           createdAt: new Date().toISOString()
         })
@@ -1436,7 +1438,7 @@ export default function AdminPortal({
                               itemGenericName: dispenseItem.genericName,
                               quantityChanged: amount,
                               actionType: 'DISPENSE',
-                              userRole: 'ADMIN',
+                              userRole: userRole || 'ADMIN',
                               details: `Dispensed ${amount} ${dispenseItem.subUnit || 'units'} directly via Backdoor Inventory table.`,
                               createdAt: new Date().toISOString(),
                             }),
@@ -1499,7 +1501,7 @@ export default function AdminPortal({
                               itemGenericName: dispenseItem.genericName,
                               quantityChanged: -amount,
                               actionType: 'DISPENSE',
-                              userRole: 'ADMIN',
+                              userRole: userRole || 'ADMIN',
                               details: `Undispensed / Restocked ${amount} ${dispenseItem.subUnit || 'units'} back into inventory.`,
                               createdAt: new Date().toISOString(),
                             }),

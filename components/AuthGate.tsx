@@ -7,7 +7,7 @@ import { Lock, AlertCircle, KeyRound, BookOpen } from 'lucide-react';
 
 interface AuthGateProps {
   currentRole: AuthRole;
-  onAuthenticate: (role: AuthRole) => void;
+  onAuthenticate: (role: AuthRole, actorTag?: string) => void;
 }
 
 export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps) {
@@ -66,10 +66,13 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
     if (currentRole === 'LOCKED' && pin.length === 4) {
       if (pin === '1234') {
         setPin('');
-        onAuthenticate('STAFF');
+        onAuthenticate('STAFF', 'STAFF');
       } else if (pin === '8888') {
         setPin('');
-        onAuthenticate('ADMIN');
+        onAuthenticate('ADMIN', 'ADMIN');
+      } else if (pin === '7777') {
+        setPin('');
+        onAuthenticate('ADMIN', 'DEVELOPER');
       } else if (pin === '9110') {
         setPin('');
         setIsTestingModalOpen(true);
@@ -261,7 +264,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.6 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.7 Live</span>
           <span className="text-slate-300">•</span>
           {isTestingMode && (
             <>

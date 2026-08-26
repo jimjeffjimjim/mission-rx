@@ -139,6 +139,8 @@ export default function Home() {
     }
   };
 
+  const [actorTag, setActorTag] = useState<string>('STAFF');
+
   const handleToggleAutofill = () => {
     const newVal = !isAutofillEnabled;
     setIsAutofillEnabled(newVal);
@@ -147,8 +149,15 @@ export default function Home() {
     }
   };
 
-  const handleSwitchRole = useCallback((newRole: AuthRole) => {
+  const handleSwitchRole = useCallback((newRole: AuthRole, newActor?: string) => {
     setRole(newRole);
+    if (newActor) {
+      setActorTag(newActor);
+    } else if (newRole === 'ADMIN') {
+      setActorTag('ADMIN');
+    } else {
+      setActorTag('STAFF');
+    }
   }, []);
 
   // Process pending audit logs sequentially in bulk batches to prevent dropping events during rapid clicking
@@ -271,7 +280,7 @@ export default function Home() {
     const payload = {
       id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
       ...logData,
-      userRole: role === 'LOCKED' ? 'STAFF' : role,
+      userRole: actorTag || (role === 'LOCKED' ? 'STAFF' : role),
       createdAt: new Date().toISOString(),
     };
 
@@ -781,6 +790,7 @@ export default function Home() {
           onOpenCreateModal={openCreateModal}
           onOpenAuditLogs={() => setIsAuditModalOpen(true)}
           onRefreshData={fetchInventory}
+          userRole={actorTag}
         />
       </div>
 
@@ -875,7 +885,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.6 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.7 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

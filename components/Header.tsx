@@ -7,7 +7,7 @@ import { Shield, User, Plus, KeyRound, Sparkles, X, LayoutDashboard, ToggleLeft,
 
 interface HeaderProps {
   currentRole: AuthRole;
-  onSwitchRole: (newRole: AuthRole) => void;
+  onSwitchRole: (newRole: AuthRole, actorTag?: string) => void;
   onOpenCreateModal: () => void;
   isAutofillEnabled?: boolean;
   onToggleAutofill?: () => void;
@@ -72,7 +72,11 @@ export default function Header({
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminPinInput === '8888') {
-      onSwitchRole('ADMIN');
+      onSwitchRole('ADMIN', 'ADMIN');
+      setShowAdminPrompt(false);
+      setAdminPinInput('');
+    } else if (adminPinInput === '7777') {
+      onSwitchRole('ADMIN', 'DEVELOPER');
       setShowAdminPrompt(false);
       setAdminPinInput('');
     } else {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
@@ -267,8 +267,16 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                           {formattedDate}
                         </span>
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-300 flex items-center gap-1">
-                          <User className="w-3 h-3 text-slate-500" />
+                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                          log.userRole === 'DEVELOPER'
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                            : 'bg-slate-100 text-slate-700 border-slate-300'
+                        }`}>
+                          {log.userRole === 'DEVELOPER' ? (
+                            <Terminal className="w-3 h-3 text-indigo-600" />
+                          ) : (
+                            <User className="w-3 h-3 text-slate-500" />
+                          )}
                           {log.userRole || 'STAFF'}
                         </span>
                       </div>
