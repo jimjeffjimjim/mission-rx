@@ -2,16 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogsCleared?: () => void;
+  testLogs?: DispenseLog[];
 }
 
-export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditLogModalProps) {
+export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs = [] }: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +20,22 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
   const [editingLog, setEditingLog] = useState<DispenseLog | null>(null);
   const [editQty, setEditQty] = useState<number | string>('');
   const [isWarningOpen, setIsWarningOpen] = useState(false);
+  const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkTest = () => {
+      if (typeof window !== 'undefined') {
+        setIsTestingMode(localStorage.getItem('mission_rx_testing_mode') === 'true');
+      }
+    };
+    checkTest();
+    window.addEventListener('storage', checkTest);
+    window.addEventListener('mission_rx_testing_mode_change', checkTest);
+    return () => {
+      window.removeEventListener('storage', checkTest);
+      window.removeEventListener('mission_rx_testing_mode_change', checkTest);
+    };
+  }, []);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -91,7 +108,14 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
     }
   };
 
-  const filteredLogs = logs.filter((log) => {
+  const displayedLogs = React.useMemo(() => {
+    if (isTestingMode && testLogs && testLogs.length > 0) {
+      return [...testLogs, ...logs];
+    }
+    return logs;
+  }, [logs, testLogs, isTestingMode]);
+
+  const filteredLogs = displayedLogs.filter((log) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = (log.itemGenericName || '').toLowerCase().includes(q);
@@ -112,7 +136,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
       l.actionType,
       `"${(l.itemGenericName || '').replace(/"/g, '""')}"`,
       l.quantityChanged,
-      l.userRole || 'STAFF',
+      l.isTestMode ? `${l.userRole || 'STAFF'} [TEST MODE - NOT REAL]` : (l.userRole || 'STAFF'),
       `"${(l.details || '').replace(/"/g, '""')}"`,
     ]);
 
@@ -240,10 +264,16 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
                 formattedDate = log.createdAt;
               }
 
+              const isTestRecord = log.isTestMode || (log.userRole && log.userRole.includes('(TEST)')) || (log.details && log.details.includes('TESTING MODE'));
+
               return (
                 <div
                   key={log.id}
-                  className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs hover:shadow-sm transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-text"
+                  className={`p-4 rounded-2xl border shadow-2xs hover:shadow-sm transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-text ${
+                    isTestRecord
+                      ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/40'
+                      : 'bg-white border-slate-200'
+                  }`}
                 >
                   <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                     <div
@@ -260,6 +290,12 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared }: AuditL
 
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
+                        {isTestRecord && (
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 bg-amber-400 text-slate-950 border-amber-500 shadow-xs font-mono animate-pulse">
+                            <FlaskConical className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                            <span>TESTING MODE • NOT REAL</span>
+                          </span>
+                        )}
                         <span className={`font-mono text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${badgeStyle}`}>
                           {log.actionType}
                         </span>

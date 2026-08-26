@@ -50,6 +50,7 @@ interface AdminPortalProps {
   onOpenAuditLogs?: () => void;
   onRefreshData?: () => void;
   userRole?: string;
+  onAddTestAuditLog?: (log: DispenseLog) => void;
 }
 
 export default function AdminPortal({
@@ -62,6 +63,7 @@ export default function AdminPortal({
   onOpenAuditLogs,
   onRefreshData,
   userRole = 'ADMIN',
+  onAddTestAuditLog,
 }: AdminPortalProps) {
   const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
@@ -1428,6 +1430,19 @@ export default function AdminPortal({
                             ...prev,
                             { genericName: dispenseItem.genericName, quantity: amount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
+                          if (onAddTestAuditLog) {
+                            onAddTestAuditLog({
+                              id: 'test-dispense-' + Date.now(),
+                              itemId: dispenseItem.id,
+                              itemGenericName: dispenseItem.genericName,
+                              quantityChanged: amount,
+                              actionType: 'DISPENSE',
+                              userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
+                              details: `[TESTING MODE - NOT REAL]: Dispensed ${amount} ${dispenseItem.subUnit || 'units'} in test sandbox`,
+                              isTestMode: true,
+                              createdAt: new Date().toISOString(),
+                            });
+                          }
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
                           await fetch('/api/logs', {
@@ -1491,6 +1506,19 @@ export default function AdminPortal({
                             ...prev,
                             { genericName: dispenseItem.genericName, quantity: -amount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
+                          if (onAddTestAuditLog) {
+                            onAddTestAuditLog({
+                              id: 'test-undispense-' + Date.now(),
+                              itemId: dispenseItem.id,
+                              itemGenericName: dispenseItem.genericName,
+                              quantityChanged: -amount,
+                              actionType: 'RESTOCK',
+                              userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
+                              details: `[TESTING MODE - NOT REAL]: Undispensed / Restocked ${amount} ${dispenseItem.subUnit || 'units'} in test sandbox`,
+                              isTestMode: true,
+                              createdAt: new Date().toISOString(),
+                            });
+                          }
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
                           await fetch('/api/logs', {

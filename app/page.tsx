@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { InventoryItem, AuthRole, FilterCategory, StatusFilter } from '@/types/inventory';
+import { InventoryItem, AuthRole, FilterCategory, StatusFilter, DispenseLog } from '@/types/inventory';
 import AuthGate from '@/components/AuthGate';
 import Header from '@/components/Header';
 import FilterBar from '@/components/FilterBar';
@@ -35,6 +35,7 @@ export default function Home() {
 
   // Testing Sandbox Isolation State
   const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
+  const [testAuditLogs, setTestAuditLogs] = useState<DispenseLog[]>([]);
   const isTestingModeRef = useRef<boolean>(false);
   const baselineItemsRef = useRef<InventoryItem[]>([]);
 
@@ -79,6 +80,7 @@ export default function Home() {
 
         // If exiting testing mode, cleanly revert to baseline or refetch from server
         if (wasActive && !active) {
+          setTestAuditLogs([]);
           if (baselineItemsRef.current.length > 0) {
             setItems(baselineItemsRef.current);
             saveLocalCache(baselineItemsRef.current);
@@ -108,6 +110,7 @@ export default function Home() {
             localStorage.setItem('mission_rx_testing_mode', active ? 'true' : 'false');
           }
           if (wasActive && !active) {
+            setTestAuditLogs([]);
             if (baselineItemsRef.current.length > 0) {
               setItems(baselineItemsRef.current);
               saveLocalCache(baselineItemsRef.current);
@@ -307,6 +310,31 @@ export default function Home() {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
+      const target = itemsRef.current.find((i) => i.id === id);
+      if (target) {
+        const bottleDiff = newBottles - target.bottlesAvailable;
+        const looseDiff = newLoose - target.looseUnitsAvailable;
+        const totalChange = bottleDiff !== 0 ? bottleDiff : looseDiff;
+        if (totalChange !== 0) {
+          const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
+          const unitType = bottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+          const verb = totalChange < 0 ? 'Dispensed' : 'Restocked';
+          setTestAuditLogs((prev) => [
+            {
+              id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+              itemId: target.id,
+              itemGenericName: `${target.genericName} (${target.dosage})`,
+              quantityChanged: totalChange,
+              actionType,
+              userRole: `${actorTag} (TEST)`,
+              details: `[TESTING MODE - NOT REAL]: ${verb} ${Math.abs(totalChange)} ${unitType} in test sandbox`,
+              isTestMode: true,
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+        }
+      }
       setItems((prev) =>
         prev.map((item) =>
           item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
@@ -406,6 +434,33 @@ export default function Home() {
     if (isTestingMode) {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
+      }
+      const target = itemsRef.current.find((i) => i.id === id);
+      if (target) {
+        const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
+        const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
+        const actualBottleDiff = newBottles - target.bottlesAvailable;
+        const actualLooseDiff = newLoose - target.looseUnitsAvailable;
+        const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
+        if (totalChange !== 0) {
+          const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
+          const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+          const verb = totalChange < 0 ? 'Dispensed' : 'Restocked';
+          setTestAuditLogs((prev) => [
+            {
+              id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+              itemId: target.id,
+              itemGenericName: `${target.genericName} (${target.dosage})`,
+              quantityChanged: totalChange,
+              actionType,
+              userRole: `${actorTag} (TEST)`,
+              details: `[TESTING MODE - NOT REAL]: ${verb} ${Math.abs(totalChange)} ${unitType} in test sandbox`,
+              isTestMode: true,
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+        }
       }
       setItems((prev) =>
         prev.map((item) =>
@@ -511,6 +566,20 @@ export default function Home() {
         setItems((prev) =>
           prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i))
         );
+        setTestAuditLogs((prev) => [
+          {
+            id: 'test-edit-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+            itemId: itemData.id || 'test-item',
+            itemGenericName: itemData.genericName || 'Medication',
+            quantityChanged: 0,
+            actionType: 'EDIT',
+            userRole: `${actorTag} (TEST)`,
+            details: `[TESTING MODE - NOT REAL]: Updated medication details for ${itemData.genericName} in sandbox`,
+            isTestMode: true,
+            createdAt: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
       } else {
         const newItem: InventoryItem = {
           id: `test-item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -532,6 +601,20 @@ export default function Home() {
           updatedAt: new Date().toISOString(),
         };
         setItems((prev) => [...prev, newItem]);
+        setTestAuditLogs((prev) => [
+          {
+            id: 'test-create-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+            itemId: newItem.id,
+            itemGenericName: newItem.genericName,
+            quantityChanged: newItem.bottlesAvailable,
+            actionType: 'CREATE',
+            userRole: `${actorTag} (TEST)`,
+            details: `[TESTING MODE - NOT REAL]: Created new test medication ${newItem.genericName}`,
+            isTestMode: true,
+            createdAt: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
       }
       setIsEditModalOpen(false);
       setActiveItem(null);
@@ -603,6 +686,21 @@ export default function Home() {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
+      const target = itemsRef.current.find((i) => i.id === id);
+      setTestAuditLogs((prev) => [
+        {
+          id: 'test-del-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+          itemId: id,
+          itemGenericName: target?.genericName || 'Medication Item',
+          quantityChanged: 0,
+          actionType: 'DELETE',
+          userRole: `${actorTag} (TEST)`,
+          details: `[TESTING MODE - NOT REAL]: Removed ${target?.genericName || 'medication'} in test sandbox`,
+          isTestMode: true,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
       setItems((prev) => prev.filter((i) => i.id !== id));
       return;
     }
@@ -791,6 +889,7 @@ export default function Home() {
           onOpenAuditLogs={() => setIsAuditModalOpen(true)}
           onRefreshData={fetchInventory}
           userRole={actorTag}
+          onAddTestAuditLog={(log) => setTestAuditLogs((prev) => [log, ...prev])}
         />
       </div>
 
@@ -885,7 +984,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.7 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.8 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
@@ -907,6 +1006,7 @@ export default function Home() {
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
         onLogsCleared={fetchInventory}
+        testLogs={testAuditLogs}
       />
     </main>
   );

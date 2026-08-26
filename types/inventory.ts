@@ -28,6 +28,7 @@ export interface DispenseLog {
   actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
   userRole?: string;
   details?: string;
+  isTestMode?: boolean;
   createdAt: string;
 }
 
