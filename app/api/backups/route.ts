@@ -64,14 +64,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing valid inventory array for backup snapshot.' }, { status: 400 });
     }
 
+    let finalLogs: any[] = Array.isArray(logs) && logs.length > 0 ? logs : [];
+
+    // If logs were not provided (e.g. background automated snapshot), dynamically fetch all live audit logs
+    if (finalLogs.length === 0) {
+      if (supabase) {
+        try {
+          const { data: cloudLogs } = await supabase
+            .from('dispense_logs')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (cloudLogs && cloudLogs.length > 0) {
+            finalLogs = cloudLogs.map((l: any) => ({
+              id: l.id,
+              itemId: l.item_id || 'unknown',
+              itemGenericName: l.item_generic_name || 'Medication Transaction Record',
+              quantityChanged: Number(l.quantity_changed) || 0,
+              actionType: l.action_type || 'DISPENSE',
+              userRole: l.user_role || 'STAFF',
+              details: l.details || 'Clinical inventory adjustment logged.',
+              createdAt: l.created_at || new Date().toISOString(),
+            }));
+          }
+        } catch (e) {
+          console.warn('Supabase logs fetch for backup warning:', e);
+        }
+      }
+
+      if (finalLogs.length === 0) {
+        try {
+          const dbLogs = await prisma.dispenseLog.findMany({ orderBy: { createdAt: 'desc' } }).catch(() => []);
+          if (dbLogs && dbLogs.length > 0) {
+            finalLogs = dbLogs.map((l: any) => ({
+              id: l.id,
+              itemId: l.itemId,
+              itemGenericName: l.itemGenericName || 'Medication Transaction Record',
+              quantityChanged: l.quantityChanged,
+              actionType: l.actionType || 'DISPENSE',
+              userRole: l.userRole || 'STAFF',
+              details: l.details || 'Clinical inventory adjustment logged.',
+              createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
+            }));
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+
     const id = `bk_${Math.random().toString(36).substring(2, 10)}_${Date.now()}`;
     const createdAt = new Date().toISOString();
     const cleanTitle = title || `Weekly Backup - ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`;
     const cleanNotes = notes || 'Automated regulatory weekly compliance and disaster recovery snapshot.';
     const itemCount = inventory.length;
-    const logCount = Array.isArray(logs) ? logs.length : 0;
+    const logCount = finalLogs.length;
     const inventoryJson = JSON.stringify(inventory);
-    const logsJson = JSON.stringify(logs || []);
+    const logsJson = JSON.stringify(finalLogs);
 
     // 1. Write to Supabase Postgres
     if (supabase) {

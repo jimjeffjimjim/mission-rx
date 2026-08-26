@@ -182,25 +182,18 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const isTestMode = searchParams.get('test_mode') === 'true';
+
+  if (!isTestMode) {
+    return NextResponse.json(
+      { error: 'Regulatory Protection: Live clinical transaction audit logs are permanent and cannot be deleted.' },
+      { status: 403 }
+    );
+  }
+
   logsFallbackCache = [];
-
-  // 1. Clear Supabase Cloud Postgres table
-  if (supabase) {
-    try {
-      await supabase.from('dispense_logs').delete().neq('id', 'none');
-    } catch (cloudErr) {
-      console.warn('Failed clearing Supabase logs:', cloudErr);
-    }
-  }
-
-  // 2. Clear local SQLite
-  try {
-    await prisma.dispenseLog.deleteMany({});
-  } catch (e) {
-    console.warn('Cleared memory log cache:', e);
-  }
-
-  return NextResponse.json({ success: true, message: 'All audit logs reset.' });
+  return NextResponse.json({ success: true, message: 'Simulated test audit logs cleared.' });
 }
 

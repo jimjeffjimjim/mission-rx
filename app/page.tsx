@@ -237,16 +237,24 @@ export default function Home() {
           const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
           if (!lastBackup || now - Number(lastBackup) > sevenDaysMs) {
             localStorage.setItem('mission_rx_last_auto_backup', String(now));
-            fetch('/api/backups', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: `Automated Weekly Snapshot - ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`,
-                notes: 'Scheduled automatic weekly background backup of clinical formulary stock and audit logs.',
-                inventory: data,
-                logs: [],
-              }),
-            }).catch(() => null);
+            (async () => {
+              try {
+                const logsRes = await fetch('/api/logs');
+                const logsData = logsRes.ok ? await logsRes.json() : [];
+                await fetch('/api/backups', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    title: `Automated Weekly Snapshot - ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`,
+                    notes: 'Scheduled automatic weekly background backup of clinical formulary stock and audit logs.',
+                    inventory: data,
+                    logs: Array.isArray(logsData) ? logsData : [],
+                  }),
+                });
+              } catch (e) {
+                console.warn('Failed to capture automated weekly backup:', e);
+              }
+            })();
           }
         }
       }
@@ -984,7 +992,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.8 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.9 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

@@ -329,7 +329,7 @@ export default function AdminPortal({
   }, [activeTab, timeframe]);
 
   const handleResetInventoryToStart = async () => {
-    if (!confirm('Are you sure you want to reset default drug stock counts to initial levels? (Your newly added custom medications will be preserved and will NOT be deleted)')) {
+    if (!confirm('Are you sure you want to reset default drug stock counts to initial levels? (Your newly added custom medications and all audit history will be preserved)')) {
       return;
     }
     if (isTestingMode) {
@@ -344,7 +344,6 @@ export default function AdminPortal({
         localStorage.removeItem('mission_rx_audit_queue');
         localStorage.removeItem('mission_rx_inventory_cache');
       }
-      await fetch('/api/logs', { method: 'DELETE' });
       const res = await fetch('/api/inventory/reset', { method: 'POST' });
       if (res.ok) {
         if (activeTab === 'USAGE') fetchAnalytics(timeframe);
@@ -358,18 +357,13 @@ export default function AdminPortal({
   };
 
   const handleClearAuditLogs = async () => {
-    if (!confirm('Reset all audit logs?')) return;
-    if (isTestingMode) {
-      setTestSimulatedLogs([]);
-      setAnalyticsLogs([]);
+    if (!isTestingMode) {
+      alert('Regulatory compliance protection: Real transaction audit logs are permanent and cannot be deleted.');
       return;
     }
-    try {
-      await fetch('/api/logs', { method: 'DELETE' });
-      if (activeTab === 'USAGE') fetchAnalytics(timeframe);
-    } catch (e) {
-      console.error('Failed to clear logs:', e);
-    }
+    if (!confirm('Clear simulated test logs?')) return;
+    setTestSimulatedLogs([]);
+    setAnalyticsLogs([]);
   };
 
   // Apply Local Test Mode Sandbox Overlay

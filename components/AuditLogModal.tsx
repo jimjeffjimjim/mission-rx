@@ -61,19 +61,12 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
   if (!isOpen) return null;
 
   const handleResetAuditLogs = async () => {
-    if (!confirm('Are you sure you want to reset all audit logs? This action cannot be undone.')) {
+    if (!isTestingMode) {
+      alert('Regulatory compliance protection: Real transaction audit logs are permanent and cannot be deleted.');
       return;
     }
-    setLoading(true);
-    try {
-      await fetch('/api/logs', { method: 'DELETE' });
-      setLogs([]);
-      if (onLogsCleared) onLogsCleared();
-    } catch (e) {
-      console.error('Failed to reset audit logs', e);
-    } finally {
-      setLoading(false);
-    }
+    if (!confirm('Clear simulated test logs?')) return;
+    if (onLogsCleared) onLogsCleared();
   };
 
   const startEditingLog = (log: DispenseLog) => {
@@ -171,15 +164,17 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={handleResetAuditLogs}
-              className="min-h-[42px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
-              title="Reset all audit log entries"
-            >
-              <Trash2 className="w-4 h-4 stroke-[2.5]" />
-              <span>Reset Logs</span>
-            </button>
+            {isTestingMode && (
+              <button
+                type="button"
+                onClick={handleResetAuditLogs}
+                className="min-h-[42px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Reset simulated test logs"
+              >
+                <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                <span>Clear Test Logs</span>
+              </button>
+            )}
 
             <button
               type="button"
