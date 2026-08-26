@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { InventoryItem, FilterCategory, DispenseLog } from '@/types/inventory';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { 
@@ -68,6 +68,7 @@ export default function AdminPortal({
   // Test Mode & Dispense Modal State
   const [isLocalTestMode, setIsLocalTestMode] = useState(false);
   const [testItemsMap, setTestItemsMap] = useState<Record<string, { bottles: number; loose: number }>>({});
+  const [testSimulatedLogs, setTestSimulatedLogs] = useState<Array<{ genericName: string; quantity: number; category: string }>>([]);
   const [dispenseModalOpen, setDispenseModalOpen] = useState(false);
   const [dispenseItem, setDispenseItem] = useState<InventoryItem | null>(null);
   const [dispenseAmount, setDispenseAmount] = useState<string>('');
@@ -216,6 +217,7 @@ export default function AdminPortal({
       setIsLocalTestMode(active);
       if (!active) {
         setTestItemsMap({});
+        setTestSimulatedLogs([]);
       }
     };
     window.addEventListener('storage', handleStorageChange);
@@ -416,7 +418,34 @@ export default function AdminPortal({
     return true;
   });
 
-  const maxDispensed = topDispensed.length > 0 ? topDispensed[0].totalDispensed : 1;
+  // Combine real top dispensed with simulated test dispenses during Sandbox mode
+  const displayTopDispensed = useMemo(() => {
+    if (!isTestingMode || testSimulatedLogs.length === 0) {
+      return topDispensed;
+    }
+    const map = new Map<string, { genericName: string; totalDispensed: number; category: string }>();
+    topDispensed.forEach((item) => {
+      map.set(item.genericName.toLowerCase().trim(), { ...item });
+    });
+    testSimulatedLogs.forEach((log) => {
+      const key = log.genericName.toLowerCase().trim();
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        existing.totalDispensed += log.quantity;
+      } else {
+        map.set(key, {
+          genericName: log.genericName,
+          totalDispensed: log.quantity,
+          category: log.category || 'General Medical',
+        });
+      }
+    });
+    return Array.from(map.values())
+      .filter((i) => i.totalDispensed > 0)
+      .sort((a, b) => b.totalDispensed - a.totalDispensed);
+  }, [topDispensed, isTestingMode, testSimulatedLogs]);
+
+  const maxDispensed = displayTopDispensed.length > 0 ? displayTopDispensed[0].totalDispensed : 1;
 
   return (
     <div className="space-y-6 pb-16 select-none max-w-full overflow-x-hidden">
@@ -546,12 +575,15 @@ export default function AdminPortal({
                     setIsTestingMode(false);
                     setIsLocalTestMode(false);
                     setTestItemsMap({});
+                    setTestSimulatedLogs([]);
                     window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
                     fetch('/api/settings', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ testingMode: false }),
                     }).catch(() => {});
+                    fetchAnalytics(timeframe);
+                    if (onRefreshData) onRefreshData();
                   }
                 }}
                 className={`min-h-[44px] px-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border cursor-pointer ${
@@ -770,7 +802,21 @@ export default function AdminPortal({
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => item.bottlesAvailable > 0 && (onAdjustStock ? onAdjustStock(item.id, -1, 0) : onUpdateStock(item.id, Math.max(0, item.bottlesAvailable - 1), item.looseUnitsAvailable))}
+                              onClick={() => {
+                                if (item.bottlesAvailable <= 0) return;
+                                const newBottles = item.bottlesAvailable - 1;
+                                const packSize = item.pillsPerBottle || 1;
+                                if (isTestingMode) {
+                                  setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
+                                  setTestSimulatedLogs((prev) => [
+                                    ...prev,
+                                    { genericName: item.genericName, quantity: packSize, category: item.shelfLocation || 'General Medical' }
+                                  ]);
+                                } else {
+                                  if (onAdjustStock) onAdjustStock(item.id, -1, 0);
+                                  else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
+                                }
+                              }}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Dispense 1 Container (-1)"
                             >
@@ -788,7 +834,20 @@ export default function AdminPortal({
                             </div>
                             <button
                               type="button"
-                              onClick={() => (onAdjustStock ? onAdjustStock(item.id, 1, 0) : onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable))}
+                              onClick={() => {
+                                const newBottles = item.bottlesAvailable + 1;
+                                const packSize = item.pillsPerBottle || 1;
+                                if (isTestingMode) {
+                                  setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
+                                  setTestSimulatedLogs((prev) => [
+                                    ...prev,
+                                    { genericName: item.genericName, quantity: -packSize, category: item.shelfLocation || 'General Medical' }
+                                  ]);
+                                } else {
+                                  if (onAdjustStock) onAdjustStock(item.id, 1, 0);
+                                  else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
+                                }
+                              }}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
                               title="Restock 1 Container (+1)"
                             >
@@ -812,8 +871,12 @@ export default function AdminPortal({
                                 if (currentTotal > 0) {
                                   const newTotal = currentTotal - 1;
                                   const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
-                                  if (isLocalTestMode) {
+                                  if (isTestingMode) {
                                     setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles, loose } }));
+                                    setTestSimulatedLogs((prev) => [
+                                      ...prev,
+                                      { genericName: item.genericName, quantity: 1, category: item.shelfLocation || 'General Medical' }
+                                    ]);
                                   } else {
                                     onUpdateStock(item.id, bottles, loose);
                                   }
@@ -985,7 +1048,7 @@ export default function AdminPortal({
                 </div>
               </div>
               <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                {topDispensed.length} Formulations
+                {displayTopDispensed.length} Formulations
               </span>
             </div>
 
@@ -994,13 +1057,13 @@ export default function AdminPortal({
                 <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
                 <span className="text-xs font-bold uppercase">Aggregating dispense records...</span>
               </div>
-            ) : topDispensed.length === 0 ? (
+            ) : displayTopDispensed.length === 0 ? (
               <div className="py-12 text-center text-slate-400 text-xs font-bold">
                 No dispense transactions recorded for this timeframe yet.
               </div>
             ) : (
               <div className="space-y-3.5 pt-2">
-                {topDispensed.map((item, idx) => {
+                {displayTopDispensed.map((item, idx) => {
                   const style = getSpecialtyColor(item.category);
                   const percentage = Math.min(100, Math.round((item.totalDispensed / maxDispensed) * 100));
 
@@ -1360,8 +1423,12 @@ export default function AdminPortal({
                         const newTotal = Math.max(0, currentTotal - amount);
                         const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
 
-                        if (isLocalTestMode) {
+                        if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
+                          setTestSimulatedLogs((prev) => [
+                            ...prev,
+                            { genericName: dispenseItem.genericName, quantity: amount, category: dispenseItem.shelfLocation || 'General Medical' }
+                          ]);
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
                           await fetch('/api/logs', {
@@ -1419,8 +1486,12 @@ export default function AdminPortal({
                         const newTotal = currentTotal + amount;
                         const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
 
-                        if (isLocalTestMode) {
+                        if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
+                          setTestSimulatedLogs((prev) => [
+                            ...prev,
+                            { genericName: dispenseItem.genericName, quantity: -amount, category: dispenseItem.shelfLocation || 'General Medical' }
+                          ]);
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
                           await fetch('/api/logs', {
