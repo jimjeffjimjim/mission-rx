@@ -8,6 +8,28 @@ export const revalidate = 0;
 
 let logsFallbackCache: DispenseLog[] = [];
 
+function parseLogDetails(detailsText: string) {
+  let details = detailsText || '';
+  let dispensedUnit: 'bottle' | 'unit' | null = null;
+  let dispensedBottles = 0;
+  let dispensedPillsPerBottle = 0;
+  let lotNumbers: string[] = [];
+
+  const splitIdx = details.indexOf(' | METADATA: ');
+  if (splitIdx !== -1) {
+    const metaStr = details.slice(splitIdx + ' | METADATA: '.length);
+    details = details.slice(0, splitIdx);
+    try {
+      const meta = JSON.parse(metaStr);
+      dispensedUnit = meta.dispensedUnit || null;
+      dispensedBottles = meta.dispensedBottles || 0;
+      dispensedPillsPerBottle = meta.dispensedPillsPerBottle || 0;
+      lotNumbers = Array.isArray(meta.lotNumbers) ? meta.lotNumbers : [];
+    } catch (e) {}
+  }
+  return { details, dispensedUnit, dispensedBottles, dispensedPillsPerBottle, lotNumbers };
+}
+
 export async function GET() {
   try {
     // 1. Prioritize Supabase Cloud Postgres
@@ -21,10 +43,12 @@ export async function GET() {
 
         if (cloudLogs && !error) {
           const mapped: DispenseLog[] = cloudLogs.map((l: any) => {
-            let lotList: string[] = [];
+            const parsedMeta = parseLogDetails(l.details || '');
+            let lotList = parsedMeta.lotNumbers;
             try {
               if (l.lot_numbers) {
-                lotList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
+                const addList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
+                lotList = Array.from(new Set([...lotList, ...addList]));
               }
             } catch (e) {}
             return {
@@ -34,11 +58,11 @@ export async function GET() {
               quantityChanged: Number(l.quantity_changed) || 0,
               actionType: l.action_type || 'DISPENSE',
               userRole: l.user_role || 'STAFF',
-              details: l.details || 'Clinical inventory adjustment logged.',
+              details: parsedMeta.details || 'Clinical inventory adjustment logged.',
               createdAt: l.created_at || new Date().toISOString(),
-              dispensedUnit: l.dispensed_unit || null,
-              dispensedBottles: Number(l.dispensed_bottles) || 0,
-              dispensedPillsPerBottle: Number(l.dispensed_pills_per_bottle) || 0,
+              dispensedUnit: (l.dispensed_unit || parsedMeta.dispensedUnit) as any,
+              dispensedBottles: Number(l.dispensed_bottles || parsedMeta.dispensedBottles) || 0,
+              dispensedPillsPerBottle: Number(l.dispensed_pills_per_bottle || parsedMeta.dispensedPillsPerBottle) || 0,
               lotNumbers: lotList,
               isTestMode: l.is_test_mode || false,
             };
@@ -128,20 +152,24 @@ export async function POST(request: Request) {
   // 1. Supabase Cloud Postgres Insertion (First)
   if (supabase && newLogs.length > 0) {
     try {
-      const cloudRows = newLogs.map((l) => ({
-        id: l.id,
-        item_id: l.itemId,
-        item_generic_name: l.itemGenericName,
-        quantity_changed: l.quantityChanged,
-        action_type: l.actionType,
-        user_role: l.userRole,
-        details: l.details,
-        created_at: l.createdAt,
-        dispensed_unit: l.dispensedUnit,
-        dispensed_bottles: l.dispensedBottles,
-        dispensed_pills_per_bottle: l.dispensedPillsPerBottle,
-        lot_numbers: l.lotNumbers,
-      }));
+      const cloudRows = newLogs.map((l) => {
+        const metadataString = JSON.stringify({
+          dispensedUnit: l.dispensedUnit,
+          dispensedBottles: l.dispensedBottles,
+          dispensedPillsPerBottle: l.dispensedPillsPerBottle,
+          lotNumbers: l.lotNumbers,
+        });
+        return {
+          id: l.id,
+          item_id: l.itemId,
+          item_generic_name: l.itemGenericName,
+          quantity_changed: l.quantityChanged,
+          action_type: l.actionType,
+          user_role: l.userRole,
+          details: `${l.details} | METADATA: ${metadataString}`,
+          created_at: l.createdAt,
+        };
+      });
       await supabase.from('dispense_logs').insert(cloudRows);
     } catch (cloudErr) {
       console.warn('Failed saving audit logs to Supabase:', cloudErr);
