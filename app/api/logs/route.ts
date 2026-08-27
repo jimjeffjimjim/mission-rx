@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   }
 
   const items: any[] = Array.isArray(data) ? data : [data];
-  const newLogs: DispenseLog[] = items.map((item) => ({
+  const newLogs: any[] = items.map((item) => ({
     id: item.id || ('log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5)),
     itemId: item.itemId || 'unknown',
     itemGenericName: item.itemGenericName || 'General Inventory Item',
@@ -91,6 +91,10 @@ export async function POST(request: Request) {
     userRole: item.userRole || 'STAFF',
     details: item.details || 'Routine medical supply transaction.',
     createdAt: item.createdAt || new Date().toISOString(),
+    dispensedUnit: item.dispensedUnit || null,
+    dispensedBottles: item.dispensedBottles || 0,
+    dispensedPillsPerBottle: item.dispensedPillsPerBottle || 0,
+    lotNumbers: Array.isArray(item.lotNumbers) ? item.lotNumbers : (item.lotNumbers ? [String(item.lotNumbers)] : []),
   }));
 
   logsFallbackCache.unshift(...newLogs);
@@ -129,7 +133,7 @@ export async function POST(request: Request) {
     // Expected on read-only serverless platforms
   }
 
-  return NextResponse.json(newLogs.length === 1 ? newLogs[0] : newLogs, { status: 201 });
+  return NextResponse.json(newLogs, { status: 201 });
 }
 
 export async function PUT(request: Request) {
@@ -183,17 +187,21 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const isTestMode = searchParams.get('test_mode') === 'true';
+  try {
+    const { searchParams } = new URL(request.url);
+    const isTestMode = searchParams.get('test_mode') === 'true';
 
-  if (!isTestMode) {
-    return NextResponse.json(
-      { error: 'Regulatory Protection: Live clinical transaction audit logs are permanent and cannot be deleted.' },
-      { status: 403 }
-    );
+    if (!isTestMode) {
+      return NextResponse.json(
+        { error: 'Regulatory Protection: Live clinical transaction audit logs are permanent and cannot be deleted.' },
+        { status: 403 }
+      );
+    }
+
+    logsFallbackCache = [];
+    return NextResponse.json({ success: true, message: 'Simulated test audit logs cleared.' });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
-
-  logsFallbackCache = [];
-  return NextResponse.json({ success: true, message: 'Simulated test audit logs cleared.' });
 }
 

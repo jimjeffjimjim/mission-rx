@@ -107,6 +107,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         try {
           if (item.lotNumbers.startsWith('[')) {
             parsedLots = JSON.parse(item.lotNumbers);
+            if (!Array.isArray(parsedLots)) parsedLots = parsedLots ? [String(parsedLots)] : [];
           } else {
             parsedLots = item.lotNumbers.split(',').map((s) => s.trim()).filter(Boolean);
           }
@@ -200,8 +201,8 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               setIsSearchingFda(false);
               if (fdaResults.length > 0) {
                 setSuggestions((current) => {
-                  const existingNames = new Set(current.map(c => c.genericName.toLowerCase()));
-                  const newFdaEntries = fdaResults.filter(f => !existingNames.has(f.genericName.toLowerCase()));
+                  const existingNames = new Set(current.map(c => (c.genericName || '').toLowerCase()));
+                  const newFdaEntries = fdaResults.filter(f => !existingNames.has((f.genericName || '').toLowerCase()));
                   const merged = [...current, ...newFdaEntries];
                   if (merged.length > 0 && merged[0].dosageOptions) {
                     setDosageOptionsList(merged[0].dosageOptions);
@@ -294,7 +295,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     onClose();
   };
 
-  const currentLots = (formData.lotNumbers as string[]) || [];
+  const currentLots = Array.isArray(formData.lotNumbers) ? formData.lotNumbers : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 touch-none max-w-full overflow-x-hidden">

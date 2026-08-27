@@ -150,24 +150,30 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
 
   const handleExportCSV = () => {
     try {
-      const headers = ['Timestamp', 'Action Type', 'Medication Name', 'Quantity Changed', 'User Role', 'Audit Details'];
-      const rows = filteredLogs.map((l) => [
-        l.createdAt ? `"${String(l.createdAt).replace(/"/g, '""')}"` : '""',
-        l.actionType ? `"${String(l.actionType).replace(/"/g, '""')}"` : '""',
-        `"${String(l.itemGenericName || '').replace(/"/g, '""')}"`,
-        Number(l.quantityChanged) || 0,
-        l.isTestMode ? `"${String(l.userRole || 'STAFF')} [TEST MODE - NOT REAL]"` : `"${String(l.userRole || 'STAFF')}"`,
-        `"${String(l.details || '').replace(/"/g, '""')}"`,
-      ]);
+      const headers = ['Timestamp', 'Action Type', 'Medication Name', 'Quantity Changed', 'Lot Numbers', 'User Role', 'Audit Details'];
+      const rows = filteredLogs.map((l) => {
+        const safeRole = String(l.userRole || 'STAFF').replace(/"/g, '""');
+        const lots = Array.isArray(l.lotNumbers) ? l.lotNumbers.join(', ') : (l.lotNumbers || 'N/A');
+        return [
+          l.createdAt ? `"${String(l.createdAt).replace(/"/g, '""')}"` : '""',
+          l.actionType ? `"${String(l.actionType).replace(/"/g, '""')}"` : '""',
+          `"${String(l.itemGenericName || '').replace(/"/g, '""')}"`,
+          Number(l.quantityChanged) || 0,
+          `"${lots.replace(/"/g, '""')}"`,
+          l.isTestMode ? `"${safeRole} [TEST MODE - NOT REAL]"` : `"${safeRole}"`,
+          `"${String(l.details || '').replace(/"/g, '""')}"`,
+        ];
+      });
 
       const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `mission_rx_audit_report_${new Date().toISOString().slice(0, 10)}.csv`);
       document.body.appendChild(link);
       link.click();
+      URL.revokeObjectURL(url);
       document.body.removeChild(link);
     } catch (err) {
       console.error('Failed to export CSV:', err);
@@ -241,7 +247,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
           </div>
 
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            <span className="text-xs font-bold text-slate-400 uppercase mr-1 hidden lg:inline flex items-center gap-1">
+            <span className="text-xs font-bold text-slate-400 uppercase mr-1 hidden lg:inline-flex items-center gap-1">
               <Filter className="w-3.5 h-3.5" /> Type:
             </span>
             {['ALL', 'DISPENSE', 'RESTOCK', 'EDIT', 'AUDIT'].map((type) => {
@@ -294,7 +300,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                 (log.details && String(log.details).includes('TESTING MODE'))
               );
 
-              const safeKey = log.id ? `log-${log.id}` : `log-${index}-${log.createdAt || Date.now()}`;
+              const safeKey = `log-${log.id || 'entry'}-${index}`;
 
               return (
                 <div
@@ -353,6 +359,16 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                       <p className="text-xs font-medium text-slate-600 leading-normal">
                         {log.details || 'Routine clinical dispensary action.'}
                       </p>
+                      {log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase self-center mr-1">Lots:</span>
+                          {log.lotNumbers.map((lot, idx) => (
+                            <span key={idx} className="font-mono text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
+                              {lot}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -396,7 +412,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                     Are you sure?
                   </h3>
                   <p className="text-xs font-semibold text-slate-600 leading-normal">
-                    You are modifying an official clinical transaction log for <span className="font-bold text-slate-900">{editingLog.itemGenericName}</span>. Altering regulatory usage records changes historical compliance totals and dispense reporting.
+                    You are modifying an official clinical transaction log for <span className="font-bold text-slate-900">{editingLog.itemGenericName || 'this item'}</span>. Altering regulatory usage records changes historical compliance totals and dispense reporting.
                   </p>
                 </div>
               </div>

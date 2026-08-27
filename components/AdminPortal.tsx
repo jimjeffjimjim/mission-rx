@@ -81,6 +81,14 @@ export default function AdminPortal({
   const [dispenseAmount, setDispenseAmount] = useState<string>('');
   const [undispenseAmount, setUndispenseAmount] = useState<string>('');
   const [dispensingAction, setDispensingAction] = useState(false);
+  const [dispenseModalMode, setDispenseModalMode] = useState<'units' | 'bottles'>('units');
+
+  // Detailed Dispense Log Modal (lifted from IIFE to top level — React Rules of Hooks)
+  const [detailedModalOpen, setDetailedModalOpen] = useState(false);
+  const [detailedLogItem, setDetailedLogItem] = useState<any>(null);
+
+  // Sealed Packs (+) Button Popover Menu
+  const [bottleMenuItemId, setBottleMenuItemId] = useState<string | null>(null);
 
   // Weekly Backups State
   const [backups, setBackups] = useState<any[]>([]);
@@ -797,26 +805,65 @@ export default function AdminPortal({
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1.5 relative">
                             <button
                               type="button"
                               onClick={() => {
                                 if (item.bottlesAvailable <= 0) return;
                                 const newBottles = item.bottlesAvailable - 1;
                                 const packSize = item.pillsPerBottle || 1;
+                                let itemLots: string[] = [];
+                                try {
+                                  if (Array.isArray(item.lotNumbers)) itemLots = item.lotNumbers;
+                                  else if (typeof item.lotNumbers === 'string') itemLots = item.lotNumbers.startsWith('[') ? JSON.parse(item.lotNumbers) : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+                                } catch (e) {}
                                 if (isTestingMode) {
                                   setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
                                   setTestSimulatedLogs((prev) => [
                                     ...prev,
                                     { genericName: item.genericName, quantity: packSize, category: item.shelfLocation || 'General Medical' }
                                   ]);
+                                  if (onAddTestAuditLog) {
+                                    onAddTestAuditLog({
+                                      id: 'test-bottle-' + Date.now(),
+                                      itemId: item.id,
+                                      itemGenericName: item.genericName,
+                                      quantityChanged: packSize,
+                                      actionType: 'DISPENSE',
+                                      userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
+                                      details: `[TESTING MODE - NOT REAL]: Dispensed 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) in test sandbox`,
+                                      isTestMode: true,
+                                      createdAt: new Date().toISOString(),
+                                      dispensedUnit: 'bottle',
+                                      dispensedBottles: 1,
+                                      dispensedPillsPerBottle: packSize,
+                                      lotNumbers: itemLots,
+                                    } as any);
+                                  }
                                 } else {
                                   if (onAdjustStock) onAdjustStock(item.id, -1, 0);
                                   else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
+                                  fetch('/api/logs', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      itemId: item.id,
+                                      itemGenericName: item.genericName,
+                                      quantityChanged: packSize,
+                                      actionType: 'DISPENSE',
+                                      userRole: userRole || 'ADMIN',
+                                      details: `Dispensed 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) via Sealed Packs quick-dispense.`,
+                                      createdAt: new Date().toISOString(),
+                                      dispensedUnit: 'bottle',
+                                      dispensedBottles: 1,
+                                      dispensedPillsPerBottle: packSize,
+                                      lotNumbers: itemLots,
+                                    }),
+                                  }).catch(() => null);
                                 }
                               }}
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Dispense 1 Container (-1)"
+                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                              title="Quick Dispense 1 Container (-1)"
                             >
                               <Minus className="w-3.5 h-3.5 stroke-[3]" />
                             </button>
@@ -832,25 +879,101 @@ export default function AdminPortal({
                             </div>
                             <button
                               type="button"
-                              onClick={() => {
-                                const newBottles = item.bottlesAvailable + 1;
-                                const packSize = item.pillsPerBottle || 1;
-                                if (isTestingMode) {
-                                  setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
-                                  setTestSimulatedLogs((prev) => [
-                                    ...prev,
-                                    { genericName: item.genericName, quantity: -packSize, category: item.shelfLocation || 'General Medical' }
-                                  ]);
-                                } else {
-                                  if (onAdjustStock) onAdjustStock(item.id, 1, 0);
-                                  else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
-                                }
-                              }}
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95"
-                              title="Restock 1 Container (+1)"
+                              onClick={() => setBottleMenuItemId(bottleMenuItemId === item.id ? null : item.id)}
+                              className={`w-8 h-8 rounded-xl border font-black flex items-center justify-center active:scale-95 cursor-pointer transition-all ${
+                                bottleMenuItemId === item.id
+                                  ? 'bg-teal-600 text-white border-teal-700 shadow-md'
+                                  : 'bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 border-slate-300'
+                              }`}
+                              title="Dispense / Restock / Undispense Sealed Packs"
                             >
                               <Plus className="w-3.5 h-3.5 stroke-[3]" />
                             </button>
+
+                            {/* Sealed Packs Popover Menu */}
+                            {bottleMenuItemId === item.id && (
+                              <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-150">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBottleMenuItemId(null);
+                                    setDispenseItem(item);
+                                    setDispenseAmount('');
+                                    setUndispenseAmount('');
+                                    setDispenseModalMode('bottles');
+                                    setDispenseModalOpen(true);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-left transition-colors group cursor-pointer"
+                                >
+                                  <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600 group-hover:bg-rose-200">
+                                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-black text-slate-900 block">Dispense Packs</span>
+                                    <span className="text-[10px] font-semibold text-slate-400">Subtract sealed containers</span>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBottleMenuItemId(null);
+                                    const newBottles = item.bottlesAvailable + 1;
+                                    const packSize = item.pillsPerBottle || 1;
+                                    if (isTestingMode) {
+                                      setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
+                                    } else {
+                                      if (onAdjustStock) onAdjustStock(item.id, 1, 0);
+                                      else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
+                                      fetch('/api/logs', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          itemId: item.id,
+                                          itemGenericName: item.genericName,
+                                          quantityChanged: -packSize,
+                                          actionType: 'RESTOCK',
+                                          userRole: userRole || 'ADMIN',
+                                          details: `Restocked 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) into sealed inventory.`,
+                                          createdAt: new Date().toISOString(),
+                                          dispensedUnit: 'bottle',
+                                          dispensedBottles: 1,
+                                          dispensedPillsPerBottle: packSize,
+                                        }),
+                                      }).catch(() => null);
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group cursor-pointer"
+                                >
+                                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200">
+                                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-black text-slate-900 block">Restock +1</span>
+                                    <span className="text-[10px] font-semibold text-slate-400">Add 1 sealed container</span>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBottleMenuItemId(null);
+                                    setDispenseItem(item);
+                                    setDispenseAmount('');
+                                    setUndispenseAmount('');
+                                    setDispenseModalMode('bottles');
+                                    setDispenseModalOpen(true);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-amber-50 text-left transition-colors group cursor-pointer"
+                                >
+                                  <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 group-hover:bg-amber-200">
+                                    <ArrowUpRight className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                  <div>
+                                    <span className="text-xs font-black text-slate-900 block">Undispense Packs</span>
+                                    <span className="text-[10px] font-semibold text-slate-400">Return sealed containers</span>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -891,6 +1014,7 @@ export default function AdminPortal({
                                 setDispenseItem(item);
                                 setDispenseAmount('');
                                 setUndispenseAmount('');
+                                setDispenseModalMode('units');
                                 setDispenseModalOpen(true);
                               }}
                               className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
@@ -904,6 +1028,7 @@ export default function AdminPortal({
                                 setDispenseItem(item);
                                 setDispenseAmount('');
                                 setUndispenseAmount('');
+                                setDispenseModalMode('units');
                                 setDispenseModalOpen(true);
                               }}
                               className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
@@ -1247,22 +1372,29 @@ export default function AdminPortal({
                                 </div>
                               </td>
                               <td className="py-2.5 px-3 text-center font-mono font-black text-rose-600 text-sm">
-                                -{quantity}
+                                {log.dispensedUnit === 'bottle' ? (
+                                  <span className="flex flex-col items-center">
+                                    <span>-{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
+                                    <span className="text-[9px] font-bold text-slate-400">({quantity} {corrItem?.subUnit || 'pills'})</span>
+                                  </span>
+                                ) : (
+                                  <span>-{quantity}</span>
+                                )}
                               </td>
                               <td className="py-2.5 px-3 text-right whitespace-nowrap">
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    // Set detailed view modal
                                     const modalData = {
                                       ...log,
-                                      lotNumbers: lotList,
+                                      lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,
                                       brandName: corrItem?.brandName || 'N/A',
                                       dosage: corrItem?.dosage || 'N/A',
                                       shelfLocation: corrItem?.shelfLocation || 'N/A',
                                       subUnit: corrItem?.subUnit || 'pills'
                                     };
-                                    (window as any).showDetailedDispenseModal?.(modalData);
+                                    setDetailedLogItem(modalData);
+                                    setDetailedModalOpen(true);
                                   }}
                                   className="text-[11px] text-teal-700 hover:text-teal-900 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg font-black cursor-pointer"
                                 >
@@ -1566,47 +1698,68 @@ export default function AdminPortal({
               {/* Section 1: Dispense */}
               <div>
                 <label className="text-xs font-black uppercase tracking-wider text-rose-700 block mb-1">
-                  1. How many did you dispense? (Subtract)
+                  1. How many {dispenseModalMode === 'bottles' ? (dispenseItem.stockUnit || 'bottles') : (dispenseItem.subUnit || 'units')} did you dispense? (Subtract)
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    value={dispenseAmount}
-                    onChange={(e) => setDispenseAmount(e.target.value)}
-                    className="flex-1 min-h-[46px] px-4 bg-white border border-slate-300 focus:border-rose-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
-                    placeholder={`e.g. 30 ${dispenseItem.subUnit || 'units'}`}
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      min="1"
+                      value={dispenseAmount}
+                      onChange={(e) => setDispenseAmount(e.target.value)}
+                      className="w-full min-h-[46px] px-4 bg-white border border-slate-300 focus:border-rose-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
+                      placeholder={dispenseModalMode === 'bottles' ? `e.g. 1 ${dispenseItem.stockUnit || 'bottle'}` : `e.g. 30 ${dispenseItem.subUnit || 'units'}`}
+                    />
+                    {dispenseModalMode === 'bottles' && dispenseAmount && !isNaN(Number(dispenseAmount)) && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-rose-50 text-rose-700 font-extrabold border border-rose-200 px-2 py-0.5 rounded-md">
+                        = {Number(dispenseAmount) * (dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     disabled={!dispenseAmount || Number(dispenseAmount) <= 0 || dispensingAction}
                     onClick={async () => {
-                      const amount = parseInt(dispenseAmount, 10);
-                      if (isNaN(amount) || amount <= 0) return;
+                      const inputAmt = parseInt(dispenseAmount, 10);
+                      if (isNaN(inputAmt) || inputAmt <= 0) return;
+                      const isBottle = dispenseModalMode === 'bottles';
+                      const pillsPerBottle = dispenseItem.pillsPerBottle || 1;
+                      const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
+                      const bottleAmount = isBottle ? inputAmt : 0;
                       setDispensingAction(true);
                       try {
                         const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
-                        const newTotal = Math.max(0, currentTotal - amount);
+                        const newTotal = Math.max(0, currentTotal - pillAmount);
                         const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
+
+                        let itemLots: string[] = [];
+                        try {
+                          if (Array.isArray(dispenseItem.lotNumbers)) itemLots = dispenseItem.lotNumbers;
+                          else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+                        } catch (e) {}
 
                         if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
                           setTestSimulatedLogs((prev) => [
                             ...prev,
-                            { genericName: dispenseItem.genericName, quantity: amount, category: dispenseItem.shelfLocation || 'General Medical' }
+                            { genericName: dispenseItem.genericName, quantity: pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
                           if (onAddTestAuditLog) {
                             onAddTestAuditLog({
                               id: 'test-dispense-' + Date.now(),
                               itemId: dispenseItem.id,
                               itemGenericName: dispenseItem.genericName,
-                              quantityChanged: amount,
+                              quantityChanged: pillAmount,
                               actionType: 'DISPENSE',
                               userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
-                              details: `[TESTING MODE - NOT REAL]: Dispensed ${amount} ${dispenseItem.subUnit || 'units'} in test sandbox`,
+                              details: `[TESTING MODE - NOT REAL]: Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} in test sandbox`,
                               isTestMode: true,
                               createdAt: new Date().toISOString(),
-                            });
+                              dispensedUnit: isBottle ? 'bottle' : 'unit',
+                              dispensedBottles: bottleAmount,
+                              dispensedPillsPerBottle: pillsPerBottle,
+                              lotNumbers: itemLots,
+                            } as any);
                           }
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
@@ -1616,11 +1769,15 @@ export default function AdminPortal({
                             body: JSON.stringify({
                               itemId: dispenseItem.id,
                               itemGenericName: dispenseItem.genericName,
-                              quantityChanged: amount,
+                              quantityChanged: pillAmount,
                               actionType: 'DISPENSE',
                               userRole: userRole || 'ADMIN',
-                              details: `Dispensed ${amount} ${dispenseItem.subUnit || 'units'} directly via Backdoor Inventory table.`,
+                              details: `Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} directly via Backdoor Inventory table.`,
                               createdAt: new Date().toISOString(),
+                              dispensedUnit: isBottle ? 'bottle' : 'unit',
+                              dispensedBottles: bottleAmount,
+                              dispensedPillsPerBottle: pillsPerBottle,
+                              lotNumbers: itemLots,
                             }),
                           }).catch(() => null);
                           if (onRefreshData) onRefreshData();
@@ -1645,44 +1802,65 @@ export default function AdminPortal({
                   2. Undispense / Restock Amount (Add & Reverse Usage)
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    value={undispenseAmount}
-                    onChange={(e) => setUndispenseAmount(e.target.value)}
-                    className="flex-1 min-h-[46px] px-4 bg-white border border-slate-300 focus:border-emerald-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
-                    placeholder={`e.g. 10 ${dispenseItem.subUnit || 'units'}`}
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      min="1"
+                      value={undispenseAmount}
+                      onChange={(e) => setUndispenseAmount(e.target.value)}
+                      className="w-full min-h-[46px] px-4 bg-white border border-slate-300 focus:border-emerald-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner"
+                      placeholder={dispenseModalMode === 'bottles' ? `e.g. 1 ${dispenseItem.stockUnit || 'bottle'}` : `e.g. 10 ${dispenseItem.subUnit || 'units'}`}
+                    />
+                    {dispenseModalMode === 'bottles' && undispenseAmount && !isNaN(Number(undispenseAmount)) && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-200 px-2 py-0.5 rounded-md">
+                        = {Number(undispenseAmount) * (dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     disabled={!undispenseAmount || Number(undispenseAmount) <= 0 || dispensingAction}
                     onClick={async () => {
-                      const amount = parseInt(undispenseAmount, 10);
-                      if (isNaN(amount) || amount <= 0) return;
+                      const inputAmt = parseInt(undispenseAmount, 10);
+                      if (isNaN(inputAmt) || inputAmt <= 0) return;
+                      const isBottle = dispenseModalMode === 'bottles';
+                      const pillsPerBottle = dispenseItem.pillsPerBottle || 1;
+                      const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
+                      const bottleAmount = isBottle ? inputAmt : 0;
                       setDispensingAction(true);
                       try {
                         const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
-                        const newTotal = currentTotal + amount;
+                        const newTotal = currentTotal + pillAmount;
                         const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
+
+                        let itemLots: string[] = [];
+                        try {
+                          if (Array.isArray(dispenseItem.lotNumbers)) itemLots = dispenseItem.lotNumbers;
+                          else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+                        } catch (e) {}
 
                         if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
                           setTestSimulatedLogs((prev) => [
                             ...prev,
-                            { genericName: dispenseItem.genericName, quantity: -amount, category: dispenseItem.shelfLocation || 'General Medical' }
+                            { genericName: dispenseItem.genericName, quantity: -pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
                           if (onAddTestAuditLog) {
                             onAddTestAuditLog({
                               id: 'test-undispense-' + Date.now(),
                               itemId: dispenseItem.id,
                               itemGenericName: dispenseItem.genericName,
-                              quantityChanged: -amount,
+                              quantityChanged: -pillAmount,
                               actionType: 'RESTOCK',
                               userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
-                              details: `[TESTING MODE - NOT REAL]: Undispensed / Restocked ${amount} ${dispenseItem.subUnit || 'units'} in test sandbox`,
+                              details: `[TESTING MODE - NOT REAL]: Undispensed / Restocked ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} in test sandbox`,
                               isTestMode: true,
                               createdAt: new Date().toISOString(),
-                            });
+                              dispensedUnit: isBottle ? 'bottle' : 'unit',
+                              dispensedBottles: bottleAmount,
+                              dispensedPillsPerBottle: pillsPerBottle,
+                              lotNumbers: itemLots,
+                            } as any);
                           }
                         } else {
                           onUpdateStock(dispenseItem.id, bottles, loose);
@@ -1692,11 +1870,15 @@ export default function AdminPortal({
                             body: JSON.stringify({
                               itemId: dispenseItem.id,
                               itemGenericName: dispenseItem.genericName,
-                              quantityChanged: -amount,
+                              quantityChanged: -pillAmount,
                               actionType: 'DISPENSE',
                               userRole: userRole || 'ADMIN',
-                              details: `Undispensed / Restocked ${amount} ${dispenseItem.subUnit || 'units'} back into inventory.`,
+                              details: `Undispensed / Restocked ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} back into inventory.`,
                               createdAt: new Date().toISOString(),
+                              dispensedUnit: isBottle ? 'bottle' : 'unit',
+                              dispensedBottles: bottleAmount,
+                              dispensedPillsPerBottle: pillsPerBottle,
+                              lotNumbers: itemLots,
                             }),
                           }).catch(() => null);
                           if (onRefreshData) onRefreshData();
@@ -1773,47 +1955,20 @@ export default function AdminPortal({
         </div>
       )}
       {/* Detailed Dispense Audit Modal Pop-up */}
-      {(() => {
-        // We set up a React state and attach showDetailedDispenseModal callback to window
-        const [detailedModalOpen, setDetailedModalOpen] = useState(false);
-        const [detailedLogItem, setDetailedLogItem] = useState<any>(null);
-
-        useEffect(() => {
-          (window as any).showDetailedDispenseModal = (logData: any) => {
-            setDetailedLogItem(logData);
-            setDetailedModalOpen(true);
-          };
-          return () => {
-            delete (window as any).showDetailedDispenseModal;
-          };
-        }, []);
-
-        if (!detailedModalOpen || !detailedLogItem) return null;
-
+      {detailedModalOpen && detailedLogItem && (() => {
         const dDate = detailedLogItem.createdAt ? new Date(detailedLogItem.createdAt) : new Date();
         const formattedFullDate = dDate.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         }) + ' • ' + dDate.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
+          hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
         });
+        const safeLots = Array.isArray(detailedLogItem.lotNumbers) ? detailedLogItem.lotNumbers : [];
 
         return (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/65 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-white border-2 border-teal-600 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-900 relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setDetailedModalOpen(false);
-                  setDetailedLogItem(null);
-                }}
-                className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
-              >
+              <button type="button" onClick={() => { setDetailedModalOpen(false); setDetailedLogItem(null); }}
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer">
                 <X className="w-5 h-5 stroke-[2.5]" />
               </button>
 
@@ -1828,9 +1983,7 @@ export default function AdminPortal({
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate select-text">
                     {detailedLogItem.itemGenericName || 'Formulation Record'}
                   </h3>
-                  <p className="text-xs font-mono font-bold text-slate-400">
-                    ID: {detailedLogItem.id || 'N/A'}
-                  </p>
+                  <p className="text-xs font-mono font-bold text-slate-400">ID: {detailedLogItem.id || 'N/A'}</p>
                 </div>
               </div>
 
@@ -1854,7 +2007,11 @@ export default function AdminPortal({
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Quantity Distributed</span>
                     <span className="text-rose-600 font-mono font-black text-sm">
-                      -{Math.abs(detailedLogItem.quantityChanged)} {detailedLogItem.subUnit || 'units'}
+                      {detailedLogItem.dispensedUnit === 'bottle' ? (
+                        <>-{detailedLogItem.dispensedBottles || 1} bottle ({Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'pills'})</>
+                      ) : (
+                        <>-{Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'units'}</>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1862,11 +2019,9 @@ export default function AdminPortal({
                 <div className="border-b border-slate-200/80 pb-3">
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Lot Numbers Associated</span>
                   <div className="flex flex-wrap gap-1">
-                    {detailedLogItem.lotNumbers && detailedLogItem.lotNumbers.length > 0 ? (
-                      detailedLogItem.lotNumbers.map((lot: string, idx: number) => (
-                        <span key={idx} className="font-mono text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">
-                          {lot}
-                        </span>
+                    {safeLots.length > 0 ? (
+                      safeLots.map((lot: string, idx: number) => (
+                        <span key={idx} className="font-mono text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">{lot}</span>
                       ))
                     ) : (
                       <span className="text-slate-400 italic font-semibold">No lot numbers registered</span>
@@ -1878,15 +2033,13 @@ export default function AdminPortal({
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Dispensed At</span>
                     <span className="text-slate-900 font-mono text-[11px] flex items-center gap-1.5 pt-0.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {formattedFullDate}
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />{formattedFullDate}
                     </span>
                   </div>
                   <div className="pt-1">
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Supervised By Role</span>
                     <span className="text-slate-900 flex items-center gap-1.5 pt-0.5 font-extrabold">
-                      <User className="w-3.5 h-3.5 text-slate-500" />
-                      {detailedLogItem.userRole || 'STAFF'}
+                      <User className="w-3.5 h-3.5 text-slate-500" />{detailedLogItem.userRole || 'STAFF'}
                     </span>
                   </div>
                 </div>
@@ -1898,14 +2051,8 @@ export default function AdminPortal({
               </div>
 
               <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDetailedModalOpen(false);
-                    setDetailedLogItem(null);
-                  }}
-                  className="min-h-[42px] px-6 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-                >
+                <button type="button" onClick={() => { setDetailedModalOpen(false); setDetailedLogItem(null); }}
+                  className="min-h-[42px] px-6 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md active:scale-95 cursor-pointer">
                   Close Details
                 </button>
               </div>

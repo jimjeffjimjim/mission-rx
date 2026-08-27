@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { testingMode } = body;
-    const isModeActive = Boolean(testingMode);
+    const isModeActive = testingMode === true || testingMode === 'true';
     memoryTestingMode = isModeActive;
 
     if (supabase) {

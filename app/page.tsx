@@ -286,6 +286,10 @@ export default function Home() {
     quantityChanged: number;
     actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
     details: string;
+    dispensedUnit?: 'bottle' | 'unit';
+    dispensedBottles?: number;
+    dispensedPillsPerBottle?: number;
+    lotNumbers?: string[];
   }) => {
     if (typeof window === 'undefined') return;
     const payload = {
@@ -452,20 +456,32 @@ export default function Home() {
         const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
         if (totalChange !== 0) {
           const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-          const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+          const isBottleChange = actualBottleDiff !== 0;
+          const pillsPerBottle = target.pillsPerBottle || 1;
+          const pillQuantity = isBottleChange ? totalChange * pillsPerBottle : totalChange;
+          const unitLabel = isBottleChange ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
           const verb = totalChange < 0 ? 'Dispensed' : 'Restocked';
-          setTestAuditLogs((prev) => [
+
+          let itemLots: string[] = [];
+          try {
+            if (Array.isArray(target.lotNumbers)) itemLots = target.lotNumbers;
+            else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+          } catch (e) {}          setTestAuditLogs((prev) => [
             {
               id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
               itemId: target.id,
               itemGenericName: `${target.genericName} (${target.dosage})`,
-              quantityChanged: totalChange,
+              quantityChanged: pillQuantity,
               actionType,
               userRole: `${actorTag} (TEST)`,
-              details: `[TESTING MODE - NOT REAL]: ${verb} ${Math.abs(totalChange)} ${unitType} in test sandbox`,
+              details: `[TESTING MODE - NOT REAL]: ${verb} ${isBottleChange ? `${Math.abs(totalChange)} ${target.stockUnit || 'bottle'}(s) (${Math.abs(pillQuantity)} pills)` : `${Math.abs(pillQuantity)} ${unitLabel}`} in test sandbox`,
               isTestMode: true,
               createdAt: new Date().toISOString(),
-            },
+              dispensedUnit: isBottleChange ? 'bottle' : 'unit',
+              dispensedBottles: isBottleChange ? Math.abs(totalChange) : 0,
+              dispensedPillsPerBottle: pillsPerBottle,
+              lotNumbers: itemLots,
+            } as any,
             ...prev,
           ]);
         }
@@ -502,22 +518,36 @@ export default function Home() {
     const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
 
     if (totalChange !== 0) {
-      const unitType = actualBottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
+      const isBottleChange = actualBottleDiff !== 0;
+      const pillsPerBottle = target.pillsPerBottle || 1;
+      const pillQuantity = isBottleChange ? totalChange * pillsPerBottle : totalChange;
+      const unitType = isBottleChange ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
       const itemKey = `${target.id}_${unitType}`;
+
+      let itemLots: string[] = [];
+      try {
+        if (Array.isArray(target.lotNumbers)) itemLots = target.lotNumbers;
+        else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } catch (e) {}
 
       if (!auditLogAccumulatorsRef.current[itemKey]) {
         auditLogAccumulatorsRef.current[itemKey] = {
           itemId: target.id,
           itemGenericName: `${target.genericName} (${target.dosage})`,
-          quantityChanged: totalChange,
+          quantityChanged: pillQuantity,
           unitType,
           newBottles,
           newLoose,
+          isBottle: isBottleChange,
+          bottlesChanged: isBottleChange ? totalChange : 0,
         };
       } else {
-        auditLogAccumulatorsRef.current[itemKey].quantityChanged += totalChange;
+        auditLogAccumulatorsRef.current[itemKey].quantityChanged += pillQuantity;
         auditLogAccumulatorsRef.current[itemKey].newBottles = newBottles;
         auditLogAccumulatorsRef.current[itemKey].newLoose = newLoose;
+        if (isBottleChange) {
+          auditLogAccumulatorsRef.current[itemKey].bottlesChanged += totalChange;
+        }
       }
 
       if (auditLogTimersRef.current[itemKey]) {
@@ -535,7 +565,11 @@ export default function Home() {
             itemGenericName: pending.itemGenericName,
             quantityChanged: pending.quantityChanged,
             actionType: pendingAction,
-            details: `${pendingVerb}: ${Math.abs(pending.quantityChanged)} ${pending.unitType} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
+            details: `${pendingVerb}: ${pending.isBottle ? `${Math.abs(pending.bottlesChanged)} ${target.stockUnit || 'bottle'}(s) (${Math.abs(pending.quantityChanged)} pills)` : `${Math.abs(pending.quantityChanged)} ${pending.unitType}`} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
+            dispensedUnit: pending.isBottle ? 'bottle' : 'unit',
+            dispensedBottles: pending.isBottle ? Math.abs(pending.bottlesChanged) : 0,
+            dispensedPillsPerBottle: pillsPerBottle,
+            lotNumbers: itemLots,
           });
         }
         delete auditLogAccumulatorsRef.current[itemKey];
@@ -992,7 +1026,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.11 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.12 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

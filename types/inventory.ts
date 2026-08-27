@@ -30,6 +30,10 @@ export interface DispenseLog {
   details?: string;
   isTestMode?: boolean;
   createdAt: string;
+  dispensedUnit?: 'bottle' | 'unit';
+  dispensedBottles?: number;
+  dispensedPillsPerBottle?: number;
+  lotNumbers?: string[];
 }
 
 export type AuthRole = 'LOCKED' | 'STAFF' | 'ADMIN';

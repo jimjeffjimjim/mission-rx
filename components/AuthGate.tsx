@@ -28,10 +28,12 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
     fetch('/api/settings')
       .then((res) => res.json())
       .then((data) => {
-        if (typeof data.testingMode === 'boolean') {
+        if (data && typeof data.testingMode === 'boolean') {
           setIsTestingMode(data.testingMode);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('mission_rx_testing_mode', data.testingMode ? 'true' : 'false');
+            try {
+              localStorage.setItem('mission_rx_testing_mode', data.testingMode ? 'true' : 'false');
+            } catch (e) {}
           }
         }
       })
@@ -51,7 +53,9 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
     const nextVal = !isTestingMode;
     setIsTestingMode(nextVal);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('mission_rx_testing_mode', nextVal ? 'true' : 'false');
+      try {
+        localStorage.setItem('mission_rx_testing_mode', nextVal ? 'true' : 'false');
+      } catch (e) {}
       window.dispatchEvent(new Event('mission_rx_testing_mode_change'));
       window.dispatchEvent(new Event('testingModeChanged'));
     }
@@ -264,7 +268,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.11 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.12 Live</span>
           <span className="text-slate-300">•</span>
           {isTestingMode && (
             <>
