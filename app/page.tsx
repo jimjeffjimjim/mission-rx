@@ -322,31 +322,6 @@ export default function Home() {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
-      const target = itemsRef.current.find((i) => i.id === id);
-      if (target) {
-        const bottleDiff = newBottles - target.bottlesAvailable;
-        const looseDiff = newLoose - target.looseUnitsAvailable;
-        const totalChange = bottleDiff !== 0 ? bottleDiff : looseDiff;
-        if (totalChange !== 0) {
-          const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-          const unitType = bottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-          const verb = totalChange < 0 ? 'Dispensed' : 'Restocked';
-          setTestAuditLogs((prev) => [
-            {
-              id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-              itemId: target.id,
-              itemGenericName: `${target.genericName} (${target.dosage})`,
-              quantityChanged: totalChange,
-              actionType,
-              userRole: `${actorTag} (TEST)`,
-              details: `[TESTING MODE - NOT REAL]: ${verb} ${Math.abs(totalChange)} ${unitType} in test sandbox`,
-              isTestMode: true,
-              createdAt: new Date().toISOString(),
-            },
-            ...prev,
-          ]);
-        }
-      }
       setItems((prev) =>
         prev.map((item) =>
           item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
@@ -363,62 +338,11 @@ export default function Home() {
     }, 2500);
 
     setItems((prev) => {
-      const target = prev.find((i) => i.id === id);
-      if (target) {
-        const bottleDiff = newBottles - target.bottlesAvailable;
-        const looseDiff = newLoose - target.looseUnitsAvailable;
-        const totalChange = bottleDiff !== 0 ? bottleDiff : looseDiff;
-        const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-        const unitType = bottleDiff !== 0 ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-        const verb = totalChange < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
-
-        if (totalChange !== 0) {
-          const itemKey = `${target.id}_${unitType}`;
-          if (!auditLogAccumulatorsRef.current[itemKey]) {
-            auditLogAccumulatorsRef.current[itemKey] = {
-              itemId: target.id,
-              itemGenericName: `${target.genericName} (${target.dosage})`,
-              quantityChanged: totalChange,
-              unitType,
-              newBottles,
-              newLoose,
-            };
-          } else {
-            auditLogAccumulatorsRef.current[itemKey].quantityChanged += totalChange;
-            auditLogAccumulatorsRef.current[itemKey].newBottles = newBottles;
-            auditLogAccumulatorsRef.current[itemKey].newLoose = newLoose;
-          }
-
-          if (auditLogTimersRef.current[itemKey]) {
-            clearTimeout(auditLogTimersRef.current[itemKey]);
-          }
-
-          auditLogTimersRef.current[itemKey] = setTimeout(() => {
-            const pending = auditLogAccumulatorsRef.current[itemKey];
-            if (pending && pending.quantityChanged !== 0) {
-              const pendingAction = pending.quantityChanged < 0 ? 'DISPENSE' : 'RESTOCK';
-              const pendingVerb = pending.quantityChanged < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
-
-              recordAuditLog({
-                itemId: pending.itemId,
-                itemGenericName: pending.itemGenericName,
-                quantityChanged: pending.quantityChanged,
-                actionType: pendingAction,
-                details: `${pendingVerb}: ${Math.abs(pending.quantityChanged)} ${pending.unitType} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
-              });
-            }
-            delete auditLogAccumulatorsRef.current[itemKey];
-            delete auditLogTimersRef.current[itemKey];
-          }, 100);
-        }
-      }
-
       const updated = prev.map((item) =>
         item.id === id
           ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose }
           : item
       );
-
       saveLocalCache(updated);
       return updated;
     });
