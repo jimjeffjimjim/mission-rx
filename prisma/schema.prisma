@@ -32,12 +32,19 @@ model InventoryItem {
 }
 
 model DispenseLog {
-  id              String        @id @default(uuid())
-  itemId          String
-  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  quantityChanged Float
-  actionType      String        // 'DISPENSE' | 'RESTOCK' | 'EDIT'
-  createdAt       DateTime      @default(now())
+  id                      String        @id @default(uuid())
+  itemId                  String
+  item                    InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantityChanged         Float
+  actionType              String        // 'DISPENSE' | 'RESTOCK' | 'EDIT'
+  userRole                String?       @default("STAFF")
+  details                 String?
+  dispensedUnit           String?
+  dispensedBottles        Int?          @default(0)
+  dispensedPillsPerBottle Int?          @default(0)
+  lotNumbers              String?       @default("[]")
+  isTestMode              Boolean?      @default(false)
+  createdAt               DateTime      @default(now())
 }
 
 model InventoryBackup {

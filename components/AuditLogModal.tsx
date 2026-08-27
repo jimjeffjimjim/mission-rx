@@ -126,7 +126,11 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
         const matchName = String(log.itemGenericName || '').toLowerCase().includes(q);
         const matchDetails = String(log.details || '').toLowerCase().includes(q);
         const matchRole = String(log.userRole || '').toLowerCase().includes(q);
-        if (!matchName && !matchDetails && !matchRole) return false;
+        const lots = Array.isArray(log.lotNumbers) 
+          ? log.lotNumbers.join(' ').toLowerCase() 
+          : String(log.lotNumbers || '').toLowerCase();
+        const matchLots = lots.includes(q);
+        if (!matchName && !matchDetails && !matchRole && !matchLots) return false;
       }
       if (selectedAction !== 'ALL' && log.actionType !== selectedAction) {
         return false;
@@ -377,11 +381,20 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                     <div className="sm:text-right flex sm:flex-col items-baseline sm:items-end justify-between gap-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider sm:hidden">Qty Change</span>
                       <span
-                        className={`font-mono font-black text-lg sm:text-2xl ${
+                        className={`font-mono font-black text-sm sm:text-base ${
                           isNegative ? 'text-rose-600' : isPositive ? 'text-emerald-600' : 'text-slate-700'
                         }`}
                       >
-                        {isPositive ? `+${qtyNum}` : qtyNum}
+                        {log.dispensedUnit === 'bottle' ? (
+                          <span>
+                            {isPositive ? '+' : '-'}{log.dispensedBottles || 1} bottle{(log.dispensedBottles || 1) !== 1 ? 's' : ''}
+                            <span className="text-[10px] font-bold text-slate-400 block sm:text-right">
+                              ({Math.abs(qtyNum)} pills)
+                            </span>
+                          </span>
+                        ) : (
+                          <span>{isPositive ? `+${qtyNum}` : qtyNum}</span>
+                        )}
                       </span>
                     </div>
                     <button

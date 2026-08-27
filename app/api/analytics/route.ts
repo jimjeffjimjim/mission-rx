@@ -32,15 +32,29 @@ export async function GET(request: Request) {
         }
         const { data: cloudLogs, error } = await query;
         if (cloudLogs && !error && cloudLogs.length > 0) {
-          formattedLogs = cloudLogs.map((l: any) => ({
-            id: l.id,
-            itemId: l.item_id || 'unknown',
-            itemGenericName: l.item_generic_name || 'Medication Formulation',
-            quantityChanged: Number(l.quantity_changed) || 0,
-            actionType: l.action_type || 'DISPENSE',
-            category: 'General Medical',
-            createdAt: l.created_at || new Date().toISOString(),
-          }));
+          formattedLogs = cloudLogs.map((l: any) => {
+            let lotList: string[] = [];
+            try {
+              if (l.lot_numbers) {
+                lotList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
+              }
+            } catch (e) {}
+            return {
+              id: l.id,
+              itemId: l.item_id || 'unknown',
+              itemGenericName: l.item_generic_name || 'Medication Formulation',
+              quantityChanged: Number(l.quantity_changed) || 0,
+              actionType: l.action_type || 'DISPENSE',
+              userRole: l.user_role || 'STAFF',
+              details: l.details || '',
+              category: 'General Medical',
+              createdAt: l.created_at || new Date().toISOString(),
+              dispensedUnit: l.dispensed_unit || null,
+              dispensedBottles: Number(l.dispensed_bottles) || 0,
+              dispensedPillsPerBottle: Number(l.dispensed_pills_per_bottle) || 0,
+              lotNumbers: lotList,
+            };
+          });
         }
       } catch (cloudErr) {
         console.warn('Supabase analytics fetch warning:', cloudErr);
@@ -67,15 +81,29 @@ export async function GET(request: Request) {
         take: 500,
       }).catch(() => []);
 
-      formattedLogs = logs.map((log: any) => ({
-        id: log.id,
-        itemId: log.itemId,
-        itemGenericName: log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation',
-        quantityChanged: log.quantityChanged,
-        actionType: log.actionType,
-        category: log.item?.shelfLocation || 'General Medical',
-        createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString(),
-      }));
+      formattedLogs = logs.map((log: any) => {
+        let lotList: string[] = [];
+        try {
+          if (log.lotNumbers) {
+            lotList = log.lotNumbers.startsWith('[') ? JSON.parse(log.lotNumbers) : log.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+          }
+        } catch (e) {}
+        return {
+          id: log.id,
+          itemId: log.itemId,
+          itemGenericName: log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation',
+          quantityChanged: log.quantityChanged,
+          actionType: log.actionType,
+          userRole: log.userRole || 'STAFF',
+          details: log.details || '',
+          category: log.item?.shelfLocation || 'General Medical',
+          createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString(),
+          dispensedUnit: log.dispensedUnit || null,
+          dispensedBottles: log.dispensedBottles || 0,
+          dispensedPillsPerBottle: log.dispensedPillsPerBottle || 0,
+          lotNumbers: lotList,
+        };
+      });
     }
 
     // Aggregate Top Dispensed Items

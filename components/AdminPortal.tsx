@@ -408,7 +408,11 @@ export default function AdminPortal({
       const matchBrand = (item.brandName || '').toLowerCase().includes(q);
       const matchChem = (item.chemicalName || '').toLowerCase().includes(q);
       const matchDosage = item.dosage.toLowerCase().includes(q);
-      if (!matchName && !matchBrand && !matchChem && !matchDosage) return false;
+      const lots = Array.isArray(item.lotNumbers)
+        ? item.lotNumbers.join(' ').toLowerCase()
+        : String(item.lotNumbers || '').toLowerCase();
+      const matchLots = lots.includes(q);
+      if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots) return false;
     }
 
     if (selectedCategory !== 'ALL') {
@@ -992,14 +996,49 @@ export default function AdminPortal({
                                 if (currentTotal > 0) {
                                   const newTotal = currentTotal - 1;
                                   const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
+                                  let itemLots: string[] = [];
+                                  try {
+                                    if (Array.isArray(item.lotNumbers)) itemLots = item.lotNumbers;
+                                    else if (typeof item.lotNumbers === 'string') itemLots = item.lotNumbers.startsWith('[') ? JSON.parse(item.lotNumbers) : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+                                  } catch (e) {}
                                   if (isTestingMode) {
                                     setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles, loose } }));
                                     setTestSimulatedLogs((prev) => [
                                       ...prev,
                                       { genericName: item.genericName, quantity: 1, category: item.shelfLocation || 'General Medical' }
                                     ]);
+                                    if (onAddTestAuditLog) {
+                                      onAddTestAuditLog({
+                                        id: 'test-unit-' + Date.now(),
+                                        itemId: item.id,
+                                        itemGenericName: item.genericName,
+                                        quantityChanged: 1,
+                                        actionType: 'DISPENSE',
+                                        userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
+                                        details: `[TESTING MODE - NOT REAL]: Dispensed 1 ${item.subUnit || 'unit'} in test sandbox`,
+                                        isTestMode: true,
+                                        createdAt: new Date().toISOString(),
+                                        dispensedUnit: 'unit',
+                                        lotNumbers: itemLots,
+                                      } as any);
+                                    }
                                   } else {
                                     onUpdateStock(item.id, bottles, loose);
+                                    fetch('/api/logs', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        itemId: item.id,
+                                        itemGenericName: item.genericName,
+                                        quantityChanged: 1,
+                                        actionType: 'DISPENSE',
+                                        userRole: userRole || 'ADMIN',
+                                        details: `Dispensed 1 ${item.subUnit || 'unit'} via directly dispense minus button.`,
+                                        createdAt: new Date().toISOString(),
+                                        dispensedUnit: 'unit',
+                                        lotNumbers: itemLots,
+                                      }),
+                                    }).catch(() => null);
                                   }
                                 }
                               }}

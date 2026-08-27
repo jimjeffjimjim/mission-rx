@@ -20,16 +20,29 @@ export async function GET() {
           .limit(500);
 
         if (cloudLogs && !error) {
-          const mapped: DispenseLog[] = cloudLogs.map((l: any) => ({
-            id: l.id,
-            itemId: l.item_id || 'unknown',
-            itemGenericName: l.item_generic_name || 'Medication Transaction Record',
-            quantityChanged: Number(l.quantity_changed) || 0,
-            actionType: l.action_type || 'DISPENSE',
-            userRole: l.user_role || 'STAFF',
-            details: l.details || 'Clinical inventory adjustment logged.',
-            createdAt: l.created_at || new Date().toISOString(),
-          }));
+          const mapped: DispenseLog[] = cloudLogs.map((l: any) => {
+            let lotList: string[] = [];
+            try {
+              if (l.lot_numbers) {
+                lotList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
+              }
+            } catch (e) {}
+            return {
+              id: l.id,
+              itemId: l.item_id || 'unknown',
+              itemGenericName: l.item_generic_name || 'Medication Transaction Record',
+              quantityChanged: Number(l.quantity_changed) || 0,
+              actionType: l.action_type || 'DISPENSE',
+              userRole: l.user_role || 'STAFF',
+              details: l.details || 'Clinical inventory adjustment logged.',
+              createdAt: l.created_at || new Date().toISOString(),
+              dispensedUnit: l.dispensed_unit || null,
+              dispensedBottles: Number(l.dispensed_bottles) || 0,
+              dispensedPillsPerBottle: Number(l.dispensed_pills_per_bottle) || 0,
+              lotNumbers: lotList,
+              isTestMode: l.is_test_mode || false,
+            };
+          });
 
           const map = new Map<string, DispenseLog>();
           [...mapped, ...logsFallbackCache].forEach((item) => map.set(item.id, item));
@@ -50,16 +63,29 @@ export async function GET() {
       take: 500,
     }).catch(() => []);
 
-    const dbLogs: DispenseLog[] = logs.map((l) => ({
-      id: l.id,
-      itemId: l.itemId,
-      itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
-      quantityChanged: l.quantityChanged,
-      actionType: (l.actionType as any) || 'DISPENSE',
-      userRole: (l as any).userRole || 'STAFF',
-      details: (l as any).details || 'Clinical inventory adjustment logged.',
-      createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
-    }));
+    const dbLogs: DispenseLog[] = logs.map((l) => {
+      let lotList: string[] = [];
+      try {
+        if (l.lotNumbers) {
+          lotList = l.lotNumbers.startsWith('[') ? JSON.parse(l.lotNumbers) : l.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      } catch (e) {}
+      return {
+        id: l.id,
+        itemId: l.itemId,
+        itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
+        quantityChanged: l.quantityChanged,
+        actionType: (l.actionType as any) || 'DISPENSE',
+        userRole: l.userRole || 'STAFF',
+        details: l.details || 'Clinical inventory adjustment logged.',
+        createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
+        dispensedUnit: l.dispensedUnit as any,
+        dispensedBottles: l.dispensedBottles || 0,
+        dispensedPillsPerBottle: l.dispensedPillsPerBottle || 0,
+        lotNumbers: lotList,
+        isTestMode: l.isTestMode || false,
+      };
+    });
 
     const map = new Map<string, DispenseLog>();
     [...logsFallbackCache, ...dbLogs].forEach((item) => map.set(item.id, item));
@@ -111,6 +137,10 @@ export async function POST(request: Request) {
         user_role: l.userRole,
         details: l.details,
         created_at: l.createdAt,
+        dispensed_unit: l.dispensedUnit,
+        dispensed_bottles: l.dispensedBottles,
+        dispensed_pills_per_bottle: l.dispensedPillsPerBottle,
+        lot_numbers: l.lotNumbers,
       }));
       await supabase.from('dispense_logs').insert(cloudRows);
     } catch (cloudErr) {
@@ -126,6 +156,13 @@ export async function POST(request: Request) {
           itemId: l.itemId || 'unknown',
           quantityChanged: l.quantityChanged,
           actionType: l.actionType as any,
+          userRole: l.userRole || 'STAFF',
+          details: l.details || '',
+          dispensedUnit: l.dispensedUnit || null,
+          dispensedBottles: l.dispensedBottles || 0,
+          dispensedPillsPerBottle: l.dispensedPillsPerBottle || 0,
+          lotNumbers: JSON.stringify(l.lotNumbers || []),
+          isTestMode: l.isTestMode || false,
         },
       }).catch(() => null);
     }
