@@ -33,7 +33,10 @@ import {
   ShieldAlert,
   CheckCircle,
   HardDrive,
-  FileText
+  FileText,
+  ArrowDownRight,
+  ArrowUpRight,
+  User
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
@@ -994,7 +997,8 @@ export default function AdminPortal({
       {/* VIEW 2: USAGE REPORTS & DISPENSE ANALYTICS */}
       {activeTab === 'USAGE' && (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Sub-Tabs Navigation for Usage Section */}
+          <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-amber-600 stroke-[2.5]" />
               <span className="text-sm font-black text-slate-900">Filter Dispense Timeframe:</span>
@@ -1031,81 +1035,248 @@ export default function AdminPortal({
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
-                  <TrendingDown className="w-5 h-5 stroke-[2.5]" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* COLUMN 1: TOP DISPENSED MEDICATIONS (Sorted Bar Chart) */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4 flex flex-col">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+                    <TrendingDown className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">Top Dispensed Medications</h3>
+                    <p className="text-xs text-slate-500 font-medium font-bold">Ranked by total quantity distributed to patients</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">Top Dispensed Medications</h3>
-                  <p className="text-xs text-slate-500 font-medium">Ranked by total quantity distributed to patients</p>
-                </div>
+                <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                  {displayTopDispensed.length} Formulations
+                </span>
               </div>
-              <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                {displayTopDispensed.length} Formulations
-              </span>
+
+              {loadingAnalytics ? (
+                <div className="py-12 flex-1 flex flex-col items-center justify-center space-y-2 text-slate-400">
+                  <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
+                  <span className="text-xs font-bold uppercase">Aggregating records...</span>
+                </div>
+              ) : displayTopDispensed.length === 0 ? (
+                <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
+                  No dispense transactions recorded for this timeframe yet.
+                </div>
+              ) : (
+                <div className="space-y-3.5 pt-2 flex-1">
+                  {displayTopDispensed.map((item, idx) => {
+                    const style = getSpecialtyColor(item.category);
+                    const percentage = Math.min(100, Math.round((item.totalDispensed / maxDispensed) * 100));
+
+                    return (
+                      <div key={idx} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-black">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-mono text-[10px]">
+                              {idx + 1}
+                            </span>
+                            <span className="text-slate-900 font-extrabold select-text">{item.genericName}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase border ${style.badge}`}>
+                              {style.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-rose-600 font-black">
+                              {item.totalDispensed} units dispensed
+                            </span>
+                            {isTestingMode && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDispenseItem(item);
+                                  setNewDispenseAmt(item.totalDispensed);
+                                  setIsDispenseWarningOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
+                                title="Edit total amount dispensed"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200/80">
+                          <div
+                            className="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full transition-all duration-500 shadow-xs"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {loadingAnalytics ? (
-              <div className="py-12 flex flex-col items-center justify-center space-y-2 text-slate-400">
-                <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
-                <span className="text-xs font-bold uppercase">Aggregating dispense records...</span>
-              </div>
-            ) : displayTopDispensed.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs font-bold">
-                No dispense transactions recorded for this timeframe yet.
-              </div>
-            ) : (
-              <div className="space-y-3.5 pt-2">
-                {displayTopDispensed.map((item, idx) => {
-                  const style = getSpecialtyColor(item.category);
-                  const percentage = Math.min(100, Math.round((item.totalDispensed / maxDispensed) * 100));
+            {/* COLUMN 2: DETAILED DISPENSARY AUDIT REPORT (Chrono List sorted by Time) */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4 flex flex-col">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
+                    <FileText className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 font-black">Dispensary Audit Log Report</h3>
+                    <p className="text-xs text-slate-500 font-medium font-bold">Chronological list sorted by transaction time</p>
+                  </div>
+                </div>
 
-                  return (
-                    <div key={idx} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-black">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-mono text-[10px]">
-                            {idx + 1}
-                          </span>
-                          <span className="text-slate-900 font-extrabold select-text">{item.genericName}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase border ${style.badge}`}>
-                            {style.label}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-rose-600 font-black">
-                            {item.totalDispensed} units dispensed
-                          </span>
-                          {isTestingMode && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingDispenseItem(item);
-                                setNewDispenseAmt(item.totalDispensed);
-                                setIsDispenseWarningOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
-                              title="Edit total amount dispensed"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const csvHeaders = ['Date', 'Action', 'Medication Name', 'Lot Number', 'Quantity Changed', 'Staff Role', 'Log Details'];
+                      const dataRows = analyticsLogs
+                        .filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0)
+                        .map((log) => {
+                          const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
+                          const corrItem = items.find((i) => i.id === log.itemId || i.genericName === log.itemGenericName);
+                          let lotStr = 'N/A';
+                          if (corrItem && corrItem.lotNumbers) {
+                            try {
+                              const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
+                              lotStr = Array.isArray(parsed) ? parsed.join(', ') : String(parsed);
+                            } catch (e) {
+                              lotStr = String(corrItem.lotNumbers);
+                            }
+                          }
+                          return [
+                            `"${dateStr}"`,
+                            `"${log.actionType || 'DISPENSE'}"`,
+                            `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
+                            `"${lotStr.replace(/"/g, '""')}"`,
+                            Math.abs(log.quantityChanged),
+                            `"${log.userRole || 'STAFF'}"`,
+                            `"${(log.details || '').replace(/"/g, '""')}"`
+                          ];
+                        });
 
-                      <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200/80">
-                        <div
-                          className="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full transition-all duration-500 shadow-xs"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                      const csv = [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      link.href = URL.createObjectURL(blob);
+                      link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    } catch (e) {
+                      console.error('CSV Dispense download error:', e);
+                    }
+                  }}
+                  className="min-h-[38px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer"
+                  title="Download CSV Dispensary Report with Lot Numbers"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Report</span>
+                </button>
               </div>
-            )}
+
+              {loadingAnalytics ? (
+                <div className="py-12 flex-1 flex flex-col items-center justify-center space-y-2 text-slate-400">
+                  <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
+                  <span className="text-xs font-bold uppercase">Retrieving dispense logs...</span>
+                </div>
+              ) : analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0).length === 0 ? (
+                <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
+                  No dispense activities logged for this timeframe.
+                </div>
+              ) : (
+                <div className="flex-1 overflow-x-auto border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left border-collapse bg-white">
+                    <thead>
+                      <tr className="bg-slate-100/90 text-slate-700 text-[10px] font-black uppercase tracking-wider border-b border-slate-200">
+                        <th className="py-3 px-3">Date Dispensed</th>
+                        <th className="py-3 px-3">Medication</th>
+                        <th className="py-3 px-3 text-center">Lot Numbers</th>
+                        <th className="py-3 px-3 text-center">Qty</th>
+                        <th className="py-3 px-3 text-right">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-800">
+                      {analyticsLogs
+                        .filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0)
+                        .map((log) => {
+                          const quantity = Math.abs(log.quantityChanged);
+                          const dateObj = log.createdAt ? new Date(log.createdAt) : new Date();
+                          const formattedDate = dateObj.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          }) + ' ' + dateObj.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          });
+
+                          // Resolve Lot Numbers of the item in the current state
+                          const corrItem = items.find((i) => i.id === log.itemId || i.genericName === log.itemGenericName);
+                          let lotList: string[] = [];
+                          if (corrItem && corrItem.lotNumbers) {
+                            try {
+                              const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
+                              lotList = Array.isArray(parsed) ? parsed : [String(parsed)];
+                            } catch (e) {
+                              lotList = [String(corrItem.lotNumbers)];
+                            }
+                          }
+
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-2.5 px-3 whitespace-nowrap text-slate-500 font-mono text-[10px]">
+                                {formattedDate}
+                              </td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900 font-extrabold select-text">
+                                {log.itemGenericName || 'General Item'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center select-text">
+                                <div className="flex flex-wrap items-center justify-center gap-1">
+                                  {lotList.length > 0 ? (
+                                    lotList.map((lot, lIdx) => (
+                                      <span key={lIdx} className="font-mono text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1 py-0.5 rounded">
+                                        {lot}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">None</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono font-black text-rose-600 text-sm">
+                                -{quantity}
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // Set detailed view modal
+                                    const modalData = {
+                                      ...log,
+                                      lotNumbers: lotList,
+                                      brandName: corrItem?.brandName || 'N/A',
+                                      dosage: corrItem?.dosage || 'N/A',
+                                      shelfLocation: corrItem?.shelfLocation || 'N/A',
+                                      subUnit: corrItem?.subUnit || 'pills'
+                                    };
+                                    (window as any).showDetailedDispenseModal?.(modalData);
+                                  }}
+                                  className="text-[11px] text-teal-700 hover:text-teal-900 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg font-black cursor-pointer"
+                                >
+                                  View Details
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1601,6 +1772,147 @@ export default function AdminPortal({
           </div>
         </div>
       )}
+      {/* Detailed Dispense Audit Modal Pop-up */}
+      {(() => {
+        // We set up a React state and attach showDetailedDispenseModal callback to window
+        const [detailedModalOpen, setDetailedModalOpen] = useState(false);
+        const [detailedLogItem, setDetailedLogItem] = useState<any>(null);
+
+        useEffect(() => {
+          (window as any).showDetailedDispenseModal = (logData: any) => {
+            setDetailedLogItem(logData);
+            setDetailedModalOpen(true);
+          };
+          return () => {
+            delete (window as any).showDetailedDispenseModal;
+          };
+        }, []);
+
+        if (!detailedModalOpen || !detailedLogItem) return null;
+
+        const dDate = detailedLogItem.createdAt ? new Date(detailedLogItem.createdAt) : new Date();
+        const formattedFullDate = dDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }) + ' • ' + dDate.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/65 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-white border-2 border-teal-600 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-900 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setDetailedModalOpen(false);
+                  setDetailedLogItem(null);
+                }}
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5 stroke-[2.5]" />
+              </button>
+
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 shrink-0 shadow-xs">
+                  <ShieldCheck className="w-7 h-7 stroke-[2.5]" />
+                </div>
+                <div className="space-y-1 min-w-0 flex-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 px-2 py-0.5 rounded-md">
+                    DISPENSE LOG TRANSACTION
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate select-text">
+                    {detailedLogItem.itemGenericName || 'Formulation Record'}
+                  </h3>
+                  <p className="text-xs font-mono font-bold text-slate-400">
+                    ID: {detailedLogItem.id || 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3.5 text-xs font-bold text-slate-700 select-text">
+                <div className="grid grid-cols-2 gap-3.5 border-b border-slate-200/80 pb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Brand Name</span>
+                    <span className="text-slate-900 font-extrabold">{detailedLogItem.brandName || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Dosage Strength</span>
+                    <span className="text-slate-900 font-mono font-extrabold">{detailedLogItem.dosage || 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5 border-b border-slate-200/80 pb-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Category Specialty</span>
+                    <span className="text-slate-900 font-extrabold">{detailedLogItem.shelfLocation || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Quantity Distributed</span>
+                    <span className="text-rose-600 font-mono font-black text-sm">
+                      -{Math.abs(detailedLogItem.quantityChanged)} {detailedLogItem.subUnit || 'units'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-200/80 pb-3">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Lot Numbers Associated</span>
+                  <div className="flex flex-wrap gap-1">
+                    {detailedLogItem.lotNumbers && detailedLogItem.lotNumbers.length > 0 ? (
+                      detailedLogItem.lotNumbers.map((lot: string, idx: number) => (
+                        <span key={idx} className="font-mono text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded">
+                          {lot}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-400 italic font-semibold">No lot numbers registered</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 pb-1">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Dispensed At</span>
+                    <span className="text-slate-900 font-mono text-[11px] flex items-center gap-1.5 pt-0.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      {formattedFullDate}
+                    </span>
+                  </div>
+                  <div className="pt-1">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Supervised By Role</span>
+                    <span className="text-slate-900 flex items-center gap-1.5 pt-0.5 font-extrabold">
+                      <User className="w-3.5 h-3.5 text-slate-500" />
+                      {detailedLogItem.userRole || 'STAFF'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs font-semibold text-amber-950/90 leading-relaxed select-text">
+                <span className="text-[10px] uppercase font-black text-amber-800 tracking-wider block mb-0.5">Compliance Log Details</span>
+                {detailedLogItem.details || 'No additional notes provided for this dispense action.'}
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailedModalOpen(false);
+                    setDetailedLogItem(null);
+                  }}
+                  className="min-h-[42px] px-6 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  Close Details
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
