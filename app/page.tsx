@@ -366,6 +366,8 @@ export default function Home() {
 
   // Delta adjustment for rapid multi-click "spamming" without closure or state batching race conditions
   const handleAdjustStock = (id: string, bottleDelta: number, looseDelta: number) => {
+    const isBottle = bottleDelta !== 0;
+
     // If in Testing Sandbox mode, mutate ONLY in-memory state without database persistence
     if (isTestingMode) {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
@@ -373,54 +375,50 @@ export default function Home() {
       }
       const target = itemsRef.current.find((i) => i.id === id);
       if (target) {
-        const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
-        const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
-        const actualBottleDiff = newBottles - target.bottlesAvailable;
-        const actualLooseDiff = newLoose - target.looseUnitsAvailable;
-        const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
-        if (totalChange !== 0) {
-          const actionType = totalChange < 0 ? 'DISPENSE' : 'RESTOCK';
-          const isBottleChange = actualBottleDiff !== 0;
-          const pillsPerBottle = target.pillsPerBottle || 1;
-          const pillQuantity = isBottleChange ? totalChange * pillsPerBottle : totalChange;
-          const unitLabel = isBottleChange ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-          const verb = totalChange < 0 ? 'Dispensed' : 'Restocked';
+        const pillsPerBottle = target.pillsPerBottle || 1;
+        const currentTotal = calculateTotalUnits(target.bottlesAvailable || 0, pillsPerBottle, target.looseUnitsAvailable || 0);
+        const deltaPills = (bottleDelta * pillsPerBottle) + looseDelta;
+        const newTotal = Math.max(0, currentTotal + deltaPills);
+        const actualPillDiff = newTotal - currentTotal;
+        const { bottles: newBottles, loose: newLoose } = convertTotalUnitsToStock(newTotal, pillsPerBottle);
+
+        if (actualPillDiff !== 0) {
+          const actionType = actualPillDiff < 0 ? 'DISPENSE' : 'RESTOCK';
+          const verb = actualPillDiff < 0 ? 'Dispensed' : 'Restocked';
+          const bottleCount = isBottle ? Math.abs(bottleDelta) : 0;
 
           let itemLots: string[] = [];
           try {
             if (Array.isArray(target.lotNumbers)) itemLots = target.lotNumbers;
             else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-          } catch (e) {}          setTestAuditLogs((prev) => [
+          } catch (e) {}
+
+          setTestAuditLogs((prev) => [
             {
               id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
               itemId: target.id,
               itemGenericName: `${target.genericName} (${target.dosage})`,
-              quantityChanged: pillQuantity,
+              quantityChanged: actualPillDiff,
               actionType,
               userRole: `${actorTag} (TEST)`,
-              details: `[TESTING MODE - NOT REAL]: ${verb} ${isBottleChange ? `${Math.abs(totalChange)} ${target.stockUnit || 'bottle'}(s) (${Math.abs(pillQuantity)} pills)` : `${Math.abs(pillQuantity)} ${unitLabel}`} in test sandbox`,
+              details: `[TESTING MODE - NOT REAL]: ${verb} ${isBottle ? `${bottleCount} ${target.stockUnit || 'bottle'}(s) (${Math.abs(actualPillDiff)} pills)` : `${Math.abs(actualPillDiff)} ${target.subUnit || 'loose units'}`} in test sandbox`,
               isTestMode: true,
               createdAt: new Date().toISOString(),
-              dispensedUnit: isBottleChange ? 'bottle' : 'unit',
-              dispensedBottles: isBottleChange ? Math.abs(totalChange) : 0,
+              dispensedUnit: isBottle ? 'bottle' : 'unit',
+              dispensedBottles: bottleCount,
               dispensedPillsPerBottle: pillsPerBottle,
               lotNumbers: itemLots,
             } as any,
             ...prev,
           ]);
+
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === id ? { ...item, bottlesAvailable: newBottles, looseUnitsAvailable: newLoose } : item
+            )
+          );
         }
       }
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                bottlesAvailable: Math.max(0, item.bottlesAvailable + bottleDelta),
-                looseUnitsAvailable: Math.max(0, item.looseUnitsAvailable + looseDelta),
-              }
-            : item
-        )
-      );
       return;
     }
 
@@ -435,18 +433,16 @@ export default function Home() {
     if (targetIndex === -1) return;
 
     const target = itemsRef.current[targetIndex];
-    const newBottles = Math.max(0, target.bottlesAvailable + bottleDelta);
-    const newLoose = Math.max(0, target.looseUnitsAvailable + looseDelta);
-    const actualBottleDiff = newBottles - target.bottlesAvailable;
-    const actualLooseDiff = newLoose - target.looseUnitsAvailable;
-    const totalChange = actualBottleDiff !== 0 ? actualBottleDiff : actualLooseDiff;
+    const pillsPerBottle = target.pillsPerBottle || 1;
+    const currentTotal = calculateTotalUnits(target.bottlesAvailable || 0, pillsPerBottle, target.looseUnitsAvailable || 0);
+    const deltaPills = (bottleDelta * pillsPerBottle) + looseDelta;
+    const newTotal = Math.max(0, currentTotal + deltaPills);
+    const actualPillDiff = newTotal - currentTotal;
+    const { bottles: newBottles, loose: newLoose } = convertTotalUnitsToStock(newTotal, pillsPerBottle);
 
-    if (totalChange !== 0) {
-      const isBottleChange = actualBottleDiff !== 0;
-      const pillsPerBottle = target.pillsPerBottle || 1;
-      const pillQuantity = isBottleChange ? totalChange * pillsPerBottle : totalChange;
-      const unitType = isBottleChange ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units');
-      const itemKey = `${target.id}_${unitType}`;
+    if (actualPillDiff !== 0) {
+      const unitKey = isBottle ? 'bottle' : 'unit';
+      const itemKey = `${target.id}_${unitKey}`;
 
       let itemLots: string[] = [];
       try {
@@ -458,19 +454,19 @@ export default function Home() {
         auditLogAccumulatorsRef.current[itemKey] = {
           itemId: target.id,
           itemGenericName: `${target.genericName} (${target.dosage})`,
-          quantityChanged: pillQuantity,
-          unitType,
+          quantityChanged: actualPillDiff,
+          unitType: isBottle ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units'),
           newBottles,
           newLoose,
-          isBottle: isBottleChange,
-          bottlesChanged: isBottleChange ? totalChange : 0,
+          isBottle,
+          bottlesChanged: isBottle ? bottleDelta : 0,
         };
       } else {
-        auditLogAccumulatorsRef.current[itemKey].quantityChanged += pillQuantity;
+        auditLogAccumulatorsRef.current[itemKey].quantityChanged += actualPillDiff;
         auditLogAccumulatorsRef.current[itemKey].newBottles = newBottles;
         auditLogAccumulatorsRef.current[itemKey].newLoose = newLoose;
-        if (isBottleChange) {
-          auditLogAccumulatorsRef.current[itemKey].bottlesChanged += totalChange;
+        if (isBottle) {
+          auditLogAccumulatorsRef.current[itemKey].bottlesChanged += bottleDelta;
         }
       }
 
@@ -483,15 +479,16 @@ export default function Home() {
         if (pending && pending.quantityChanged !== 0) {
           const pendingAction = pending.quantityChanged < 0 ? 'DISPENSE' : 'RESTOCK';
           const pendingVerb = pending.quantityChanged < 0 ? 'Dispensed to patient/department' : 'Restocked from clinical supplier';
+          const bottleCount = pending.isBottle ? Math.abs(pending.bottlesChanged) : 0;
 
           recordAuditLog({
             itemId: pending.itemId,
             itemGenericName: pending.itemGenericName,
             quantityChanged: pending.quantityChanged,
             actionType: pendingAction,
-            details: `${pendingVerb}: ${pending.isBottle ? `${Math.abs(pending.bottlesChanged)} ${target.stockUnit || 'bottle'}(s) (${Math.abs(pending.quantityChanged)} pills)` : `${Math.abs(pending.quantityChanged)} ${pending.unitType}`} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
+            details: `${pendingVerb}: ${pending.isBottle ? `${bottleCount} ${target.stockUnit || 'bottle'}(s) (${Math.abs(pending.quantityChanged)} pills)` : `${Math.abs(pending.quantityChanged)} ${pending.unitType}`} [Remaining: ${pending.newBottles} bottles, ${pending.newLoose} loose]`,
             dispensedUnit: pending.isBottle ? 'bottle' : 'unit',
-            dispensedBottles: pending.isBottle ? Math.abs(pending.bottlesChanged) : 0,
+            dispensedBottles: bottleCount,
             dispensedPillsPerBottle: pillsPerBottle,
             lotNumbers: itemLots,
           });
@@ -950,7 +947,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.13 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.14 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

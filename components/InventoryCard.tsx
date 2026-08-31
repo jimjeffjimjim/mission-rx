@@ -119,18 +119,28 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   };
 
   const incrementTotalUnits = () => {
-    const nextTotal = totalUnits + 1;
-    const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
-    onUpdateStock(item.id, bottles, loose);
-    setTotalUnitsInput(nextTotal.toString());
+    if (onAdjustStock) {
+      onAdjustStock(item.id, 0, 1);
+      setTotalUnitsInput((totalUnits + 1).toString());
+    } else {
+      const nextTotal = totalUnits + 1;
+      const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
+      onUpdateStock(item.id, bottles, loose);
+      setTotalUnitsInput(nextTotal.toString());
+    }
   };
 
   const decrementTotalUnits = () => {
     if (totalUnits <= 0) return;
-    const nextTotal = Math.max(0, totalUnits - 1);
-    const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
-    onUpdateStock(item.id, bottles, loose);
-    setTotalUnitsInput(nextTotal.toString());
+    if (onAdjustStock) {
+      onAdjustStock(item.id, 0, -1);
+      setTotalUnitsInput(Math.max(0, totalUnits - 1).toString());
+    } else {
+      const nextTotal = Math.max(0, totalUnits - 1);
+      const { bottles, loose } = convertTotalUnitsToStock(nextTotal, item.pillsPerBottle);
+      onUpdateStock(item.id, bottles, loose);
+      setTotalUnitsInput(nextTotal.toString());
+    }
   };
 
   const commitBottlesInput = () => {

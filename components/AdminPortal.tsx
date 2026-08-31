@@ -814,56 +814,10 @@ export default function AdminPortal({
                               type="button"
                               onClick={() => {
                                 if (item.bottlesAvailable <= 0) return;
-                                const newBottles = item.bottlesAvailable - 1;
-                                const packSize = item.pillsPerBottle || 1;
-                                let itemLots: string[] = [];
-                                try {
-                                  if (Array.isArray(item.lotNumbers)) itemLots = item.lotNumbers;
-                                  else if (typeof item.lotNumbers === 'string') itemLots = item.lotNumbers.startsWith('[') ? JSON.parse(item.lotNumbers) : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-                                } catch (e) {}
-                                if (isTestingMode) {
-                                  setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
-                                  setTestSimulatedLogs((prev) => [
-                                    ...prev,
-                                    { genericName: item.genericName, quantity: packSize, category: item.shelfLocation || 'General Medical' }
-                                  ]);
-                                  if (onAddTestAuditLog) {
-                                    onAddTestAuditLog({
-                                      id: 'test-bottle-' + Date.now(),
-                                      itemId: item.id,
-                                      itemGenericName: item.genericName,
-                                      quantityChanged: packSize,
-                                      actionType: 'DISPENSE',
-                                      userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
-                                      details: `[TESTING MODE - NOT REAL]: Dispensed 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) in test sandbox`,
-                                      isTestMode: true,
-                                      createdAt: new Date().toISOString(),
-                                      dispensedUnit: 'bottle',
-                                      dispensedBottles: 1,
-                                      dispensedPillsPerBottle: packSize,
-                                      lotNumbers: itemLots,
-                                    } as any);
-                                  }
+                                if (onAdjustStock) {
+                                  onAdjustStock(item.id, -1, 0);
                                 } else {
-                                  if (onAdjustStock) onAdjustStock(item.id, -1, 0);
-                                  else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
-                                  fetch('/api/logs', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      itemId: item.id,
-                                      itemGenericName: item.genericName,
-                                      quantityChanged: packSize,
-                                      actionType: 'DISPENSE',
-                                      userRole: userRole || 'ADMIN',
-                                      details: `Dispensed 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) via Sealed Packs quick-dispense.`,
-                                      createdAt: new Date().toISOString(),
-                                      dispensedUnit: 'bottle',
-                                      dispensedBottles: 1,
-                                      dispensedPillsPerBottle: packSize,
-                                      lotNumbers: itemLots,
-                                    }),
-                                  }).catch(() => null);
+                                  onUpdateStock(item.id, item.bottlesAvailable - 1, item.looseUnitsAvailable);
                                 }
                               }}
                               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
@@ -921,29 +875,10 @@ export default function AdminPortal({
                                   type="button"
                                   onClick={() => {
                                     setBottleMenuItemId(null);
-                                    const newBottles = item.bottlesAvailable + 1;
-                                    const packSize = item.pillsPerBottle || 1;
-                                    if (isTestingMode) {
-                                      setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles: newBottles, loose: item.looseUnitsAvailable } }));
+                                    if (onAdjustStock) {
+                                      onAdjustStock(item.id, 1, 0);
                                     } else {
-                                      if (onAdjustStock) onAdjustStock(item.id, 1, 0);
-                                      else onUpdateStock(item.id, newBottles, item.looseUnitsAvailable);
-                                      fetch('/api/logs', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          itemId: item.id,
-                                          itemGenericName: item.genericName,
-                                          quantityChanged: -packSize,
-                                          actionType: 'RESTOCK',
-                                          userRole: userRole || 'ADMIN',
-                                          details: `Restocked 1 ${item.stockUnit || 'bottle'} (${packSize} ${item.subUnit || 'pills'}) into sealed inventory.`,
-                                          createdAt: new Date().toISOString(),
-                                          dispensedUnit: 'bottle',
-                                          dispensedBottles: 1,
-                                          dispensedPillsPerBottle: packSize,
-                                        }),
-                                      }).catch(() => null);
+                                      onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable);
                                     }
                                   }}
                                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group cursor-pointer"
@@ -993,53 +928,13 @@ export default function AdminPortal({
                               type="button"
                               onClick={() => {
                                 const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
-                                if (currentTotal > 0) {
+                                if (currentTotal <= 0) return;
+                                if (onAdjustStock) {
+                                  onAdjustStock(item.id, 0, -1);
+                                } else {
                                   const newTotal = currentTotal - 1;
                                   const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
-                                  let itemLots: string[] = [];
-                                  try {
-                                    if (Array.isArray(item.lotNumbers)) itemLots = item.lotNumbers;
-                                    else if (typeof item.lotNumbers === 'string') itemLots = item.lotNumbers.startsWith('[') ? JSON.parse(item.lotNumbers) : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-                                  } catch (e) {}
-                                  if (isTestingMode) {
-                                    setTestItemsMap((prev) => ({ ...prev, [item.id]: { bottles, loose } }));
-                                    setTestSimulatedLogs((prev) => [
-                                      ...prev,
-                                      { genericName: item.genericName, quantity: 1, category: item.shelfLocation || 'General Medical' }
-                                    ]);
-                                    if (onAddTestAuditLog) {
-                                      onAddTestAuditLog({
-                                        id: 'test-unit-' + Date.now(),
-                                        itemId: item.id,
-                                        itemGenericName: item.genericName,
-                                        quantityChanged: 1,
-                                        actionType: 'DISPENSE',
-                                        userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
-                                        details: `[TESTING MODE - NOT REAL]: Dispensed 1 ${item.subUnit || 'unit'} in test sandbox`,
-                                        isTestMode: true,
-                                        createdAt: new Date().toISOString(),
-                                        dispensedUnit: 'unit',
-                                        lotNumbers: itemLots,
-                                      } as any);
-                                    }
-                                  } else {
-                                    onUpdateStock(item.id, bottles, loose);
-                                    fetch('/api/logs', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        itemId: item.id,
-                                        itemGenericName: item.genericName,
-                                        quantityChanged: 1,
-                                        actionType: 'DISPENSE',
-                                        userRole: userRole || 'ADMIN',
-                                        details: `Dispensed 1 ${item.subUnit || 'unit'} via directly dispense minus button.`,
-                                        createdAt: new Date().toISOString(),
-                                        dispensedUnit: 'unit',
-                                        lotNumbers: itemLots,
-                                      }),
-                                    }).catch(() => null);
-                                  }
+                                  onUpdateStock(item.id, bottles, loose);
                                 }
                               }}
                               className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
@@ -1377,10 +1272,12 @@ export default function AdminPortal({
                             hour12: true
                           });
 
-                          // Resolve Lot Numbers of the item in the current state
+                          // Resolve Lot Numbers: prioritize lotNumbers on the log record, fall back to current item
                           const corrItem = items.find((i) => i.id === log.itemId || i.genericName === log.itemGenericName);
                           let lotList: string[] = [];
-                          if (corrItem && corrItem.lotNumbers) {
+                          if (log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0) {
+                            lotList = log.lotNumbers;
+                          } else if (corrItem && corrItem.lotNumbers) {
                             try {
                               const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
                               lotList = Array.isArray(parsed) ? parsed : [String(parsed)];
