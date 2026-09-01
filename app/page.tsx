@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import FilterBar from '@/components/FilterBar';
 import InventoryCard from '@/components/InventoryCard';
 import ItemEditModal from '@/components/ItemEditModal';
+import EquipmentEditModal from '@/components/EquipmentEditModal';
 import AdminPortal from '@/components/AdminPortal';
 import AuditLogModal from '@/components/AuditLogModal';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
@@ -30,6 +31,7 @@ export default function Home() {
   // Master Autofill & Modal states
   const [isAutofillEnabled, setIsAutofillEnabled] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
@@ -721,7 +723,21 @@ export default function Home() {
     setIsEditModalOpen(true);
   };
 
+  const openCreateEquipmentModal = () => {
+    setActiveItem(null);
+    setIsEquipmentModalOpen(true);
+  };
+
+  const openEditEquipmentModal = (item: InventoryItem) => {
+    setActiveItem(item);
+    setIsEquipmentModalOpen(true);
+  };
+
   const openEditModal = (item: InventoryItem) => {
+    if (item.shelfLocation === 'Supplies' || item.itemType === 'Supply') {
+      openEditEquipmentModal(item);
+      return;
+    }
     setActiveItem(item);
     setIsEditModalOpen(true);
   };
@@ -866,6 +882,8 @@ export default function Home() {
           onEditItem={openEditModal}
           onDeleteItem={handleDeleteItem}
           onOpenCreateModal={openCreateModal}
+          onOpenCreateEquipmentModal={openCreateEquipmentModal}
+          onEditEquipmentItem={openEditEquipmentModal}
           onOpenAuditLogs={(query?: string) => {
             setAuditSearchQuery(query || '');
             setIsAuditModalOpen(true);
@@ -960,6 +978,15 @@ export default function Home() {
         onSave={handleSaveItem}
         onDelete={handleDeleteItem}
         isAutofillEnabled={isAutofillEnabled}
+      />
+
+      {/* Medical Equipment & Supplies Create & Edit Modal Sheet */}
+      <EquipmentEditModal
+        isOpen={isEquipmentModalOpen}
+        onClose={() => setIsEquipmentModalOpen(false)}
+        item={activeItem}
+        onSave={handleSaveItem}
+        onDelete={handleDeleteItem}
       />
 
       {/* Footer Legal & Compliance Navigation Bar */}

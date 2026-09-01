@@ -53,6 +53,8 @@ interface AdminPortalProps {
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
   onOpenCreateModal: (defaultItem?: Partial<InventoryItem>) => void;
+  onOpenCreateEquipmentModal?: () => void;
+  onEditEquipmentItem?: (item: InventoryItem) => void;
   onOpenAuditLogs?: (searchQuery?: string) => void;
   onRefreshData?: () => void;
   userRole?: string;
@@ -66,6 +68,8 @@ export default function AdminPortal({
   onEditItem,
   onDeleteItem,
   onOpenCreateModal,
+  onOpenCreateEquipmentModal,
+  onEditEquipmentItem,
   onOpenAuditLogs,
   onRefreshData,
   userRole = 'ADMIN',
@@ -509,6 +513,10 @@ export default function AdminPortal({
   const equipmentTotalCount = displayItems.filter((i) => i.shelfLocation === 'Supplies' || i.itemType === 'Supply').length;
 
   const handleOpenCreateEquipment = () => {
+    if (onOpenCreateEquipmentModal) {
+      onOpenCreateEquipmentModal();
+      return;
+    }
     onOpenCreateModal({
       genericName: '',
       brandName: '',
@@ -1381,7 +1389,13 @@ export default function AdminPortal({
                             {/* Edit Item */}
                             <button
                               type="button"
-                              onClick={() => onEditItem(item)}
+                              onClick={() => {
+                                if (onEditEquipmentItem) {
+                                  onEditEquipmentItem(item);
+                                } else {
+                                  onEditItem(item);
+                                }
+                              }}
                               className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
                               title="Edit Equipment Details"
                             >
