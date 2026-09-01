@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical, FileSpreadsheet } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
@@ -186,6 +186,122 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
     }
   };
 
+  const handleExportExcel = () => {
+    try {
+      const escapeXml = (str: unknown) => {
+        if (str === null || str === undefined) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+      };
+
+      const rowsXml = filteredLogs.map((l) => {
+        const safeRole = l.isTestMode ? `${l.userRole || 'STAFF'} [TEST MODE]` : (l.userRole || 'STAFF');
+        const lots = Array.isArray(l.lotNumbers) ? l.lotNumbers.join(', ') : (l.lotNumbers || 'N/A');
+        const timestamp = l.createdAt ? formatLogDate(l.createdAt) : 'N/A';
+        const actionType = l.actionType || 'LOG';
+        const itemName = l.itemGenericName || 'N/A';
+        const qty = Number(l.quantityChanged) || 0;
+        const details = l.details || '';
+
+        return `
+    <Row ss:Height="20">
+      <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(timestamp)}</Data></Cell>
+      <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(actionType)}</Data></Cell>
+      <Cell ss:StyleID="DataBold"><Data ss:Type="String">${escapeXml(itemName)}</Data></Cell>
+      <Cell ss:StyleID="Number"><Data ss:Type="Number">${qty}</Data></Cell>
+      <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(lots)}</Data></Cell>
+      <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(safeRole)}</Data></Cell>
+      <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(details)}</Data></Cell>
+    </Row>`;
+      }).join('');
+
+      const excelXml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11"/>
+   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#042F2E"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Data">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="DataBold">
+   <Font ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="DataCenter">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Number">
+   <Font ss:Size="10" ss:Color="#0F172A" ss:Bold="1"/>
+   <NumberFormat ss:Format="#,##0"/>
+   <Alignment ss:Horizontal="Right" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Audit Log">
+  <Table>
+   <Column ss:Width="140"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="220"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="300"/>
+   <Row ss:Height="26" ss:StyleID="Header">
+    <Cell><Data ss:Type="String">Timestamp</Data></Cell>
+    <Cell><Data ss:Type="String">Action Type</Data></Cell>
+    <Cell><Data ss:Type="String">Medication / Item</Data></Cell>
+    <Cell><Data ss:Type="String">Quantity Changed</Data></Cell>
+    <Cell><Data ss:Type="String">Lot / Serial Numbers</Data></Cell>
+    <Cell><Data ss:Type="String">User Role</Data></Cell>
+    <Cell><Data ss:Type="String">Audit Transaction Details</Data></Cell>
+   </Row>
+   ${rowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+      const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `mission_rx_audit_log_${new Date().toISOString().slice(0, 10)}.xls`);
+      document.body.appendChild(link);
+      link.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Failed to export Excel spreadsheet:', err);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -220,13 +336,26 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
               </button>
             )}
 
+            {/* Download Excel Button */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="min-h-[42px] px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all touch-manipulation active:scale-95 flex items-center gap-2 cursor-pointer border border-emerald-600"
+              title="Download formatted Excel Spreadsheet (.xls)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-200 stroke-[2.5]" />
+              <span>Download Excel</span>
+            </button>
+
+            {/* Export CSV Button */}
             <button
               type="button"
               onClick={handleExportCSV}
-              className="min-h-[42px] px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all touch-manipulation active:scale-95 flex items-center gap-2 cursor-pointer"
+              className="min-h-[42px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all touch-manipulation active:scale-95 flex items-center gap-2 cursor-pointer"
+              title="Export standard CSV report"
             >
               <Download className="w-4 h-4 text-amber-400 stroke-[2.5]" />
-              <span>Export CSV Report</span>
+              <span>Export CSV</span>
             </button>
 
             <button

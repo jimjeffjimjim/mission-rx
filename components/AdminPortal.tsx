@@ -1681,60 +1681,167 @@ export default function AdminPortal({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      const csvHeaders = ['Date', 'Action', 'Medication Name', 'Lot Number', 'Quantity Changed', 'Staff Role', 'Log Details'];
-                      const dataRows = analyticsLogs
-                        .filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'UNDISPENSE' || log.actionType === 'RESTOCK' || log.quantityChanged !== 0)
-                        .map((log) => {
-                          const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
-                          const logName = (log.itemGenericName || '').toLowerCase();
-                          const corrItem = items.find((i) =>
-                            Boolean((log.itemId && i.id === log.itemId) ||
-                            (logName && i.genericName.toLowerCase() === logName) ||
-                            (logName && logName.startsWith(i.genericName.toLowerCase())))
-                          );
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const escapeXml = (str: unknown) => {
+                          if (str === null || str === undefined) return '';
+                          return String(str)
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&apos;');
+                        };
 
-                          const lotStr = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
+                        const relevantLogs = analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0);
+                        const rowsXml = relevantLogs.map(log => {
+                          const lotArr = parseLotNumbers(log.lotNumbers);
+                          const lotStr = lotArr.length > 0 ? lotArr.join(', ') : 'N/A';
+                          const signedQty = log.actionType === 'DISPENSE' 
+                            ? `-${Math.abs(Number(log.quantityChanged) || 0)}` 
+                            : log.actionType === 'UNDISPENSE' 
+                            ? `+${Math.abs(Number(log.quantityChanged) || 0)} (Undispensed)` 
+                            : `+${Math.abs(Number(log.quantityChanged) || 0)} (Restocked)`;
+                          const timeStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
 
-                          const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-                          const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-                          const actionLabel = isUndispense ? 'UNDISPENSE' : isRestock ? 'RESTOCK' : 'DISPENSE';
-                          const signedQty = (isUndispense || isRestock) ? `+${Math.abs(log.quantityChanged)}` : `-${Math.abs(log.quantityChanged)}`;
+                          return `
+                          <Row ss:Height="20">
+                            <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(timeStr)}</Data></Cell>
+                            <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(log.actionType)}</Data></Cell>
+                            <Cell ss:StyleID="DataBold"><Data ss:Type="String">${escapeXml(log.itemGenericName || 'Medication')}</Data></Cell>
+                            <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(lotStr)}</Data></Cell>
+                            <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(signedQty)}</Data></Cell>
+                            <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(log.userRole || 'STAFF')}</Data></Cell>
+                            <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(log.details || '')}</Data></Cell>
+                          </Row>`;
+                        }).join('');
 
-                          return [
-                            `"${dateStr}"`,
-                            `"${actionLabel}"`,
-                            `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
-                            `"${lotStr.replace(/"/g, '""')}"`,
-                            `"${signedQty}"`,
-                            `"${(log.userRole || 'STAFF').replace(/"/g, '""')}"`,
-                            `"${(log.details || '').replace(/"/g, '""')}"`
-                          ];
-                        });
+                        const excelXml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11"/>
+   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="Data">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="DataBold">
+   <Font ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="DataCenter">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Dispensary Report">
+  <Table>
+   <Column ss:Width="140"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="220"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="130"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="300"/>
+   <Row ss:Height="26" ss:StyleID="Header">
+    <Cell><Data ss:Type="String">Timestamp</Data></Cell>
+    <Cell><Data ss:Type="String">Action</Data></Cell>
+    <Cell><Data ss:Type="String">Medication / Item</Data></Cell>
+    <Cell><Data ss:Type="String">Lot / Serial #</Data></Cell>
+    <Cell><Data ss:Type="String">Quantity Delta</Data></Cell>
+    <Cell><Data ss:Type="String">User Role</Data></Cell>
+    <Cell><Data ss:Type="String">Audit Details</Data></Cell>
+   </Row>
+   ${rowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
 
-                      const csv = '\uFEFF' + [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
-                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`);
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    } catch (e) {
-                      console.error('CSV Dispense download error:', e);
-                    }
-                  }}
-                  className="min-h-[38px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer"
-                  title="Download CSV Dispensary Report with Lot Numbers"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Report</span>
-                </button>
+                        const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.xls`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      } catch (e) {
+                        console.error('Excel Dispensary Report download error:', e);
+                      }
+                    }}
+                    className="min-h-[38px] px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer border border-emerald-600"
+                    title="Download Excel Dispensary Report (.xls)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Download Excel</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const csvHeaders = ['Date', 'Action', 'Medication Name', 'Lot Number', 'Quantity Changed', 'Staff Role', 'Log Details'];
+                        const dataRows = analyticsLogs
+                          .filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'UNDISPENSE' || log.actionType === 'RESTOCK' || log.quantityChanged !== 0)
+                          .map((log) => {
+                            const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
+                            const logName = (log.itemGenericName || '').toLowerCase();
+                            const corrItem = items.find((i) =>
+                              Boolean((log.itemId && i.id === log.itemId) ||
+                              (logName && i.genericName.toLowerCase() === logName) ||
+                              (logName && logName.startsWith(i.genericName.toLowerCase())))
+                            );
+
+                            const lotStr = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
+
+                            const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
+                            const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
+                            const actionLabel = isUndispense ? 'UNDISPENSE' : isRestock ? 'RESTOCK' : 'DISPENSE';
+                            const signedQty = (isUndispense || isRestock) ? `+${Math.abs(log.quantityChanged)}` : `-${Math.abs(log.quantityChanged)}`;
+
+                            return [
+                              `"${dateStr}"`,
+                              `"${actionLabel}"`,
+                              `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
+                              `"${lotStr.replace(/"/g, '""')}"`,
+                              `"${signedQty}"`,
+                              `"${(log.userRole || 'STAFF').replace(/"/g, '""')}"`,
+                              `"${(log.details || '').replace(/"/g, '""')}"`
+                            ];
+                          });
+
+                        const csv = '\uFEFF' + [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      } catch (e) {
+                        console.error('CSV Dispense download error:', e);
+                      }
+                    }}
+                    className="min-h-[38px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer"
+                    title="Download CSV Dispensary Report with Lot Numbers"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download CSV</span>
+                  </button>
+                </div>
               </div>
 
               {loadingAnalytics ? (
