@@ -34,3 +34,19 @@ export function convertTotalUnitsToStock(totalUnits: number, packSize: number): 
 
   return { bottles, loose };
 }
+
+/**
+ * Generates the standardized canonical display name for a formulary item,
+ * preventing duplicate keys or split names (e.g. "Clotrimazole Cream" vs "Clotrimazole Cream (1oz, cream)").
+ */
+export function getStandardItemName(genericName?: string | null, dosage?: string | null): string {
+  const gName = (genericName || '').trim();
+  const dStr = (dosage || '').trim();
+  if (!dStr || dStr.toLowerCase() === 'n/a') {
+    return gName || 'Medication Formulation';
+  }
+  if (gName.toLowerCase().includes(dStr.toLowerCase())) {
+    return gName;
+  }
+  return `${gName} (${dStr})`;
+}

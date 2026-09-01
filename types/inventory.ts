@@ -25,7 +25,7 @@ export interface DispenseLog {
   itemId?: string;
   itemGenericName?: string;
   quantityChanged: number;
-  actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
+  actionType: 'DISPENSE' | 'RESTOCK' | 'UNDISPENSE' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
   userRole?: string;
   details?: string;
   isTestMode?: boolean;

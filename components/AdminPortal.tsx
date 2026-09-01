@@ -1241,7 +1241,7 @@ export default function AdminPortal({
                   <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
                   <span className="text-xs font-bold uppercase">Retrieving dispense logs...</span>
                 </div>
-              ) : analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0).length === 0 ? (
+              ) : analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0).length === 0 ? (
                 <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
                   No dispense activities logged for this timeframe.
                 </div>
@@ -1252,6 +1252,7 @@ export default function AdminPortal({
                       <tr className="bg-slate-100/90 text-slate-700 text-[10px] font-black uppercase tracking-wider border-b border-slate-200">
                         <th className="py-3 px-3">Date Dispensed</th>
                         <th className="py-3 px-3">Medication</th>
+                        <th className="py-3 px-3 text-center">Action</th>
                         <th className="py-3 px-3 text-center">Lot Numbers</th>
                         <th className="py-3 px-3 text-center">Qty</th>
                         <th className="py-3 px-3 text-right">Details</th>
@@ -1259,7 +1260,7 @@ export default function AdminPortal({
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-800">
                       {analyticsLogs
-                        .filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0)
+                        .filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0)
                         .map((log) => {
                           const quantity = Math.abs(log.quantityChanged);
                           const dateObj = log.createdAt ? new Date(log.createdAt) : new Date();
@@ -1272,8 +1273,16 @@ export default function AdminPortal({
                             hour12: true
                           });
 
-                          // Resolve Lot Numbers: prioritize lotNumbers on the log record, fall back to current item
-                          const corrItem = items.find((i) => i.id === log.itemId || i.genericName === log.itemGenericName);
+                          const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+
+                          // Resolve corresponding item
+                          const logName = (log.itemGenericName || '').toLowerCase();
+                          const corrItem = items.find((i) =>
+                            Boolean((log.itemId && i.id === log.itemId) ||
+                            (logName && i.genericName.toLowerCase() === logName) ||
+                            (logName && logName.startsWith(i.genericName.toLowerCase())))
+                          );
+
                           let lotList: string[] = [];
                           if (log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0) {
                             lotList = log.lotNumbers;
@@ -1294,6 +1303,15 @@ export default function AdminPortal({
                               <td className="py-2.5 px-3 font-bold text-slate-900 font-extrabold select-text">
                                 {log.itemGenericName || 'General Item'}
                               </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className={`font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                                  isRestock
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                    : 'bg-rose-50 text-rose-700 border-rose-300'
+                                }`}>
+                                  {isRestock ? 'UNDISPENSE' : 'DISPENSE'}
+                                </span>
+                              </td>
                               <td className="py-2.5 px-3 text-center select-text">
                                 <div className="flex flex-wrap items-center justify-center gap-1">
                                   {lotList.length > 0 ? (
@@ -1307,14 +1325,25 @@ export default function AdminPortal({
                                   )}
                                 </div>
                               </td>
-                              <td className="py-2.5 px-3 text-center font-mono font-black text-rose-600 text-sm">
-                                {log.dispensedUnit === 'bottle' ? (
-                                  <span className="flex flex-col items-center">
-                                    <span>-{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
-                                    <span className="text-[9px] font-bold text-slate-400">({quantity} {corrItem?.subUnit || 'pills'})</span>
-                                  </span>
+                              <td className="py-2.5 px-3 text-center font-mono font-black text-sm">
+                                {isRestock ? (
+                                  log.dispensedUnit === 'bottle' ? (
+                                    <span className="flex flex-col items-center text-emerald-600">
+                                      <span>+{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
+                                      <span className="text-[9px] font-bold text-emerald-500/80">({quantity} {corrItem?.subUnit || 'pills'})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-600">+{quantity}</span>
+                                  )
                                 ) : (
-                                  <span>-{quantity}</span>
+                                  log.dispensedUnit === 'bottle' ? (
+                                    <span className="flex flex-col items-center text-rose-600">
+                                      <span>-{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
+                                      <span className="text-[9px] font-bold text-slate-400">({quantity} {corrItem?.subUnit || 'pills'})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-rose-600">-{quantity}</span>
+                                  )
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-right whitespace-nowrap">
@@ -1323,6 +1352,7 @@ export default function AdminPortal({
                                   onClick={() => {
                                     const modalData = {
                                       ...log,
+                                      isRestock,
                                       lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,
                                       brandName: corrItem?.brandName || 'N/A',
                                       dosage: corrItem?.dosage || 'N/A',
@@ -1674,17 +1704,19 @@ export default function AdminPortal({
                           else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
                         } catch (e) {}
 
+                        const fullName = dispenseItem.dosage ? `${dispenseItem.genericName} (${dispenseItem.dosage})` : dispenseItem.genericName;
+
                         if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
                           setTestSimulatedLogs((prev) => [
                             ...prev,
-                            { genericName: dispenseItem.genericName, quantity: pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
+                            { genericName: fullName, quantity: pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
                           if (onAddTestAuditLog) {
                             onAddTestAuditLog({
                               id: 'test-dispense-' + Date.now(),
                               itemId: dispenseItem.id,
-                              itemGenericName: dispenseItem.genericName,
+                              itemGenericName: fullName,
                               quantityChanged: pillAmount,
                               actionType: 'DISPENSE',
                               userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
@@ -1704,7 +1736,7 @@ export default function AdminPortal({
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               itemId: dispenseItem.id,
-                              itemGenericName: dispenseItem.genericName,
+                              itemGenericName: fullName,
                               quantityChanged: pillAmount,
                               actionType: 'DISPENSE',
                               userRole: userRole || 'ADMIN',
@@ -1775,18 +1807,20 @@ export default function AdminPortal({
                           else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
                         } catch (e) {}
 
+                        const fullName = dispenseItem.dosage ? `${dispenseItem.genericName} (${dispenseItem.dosage})` : dispenseItem.genericName;
+
                         if (isTestingMode) {
                           setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
                           setTestSimulatedLogs((prev) => [
                             ...prev,
-                            { genericName: dispenseItem.genericName, quantity: -pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
+                            { genericName: fullName, quantity: -pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
                           ]);
                           if (onAddTestAuditLog) {
                             onAddTestAuditLog({
                               id: 'test-undispense-' + Date.now(),
                               itemId: dispenseItem.id,
-                              itemGenericName: dispenseItem.genericName,
-                              quantityChanged: -pillAmount,
+                              itemGenericName: fullName,
+                              quantityChanged: pillAmount,
                               actionType: 'RESTOCK',
                               userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
                               details: `[TESTING MODE - NOT REAL]: Undispensed / Restocked ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} in test sandbox`,
@@ -1805,9 +1839,9 @@ export default function AdminPortal({
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               itemId: dispenseItem.id,
-                              itemGenericName: dispenseItem.genericName,
-                              quantityChanged: -pillAmount,
-                              actionType: 'DISPENSE',
+                              itemGenericName: fullName,
+                              quantityChanged: pillAmount,
+                              actionType: 'RESTOCK',
                               userRole: userRole || 'ADMIN',
                               details: `Undispensed / Restocked ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} back into inventory.`,
                               createdAt: new Date().toISOString(),
@@ -1913,8 +1947,12 @@ export default function AdminPortal({
                   <ShieldCheck className="w-7 h-7 stroke-[2.5]" />
                 </div>
                 <div className="space-y-1 min-w-0 flex-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 px-2 py-0.5 rounded-md">
-                    DISPENSE LOG TRANSACTION
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                    detailedLogItem.isRestock
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-rose-50 text-rose-700 border-rose-300'
+                  }`}>
+                    {detailedLogItem.isRestock ? 'UNDISPENSE / RESTOCK TRANSACTION' : 'DISPENSE LOG TRANSACTION'}
                   </span>
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate select-text">
                     {detailedLogItem.itemGenericName || 'Formulation Record'}
@@ -1941,12 +1979,14 @@ export default function AdminPortal({
                     <span className="text-slate-900 font-extrabold">{detailedLogItem.shelfLocation || 'N/A'}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">Quantity Distributed</span>
-                    <span className="text-rose-600 font-mono font-black text-sm">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-0.5">
+                      {detailedLogItem.isRestock ? 'Quantity Returned' : 'Quantity Distributed'}
+                    </span>
+                    <span className={`font-mono font-black text-sm ${detailedLogItem.isRestock ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {detailedLogItem.dispensedUnit === 'bottle' ? (
-                        <>-{detailedLogItem.dispensedBottles || 1} bottle ({Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'pills'})</>
+                        <>{detailedLogItem.isRestock ? '+' : '-'}{detailedLogItem.dispensedBottles || 1} bottle ({Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'pills'})</>
                       ) : (
-                        <>-{Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'units'}</>
+                        <>{detailedLogItem.isRestock ? '+' : '-'}{Math.abs(detailedLogItem.quantityChanged || 0)} {detailedLogItem.subUnit || 'units'}</>
                       )}
                     </span>
                   </div>

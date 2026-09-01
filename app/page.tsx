@@ -14,7 +14,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName } from '@/lib/stockMath';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -393,11 +393,13 @@ export default function Home() {
             else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
           } catch (e) {}
 
+          const canonicalName = getStandardItemName(target.genericName, target.dosage);
+
           setTestAuditLogs((prev) => [
             {
               id: 'test-log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
               itemId: target.id,
-              itemGenericName: `${target.genericName} (${target.dosage})`,
+              itemGenericName: canonicalName,
               quantityChanged: actualPillDiff,
               actionType,
               userRole: `${actorTag} (TEST)`,
@@ -443,6 +445,7 @@ export default function Home() {
     if (actualPillDiff !== 0) {
       const unitKey = isBottle ? 'bottle' : 'unit';
       const itemKey = `${target.id}_${unitKey}`;
+      const canonicalName = getStandardItemName(target.genericName, target.dosage);
 
       let itemLots: string[] = [];
       try {
@@ -453,7 +456,7 @@ export default function Home() {
       if (!auditLogAccumulatorsRef.current[itemKey]) {
         auditLogAccumulatorsRef.current[itemKey] = {
           itemId: target.id,
-          itemGenericName: `${target.genericName} (${target.dosage})`,
+          itemGenericName: canonicalName,
           quantityChanged: actualPillDiff,
           unitType: isBottle ? (target.stockUnit || 'bottles') : (target.subUnit || 'loose units'),
           newBottles,
@@ -529,15 +532,16 @@ export default function Home() {
         setItems((prev) =>
           prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i))
         );
+        const canonicalName = getStandardItemName(itemData.genericName, itemData.dosage);
         setTestAuditLogs((prev) => [
           {
             id: 'test-edit-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
             itemId: itemData.id || 'test-item',
-            itemGenericName: itemData.genericName || 'Medication',
+            itemGenericName: canonicalName,
             quantityChanged: 0,
             actionType: 'EDIT',
             userRole: `${actorTag} (TEST)`,
-            details: `[TESTING MODE - NOT REAL]: Updated medication details for ${itemData.genericName} in sandbox`,
+            details: `[TESTING MODE - NOT REAL]: Updated medication details for ${canonicalName} in sandbox`,
             isTestMode: true,
             createdAt: new Date().toISOString(),
           },
@@ -564,15 +568,16 @@ export default function Home() {
           updatedAt: new Date().toISOString(),
         };
         setItems((prev) => [...prev, newItem]);
+        const canonicalName = getStandardItemName(newItem.genericName, newItem.dosage);
         setTestAuditLogs((prev) => [
           {
             id: 'test-create-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
             itemId: newItem.id,
-            itemGenericName: newItem.genericName,
+            itemGenericName: canonicalName,
             quantityChanged: newItem.bottlesAvailable,
             actionType: 'CREATE',
             userRole: `${actorTag} (TEST)`,
-            details: `[TESTING MODE - NOT REAL]: Created new test medication ${newItem.genericName}`,
+            details: `[TESTING MODE - NOT REAL]: Created new test medication ${canonicalName}`,
             isTestMode: true,
             createdAt: new Date().toISOString(),
           },
@@ -591,12 +596,14 @@ export default function Home() {
         return updated;
       });
 
+      const canonicalName = getStandardItemName(itemData.genericName, itemData.dosage);
+
       recordAuditLog({
         itemId: itemData.id,
-        itemGenericName: itemData.genericName || 'Medication Formulation',
+        itemGenericName: canonicalName,
         quantityChanged: 0,
         actionType: 'EDIT',
-        details: `Updated formulation details, dosage strength (${itemData.dosage}), or lot tracking history.`,
+        details: `Updated formulation details, dosage strength (${itemData.dosage || 'N/A'}), or lot tracking history.`,
       });
 
       try {
@@ -623,9 +630,11 @@ export default function Home() {
             return updated;
           });
 
+          const canonicalName = getStandardItemName(newItem.genericName, newItem.dosage);
+
           recordAuditLog({
             itemId: newItem.id || 'new-item',
-            itemGenericName: `${newItem.genericName} (${newItem.dosage})`,
+            itemGenericName: canonicalName,
             quantityChanged: Number(newItem.bottlesAvailable) || 0,
             actionType: 'CREATE',
             details: `Created new clinic drug formulation in ${newItem.shelfLocation || 'General Medical'}.`,
@@ -650,15 +659,16 @@ export default function Home() {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
       const target = itemsRef.current.find((i) => i.id === id);
+      const canonicalName = getStandardItemName(target?.genericName, target?.dosage);
       setTestAuditLogs((prev) => [
         {
           id: 'test-del-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
           itemId: id,
-          itemGenericName: target?.genericName || 'Medication Item',
+          itemGenericName: canonicalName,
           quantityChanged: 0,
           actionType: 'DELETE',
           userRole: `${actorTag} (TEST)`,
-          details: `[TESTING MODE - NOT REAL]: Removed ${target?.genericName || 'medication'} in test sandbox`,
+          details: `[TESTING MODE - NOT REAL]: Removed ${canonicalName} in test sandbox`,
           isTestMode: true,
           createdAt: new Date().toISOString(),
         },
@@ -676,9 +686,10 @@ export default function Home() {
     });
 
     if (target) {
+      const canonicalName = getStandardItemName(target.genericName, target.dosage);
       recordAuditLog({
         itemId: id,
-        itemGenericName: target.genericName || 'Removed Medication',
+        itemGenericName: canonicalName,
         quantityChanged: -target.bottlesAvailable,
         actionType: 'DELETE',
         details: `Permanently retired drug formulation from active dispensary catalog.`,
@@ -947,7 +958,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.14 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.15 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

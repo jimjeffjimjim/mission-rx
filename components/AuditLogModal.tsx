@@ -287,15 +287,17 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
           ) : (
             filteredLogs.map((log, index) => {
               const qtyNum = Number(log.quantityChanged) || 0;
-              const isNegative = qtyNum < 0 || log.actionType === 'DISPENSE';
-              const isPositive = qtyNum > 0 || log.actionType === 'RESTOCK';
+              const isDispense = log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK');
+              const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+              const isPositive = isRestock && !isDispense;
+              const isNegative = isDispense;
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
-              if (log.actionType === 'DISPENSE') badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
-              if (log.actionType === 'RESTOCK') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
-              if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
-              if (log.actionType === 'CREATE') badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
-              if (log.actionType === 'DELETE') badgeStyle = 'bg-red-50 text-red-800 border-red-300';
+              if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
+              else if (isRestock) badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+              else if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+              else if (log.actionType === 'CREATE') badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
+              else if (log.actionType === 'DELETE') badgeStyle = 'bg-red-50 text-red-800 border-red-300';
 
               const formattedDate = formatLogDate(log.createdAt);
               const isTestRecord = Boolean(
@@ -393,7 +395,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                             </span>
                           </span>
                         ) : (
-                          <span>{isPositive ? `+${qtyNum}` : qtyNum}</span>
+                          <span>{isPositive ? `+${Math.abs(qtyNum)}` : isNegative ? `-${Math.abs(qtyNum)}` : qtyNum}</span>
                         )}
                       </span>
                     </div>

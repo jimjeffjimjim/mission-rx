@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
+import { getStandardItemName } from '@/lib/stockMath';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -43,6 +44,29 @@ export async function GET(request: Request) {
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
+    // Fetch current inventory items to resolve canonical names and details
+    let currentItems: any[] = [];
+    if (supabase) {
+      try {
+        const { data: inv } = await supabase.from('inventory_items').select('id, generic_name, dosage, shelf_location, lot_numbers, stock_unit, sub_unit, pills_per_bottle');
+        if (inv) currentItems = inv;
+      } catch (e) {}
+    }
+    if (currentItems.length === 0) {
+      try {
+        currentItems = await prisma.inventoryItem.findMany();
+      } catch (e) {}
+    }
+
+    const itemLookup = new Map<string, any>();
+    currentItems.forEach((item: any) => {
+      const gName = item.genericName || item.generic_name || '';
+      const d = item.dosage || '';
+      const stdName = getStandardItemName(gName, d);
+      if (item.id) itemLookup.set(item.id, { ...item, canonicalName: stdName });
+      if (gName) itemLookup.set(gName.toLowerCase(), { ...item, canonicalName: stdName });
+    });
+
     let formattedLogs: any[] = [];
 
     // 1. Prioritize Supabase Cloud Postgres
@@ -63,15 +87,20 @@ export async function GET(request: Request) {
                 lotList = Array.from(new Set([...lotList, ...addList]));
               }
             } catch (e) {}
+
+            const rawName = l.item_generic_name || 'Medication Formulation';
+            const matched = (l.item_id && itemLookup.get(l.item_id)) || itemLookup.get(rawName.toLowerCase()) || null;
+            const canonicalName = matched?.canonicalName || rawName;
+
             return {
               id: l.id,
               itemId: l.item_id || 'unknown',
-              itemGenericName: l.item_generic_name || 'Medication Formulation',
+              itemGenericName: canonicalName,
               quantityChanged: Number(l.quantity_changed) || 0,
               actionType: l.action_type || 'DISPENSE',
               userRole: l.user_role || 'STAFF',
               details: parsedMeta.details || '',
-              category: 'General Medical',
+              category: matched?.shelfLocation || matched?.shelf_location || 'General Medical',
               createdAt: l.created_at || new Date().toISOString(),
               dispensedUnit: (l.dispensed_unit || parsedMeta.dispensedUnit) as any,
               dispensedBottles: Number(l.dispensed_bottles || parsedMeta.dispensedBottles) || 0,
@@ -114,15 +143,21 @@ export async function GET(request: Request) {
             lotList = Array.from(new Set([...lotList, ...addList]));
           }
         } catch (e) {}
+
+        const rawName = log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation';
+        const rawDosage = log.item?.dosage;
+        const matched = (log.itemId && itemLookup.get(log.itemId)) || itemLookup.get(rawName.toLowerCase()) || null;
+        const canonicalName = matched?.canonicalName || getStandardItemName(rawName, rawDosage);
+
         return {
           id: log.id,
           itemId: log.itemId,
-          itemGenericName: log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation',
+          itemGenericName: canonicalName,
           quantityChanged: log.quantityChanged,
           actionType: log.actionType,
           userRole: log.userRole || 'STAFF',
           details: parsedMeta.details || '',
-          category: log.item?.shelfLocation || 'General Medical',
+          category: log.item?.shelfLocation || matched?.shelfLocation || 'General Medical',
           createdAt: log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString(),
           dispensedUnit: (log.dispensedUnit || parsedMeta.dispensedUnit) as any,
           dispensedBottles: log.dispensedBottles || parsedMeta.dispensedBottles || 0,
@@ -132,16 +167,20 @@ export async function GET(request: Request) {
       });
     }
 
-    // Aggregate Top Dispensed Items
-    const topMap: { [genericName: string]: { totalDispensed: number; category: string } } = {};
+    // Aggregate Top Dispensed Items (Dispenses add usage, Undispenses/Restocks deduct usage)
+    const topMap: { [canonicalName: string]: { totalDispensed: number; category: string } } = {};
 
     formattedLogs.forEach((log: any) => {
-      if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
-        const name = log.itemGenericName || 'General Inventory Item';
-        const qty = Math.abs(log.quantityChanged);
-        if (!topMap[name]) {
-          topMap[name] = { totalDispensed: 0, category: log.category };
-        }
+      const name = log.itemGenericName || 'General Inventory Item';
+      if (!topMap[name]) {
+        topMap[name] = { totalDispensed: 0, category: log.category || 'General Medical' };
+      }
+      const qty = Math.abs(log.quantityChanged);
+      const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+      
+      if (isRestock) {
+        topMap[name].totalDispensed = Math.max(0, topMap[name].totalDispensed - qty);
+      } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
         topMap[name].totalDispensed += qty;
       }
     });
@@ -152,6 +191,7 @@ export async function GET(request: Request) {
         totalDispensed: topMap[name].totalDispensed,
         category: topMap[name].category,
       }))
+      .filter((item) => item.totalDispensed > 0)
       .sort((a, b) => b.totalDispensed - a.totalDispensed)
       .slice(0, 10);
 
