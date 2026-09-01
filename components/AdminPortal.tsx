@@ -629,16 +629,16 @@ export default function AdminPortal({
                 </button>
               )}
 
-              {/* Developer QR Code & Labels Engine (PIN 7777) */}
+              {/* Developer QR Code & Labels Engine */}
               {onOpenDeveloperQrModal && (
                 <button
                   type="button"
                   onClick={() => onOpenDeveloperQrModal()}
                   className="min-h-[44px] px-3.5 bg-indigo-900 hover:bg-indigo-950 text-indigo-200 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-indigo-700/50 cursor-pointer"
-                  title="Developer QR Code & Clinical Label Generator (PIN: 7777)"
+                  title="Developer QR Code & Clinical Label Generator"
                 >
                   <QrCode className="w-4 h-4 text-indigo-300 stroke-[2.5]" />
-                  <span>QR Labels (PIN: 7777)</span>
+                  <span>Developer QR Engine</span>
                 </button>
               )}
 

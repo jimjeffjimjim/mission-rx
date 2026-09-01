@@ -173,7 +173,7 @@ export default function DeveloperQrModal({
                   Developer QR & Clinical Label Portal
                 </h2>
                 <span className="text-xs bg-indigo-100 text-indigo-900 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-300">
-                  PIN 7777
+                  Developer Mode
                 </span>
               </div>
               <p className="text-xs font-semibold text-slate-500">
