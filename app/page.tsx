@@ -9,6 +9,8 @@ import FilterBar from '@/components/FilterBar';
 import InventoryCard from '@/components/InventoryCard';
 import ItemEditModal from '@/components/ItemEditModal';
 import EquipmentEditModal from '@/components/EquipmentEditModal';
+import PhysicalAuditModal from '@/components/PhysicalAuditModal';
+import DeveloperQrModal from '@/components/DeveloperQrModal';
 import AdminPortal from '@/components/AdminPortal';
 import AuditLogModal from '@/components/AuditLogModal';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
@@ -32,6 +34,8 @@ export default function Home() {
   const [isAutofillEnabled, setIsAutofillEnabled] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
+  const [isPhysicalAuditOpen, setIsPhysicalAuditOpen] = useState(false);
+  const [isDeveloperQrOpen, setIsDeveloperQrOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
@@ -517,6 +521,61 @@ export default function Home() {
     }, 150);
   };
 
+  const handleBatchUpdateStock = async (
+    updates: Array<{ id: string; bottles: number; loose: number; logNote?: string }>
+  ) => {
+    // 1. Update in-memory state and cache immediately
+    const updateMap = new Map(updates.map((u) => [u.id, u]));
+    const updatedItems = itemsRef.current.map((item) => {
+      const u = updateMap.get(item.id);
+      if (u) {
+        return {
+          ...item,
+          bottlesAvailable: u.bottles,
+          looseUnitsAvailable: u.loose,
+        };
+      }
+      return item;
+    });
+
+    itemsRef.current = updatedItems;
+    saveLocalCache(updatedItems);
+    setItems([...updatedItems]);
+
+    // 2. Write audit logs and dispatch network requests
+    for (const u of updates) {
+      const target = items.find((i) => i.id === u.id);
+      if (target) {
+        const canonicalName = getStandardItemName(target.genericName, target.dosage);
+        const prevTotal = calculateTotalUnits(target.bottlesAvailable || 0, target.pillsPerBottle || 1, target.looseUnitsAvailable || 0);
+        const newTotal = calculateTotalUnits(u.bottles, target.pillsPerBottle || 1, u.loose);
+        const delta = newTotal - prevTotal;
+
+        recordAuditLog({
+          itemId: target.id,
+          itemGenericName: canonicalName,
+          quantityChanged: delta,
+          actionType: delta >= 0 ? 'RESTOCK' : 'AUDIT',
+          details: u.logNote || `Physical count audit adjusted inventory from ${prevTotal} to ${newTotal} units.`,
+          lotNumbers: parseLotNumbers(target.lotNumbers),
+        });
+
+        if (!isTestingMode) {
+          fetch(`/api/inventory/${u.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...target,
+              bottlesAvailable: u.bottles,
+              looseUnitsAvailable: u.loose,
+              isFullEdit: false,
+            }),
+          }).catch((e) => console.error('Failed to sync audit count', e));
+        }
+      }
+    }
+  };
+
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
     // If in Testing Sandbox mode, save in-memory only without network requests
     if (isTestingMode) {
@@ -884,6 +943,8 @@ export default function Home() {
           onOpenCreateModal={openCreateModal}
           onOpenCreateEquipmentModal={openCreateEquipmentModal}
           onEditEquipmentItem={openEditEquipmentModal}
+          onOpenPhysicalAuditModal={() => setIsPhysicalAuditOpen(true)}
+          onOpenDeveloperQrModal={() => setIsDeveloperQrOpen(true)}
           onOpenAuditLogs={(query?: string) => {
             setAuditSearchQuery(query || '');
             setIsAuditModalOpen(true);
@@ -989,12 +1050,28 @@ export default function Home() {
         onDelete={handleDeleteItem}
       />
 
+      {/* Physical Stock Intake & Shelf Audit Modal Sheet */}
+      <PhysicalAuditModal
+        isOpen={isPhysicalAuditOpen}
+        onClose={() => setIsPhysicalAuditOpen(false)}
+        items={items}
+        onBatchUpdateStock={handleBatchUpdateStock}
+        userRole={actorTag}
+      />
+
+      {/* Developer QR & Clinical Label Portal (PIN 7777) */}
+      <DeveloperQrModal
+        isOpen={isDeveloperQrOpen}
+        onClose={() => setIsDeveloperQrOpen(false)}
+        items={items}
+      />
+
       {/* Footer Legal & Compliance Navigation Bar */}
       <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 mt-16 pt-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.18 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.19 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

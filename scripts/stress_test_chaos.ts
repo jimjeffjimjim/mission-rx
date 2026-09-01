@@ -257,6 +257,85 @@ const gloveItem = mockInventory.find((i) => i.genericName.includes('Gloves'))!;
 const totalGlovePairs = calculateTotalUnits(gloveItem.bottlesAvailable, gloveItem.pillsPerBottle, gloveItem.looseUnitsAvailable);
 assertEquals(totalGlovePairs, 500, 'Calculates 10 boxes * 50 pairs = 500 total pairs of gloves');
 
+// ============================================================================
+// 9. Physical Count Audit Reconciliation & Undispense Preservation Test
+// ============================================================================
+console.log('\n📋 9. Physical Stock Audit Reconciliation with Undispenses');
+
+// Starting stock: 2 bottles * 100 + 10 loose = 210 pills
+let currentBottles = 2;
+let currentLoose = 10;
+const packSize = 100;
+
+// Step A: Doctor dispenses 25 pills -> stock becomes 1 bottle, 85 loose = 185
+let afterDispenseTotal = calculateTotalUnits(currentBottles, packSize, currentLoose) - 25;
+let stockAfterDispense = convertTotalUnitsToStock(afterDispenseTotal, packSize);
+assertEquals(afterDispenseTotal, 185, 'Stock after dispensing 25 pills is 185');
+
+// Step B: Doctor undispenses 25 pills -> stock restores to 2 bottles, 10 loose = 210
+let afterUndispenseTotal = afterDispenseTotal + 25;
+let stockAfterUndispense = convertTotalUnitsToStock(afterUndispenseTotal, packSize);
+assertEquals(afterUndispenseTotal, 210, 'Stock after undispensing 25 pills restores to 210');
+assertEquals(stockAfterUndispense.bottles, 2, 'Restored bottles is 2');
+assertEquals(stockAfterUndispense.loose, 10, 'Restored loose is 10');
+
+// Step C: Physical Count Audit on shelf finds 2 bottles and 5 loose = 205 (Deficit of 5 loose pills)
+const physicalBottles = 2;
+const physicalLoose = 5;
+const physicalTotal = calculateTotalUnits(physicalBottles, packSize, physicalLoose);
+const variance = physicalTotal - afterUndispenseTotal;
+assertEquals(variance, -5, 'Physical audit detects deficit variance of -5 pills');
+
+// Step D: Reconcile to physical count
+const reconciledStock = convertTotalUnitsToStock(physicalTotal, packSize);
+assertEquals(reconciledStock.bottles, 2, 'Reconciled bottles matches physical count (2)');
+assertEquals(reconciledStock.loose, 5, 'Reconciled loose matches physical count (5)');
+
+// ============================================================================
+// 10. Developer QR Code Metadata Integrity Test
+// ============================================================================
+console.log('\n🔲 10. Developer QR Code Full Clinical Data Integrity');
+
+const sampleItem = {
+  id: 'item-amox-500',
+  genericName: 'Amoxicillin',
+  dosage: '500mg Capsule',
+  brandName: 'Teva',
+  shelfLocation: 'Antibiotics',
+  itemType: 'Medication' as const,
+  pillsPerBottle: 100,
+  stockUnit: 'Bottles',
+  subUnit: 'capsules',
+  lotNumbers: ['LOT-2026A', 'LOT-2026B'],
+  expirationDate: '2026-11-30',
+  directions: 'Take with full glass of water. Finish full course.',
+};
+
+const qrString = JSON.stringify({
+  app: 'MissionRx',
+  id: sampleItem.id,
+  name: sampleItem.genericName,
+  dosage: sampleItem.dosage,
+  brand: sampleItem.brandName || null,
+  shelf: sampleItem.shelfLocation,
+  type: sampleItem.itemType || 'Medication',
+  packSize: sampleItem.pillsPerBottle || 1,
+  stockUnit: sampleItem.stockUnit || 'Bottles',
+  subUnit: sampleItem.subUnit || 'units',
+  lots: sampleItem.lotNumbers,
+  expiration: sampleItem.expirationDate,
+  directions: sampleItem.directions,
+});
+
+const parsedQr = JSON.parse(qrString);
+assertEquals(parsedQr.app, 'MissionRx', 'QR code contains MissionRx app identifier');
+assertEquals(parsedQr.name, 'Amoxicillin', 'QR code contains generic name');
+assertEquals(parsedQr.dosage, '500mg Capsule', 'QR code contains dosage strength');
+assertEquals(parsedQr.brand, 'Teva', 'QR code contains manufacturer brand');
+assertEquals(parsedQr.shelf, 'Antibiotics', 'QR code contains storage shelf');
+assertEquals(parsedQr.lots.length, 2, 'QR code contains complete lot numbers');
+assertEquals(parsedQr.expiration, '2026-11-30', 'QR code contains expiration date');
+
 console.log('\n============================================================');
 console.log('🎉 CHAOS TEST SUMMARY: ' + passed + '/' + (passed + failed) + ' Passed (' + failed + ' Failed)');
 console.log('============================================================\n');

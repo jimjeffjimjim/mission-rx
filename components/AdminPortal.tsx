@@ -39,7 +39,9 @@ import {
   User,
   Stethoscope,
   Boxes,
-  PackageCheck
+  PackageCheck,
+  ClipboardList,
+  QrCode
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
@@ -56,6 +58,8 @@ interface AdminPortalProps {
   onOpenCreateEquipmentModal?: () => void;
   onEditEquipmentItem?: (item: InventoryItem) => void;
   onOpenAuditLogs?: (searchQuery?: string) => void;
+  onOpenPhysicalAuditModal?: () => void;
+  onOpenDeveloperQrModal?: () => void;
   onRefreshData?: () => void;
   userRole?: string;
   onAddTestAuditLog?: (log: DispenseLog) => void;
@@ -71,6 +75,8 @@ export default function AdminPortal({
   onOpenCreateEquipmentModal,
   onEditEquipmentItem,
   onOpenAuditLogs,
+  onOpenPhysicalAuditModal,
+  onOpenDeveloperQrModal,
   onRefreshData,
   userRole = 'ADMIN',
   onAddTestAuditLog,
@@ -610,6 +616,32 @@ export default function AdminPortal({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* Physical Inventory Stock Audit Sheet */}
+              {onOpenPhysicalAuditModal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPhysicalAuditModal()}
+                  className="min-h-[44px] px-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-500 cursor-pointer"
+                  title="Open high-speed physical stock intake and shelf audit sheet"
+                >
+                  <ClipboardList className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  <span>Physical Audit Sheet</span>
+                </button>
+              )}
+
+              {/* Developer QR Code & Labels Engine (PIN 7777) */}
+              {onOpenDeveloperQrModal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenDeveloperQrModal()}
+                  className="min-h-[44px] px-3.5 bg-indigo-900 hover:bg-indigo-950 text-indigo-200 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-indigo-700/50 cursor-pointer"
+                  title="Developer QR Code & Clinical Label Generator (PIN: 7777)"
+                >
+                  <QrCode className="w-4 h-4 text-indigo-300 stroke-[2.5]" />
+                  <span>QR Labels (PIN: 7777)</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsSpreadsheetModalOpen(true)}
