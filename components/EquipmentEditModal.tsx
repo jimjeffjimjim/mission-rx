@@ -14,9 +14,13 @@ import {
   AlertTriangle, 
   Check, 
   ShieldCheck,
-  Tag
+  Tag,
+  Camera,
+  Barcode
 } from 'lucide-react';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
+import BarcodeScannerModal from '@/components/BarcodeScannerModal';
+import { ScannedMedicationData } from '@/lib/ndcLookup';
 
 const PRESET_EQUIPMENT_CATEGORIES = [
   'Supplies',
@@ -100,6 +104,7 @@ export default function EquipmentEditModal({
   const [customSubUnitText, setCustomSubUnitText] = useState('');
 
   const [doesNotExpire, setDoesNotExpire] = useState(true);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Multi-Lot / Multi-Serial Tracking Rows
   const [lotEntries, setLotEntries] = useState<LotEntry[]>([]);
@@ -229,6 +234,33 @@ export default function EquipmentEditModal({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleBarcodeScanned = (data: ScannedMedicationData) => {
+    setFormData((prev) => ({
+      ...prev,
+      genericName: data.genericName,
+      brandName: data.brandName || prev.brandName,
+      dosage: data.dosage !== 'Standard Formulation' ? data.dosage : (prev.dosage || 'Medical Supply / Device'),
+      shelfLocation: data.shelfLocation || prev.shelfLocation,
+      stockUnit: data.stockUnit || prev.stockUnit,
+      subUnit: data.subUnit || prev.subUnit,
+      pillsPerBottle: data.pillsPerBottle || prev.pillsPerBottle,
+      expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : prev.expirationDate),
+      directions: data.directions || prev.directions,
+    }));
+
+    if (data.lotNumber) {
+      setLotEntries([
+        {
+          id: `lot-${Date.now()}`,
+          lotNumber: data.lotNumber,
+          expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
+          bottles: 1,
+          looseUnits: 0,
+        },
+      ]);
+    }
+  };
+
   // Multi-Lot Handlers
   const handleAddLotRow = () => {
     const defaultExp = doesNotExpire ? '3000-01-01' : (formData.expirationDate || new Date().toISOString().split('T')[0]);
@@ -350,13 +382,28 @@ export default function EquipmentEditModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5 stroke-[2.5]" />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {!item && (
+              <button
+                type="button"
+                onClick={() => setIsBarcodeScannerOpen(true)}
+                className="min-h-[38px] px-3 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border border-teal-800"
+                title="Scan supply UPC, 2D GS1 DataMatrix, or packaging barcode"
+              >
+                <Camera className="w-4 h-4 stroke-[2.5]" />
+                <span>Scan Barcode</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5 stroke-[2.5]" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto pr-1 flex-1">
@@ -819,6 +866,15 @@ export default function EquipmentEditModal({
           </div>
         </form>
       </div>
+
+      {/* Live Inbound Camera Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScanSuccess={handleBarcodeScanned}
+        title="Scan Supply / Device Barcode"
+        subtitle="Point camera at manufacturer UPC, 2D GS1 DataMatrix, or packaging barcode."
+      />
     </div>
   );
 }

@@ -18,11 +18,15 @@ import {
   Globe,
   AlertTriangle,
   Calendar,
-  Layers
+  Layers,
+  Camera,
+  Barcode
 } from 'lucide-react';
 import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
+import BarcodeScannerModal from '@/components/BarcodeScannerModal';
+import { ScannedMedicationData } from '@/lib/ndcLookup';
 
 const DEFAULT_DOSAGE_VARIETIES = [
   '200 mg Tablet',
@@ -89,6 +93,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   const [dosageOptionsList, setDosageOptionsList] = useState<string[]>([]);
   const [isCustomDosageSelected, setIsCustomDosageSelected] = useState(false);
   const [isSearchingFda, setIsSearchingFda] = useState(false);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Dynamic specialties
   const [specialtyList, setSpecialtyList] = useState<{ id: string; name: string }[]>([]);
@@ -286,6 +291,40 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     setTimeout(() => setAutofilledNotice(false), 4000);
   };
 
+  const handleBarcodeScanned = (data: ScannedMedicationData) => {
+    setFormData((prev) => ({
+      ...prev,
+      genericName: data.genericName,
+      brandName: data.brandName,
+      chemicalName: data.chemicalName || prev.chemicalName,
+      dosage: data.dosage,
+      shelfLocation: data.shelfLocation || prev.shelfLocation,
+      stockUnit: data.stockUnit || prev.stockUnit,
+      subUnit: data.subUnit || prev.subUnit,
+      pillsPerBottle: data.pillsPerBottle || prev.pillsPerBottle,
+      expirationDate: data.expirationDate || prev.expirationDate,
+      directions: data.directions || prev.directions,
+    }));
+
+    if (data.lotNumber || data.expirationDate) {
+      setLotEntries([
+        {
+          id: `lot-${Date.now()}`,
+          lotNumber: data.lotNumber || '',
+          expirationDate: data.expirationDate || formData.expirationDate || '',
+          bottles: formData.bottlesAvailable || 1,
+          looseUnits: formData.looseUnitsAvailable || 0,
+        },
+      ]);
+    }
+
+    const opts = getDosageVarieties(data.genericName, data.brandName);
+    setDosageOptionsList(opts);
+    setIsCustomDosageSelected(!opts.includes(data.dosage));
+    setAutofilledNotice(true);
+    setTimeout(() => setAutofilledNotice(false), 4000);
+  };
+
   const handleToggleAutofill = () => {
     const nextState = !autofillEnabled;
     setAutofillEnabled(nextState);
@@ -410,6 +449,16 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
             {!item && (
               <>
+                <button
+                  type="button"
+                  onClick={() => setIsBarcodeScannerOpen(true)}
+                  className="min-h-[40px] px-3.5 rounded-2xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs transition-all flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer border border-teal-800"
+                  title="Scan bottle barcode, NDC, or GS1 DataMatrix with device camera"
+                >
+                  <Camera className="w-4 h-4 stroke-[2.5]" />
+                  <span>Scan Barcode</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1150,6 +1199,15 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           </div>
         </form>
       </div>
+
+      {/* Live Inbound Camera Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScanSuccess={handleBarcodeScanned}
+        title="Scan Bottle Barcode / NDC"
+        subtitle="Point camera at manufacturer UPC, 2D GS1 DataMatrix, or NDC on bottle."
+      />
     </div>
   );
 }

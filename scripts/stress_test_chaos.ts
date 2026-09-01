@@ -5,6 +5,7 @@
 
 import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers } from '../lib/stockMath';
 import { LotEntry } from '../types/inventory';
+import { parseGs1Barcode, normalizeNdc } from '../lib/ndcLookup';
 
 let passed = 0;
 let failed = 0;
@@ -335,6 +336,28 @@ assertEquals(parsedQr.brand, 'Teva', 'QR code contains manufacturer brand');
 assertEquals(parsedQr.shelf, 'Antibiotics', 'QR code contains storage shelf');
 assertEquals(parsedQr.lots.length, 2, 'QR code contains complete lot numbers');
 assertEquals(parsedQr.expiration, '2026-11-30', 'QR code contains expiration date');
+
+// ============================================================================
+// 11. Inbound Barcode, GS1 DataMatrix & NDC Intake Parsing
+// ============================================================================
+console.log('\n📷 11. Inbound Manufacturer Barcode & GS1 DataMatrix Intake Parsing');
+
+// Test GS1 DataMatrix with (01) GTIN, (17) Exp, (10) Lot
+const sampleGs1 = '(01)00300932264018(17)271031(10)LOT-99824';
+const parsedGs1 = parseGs1Barcode(sampleGs1);
+assertEquals(parsedGs1.gtin, '00300932264018', 'Extracts 14-digit GTIN');
+assertEquals(parsedGs1.lotNumber, 'LOT-99824', 'Extracts Lot Number from AI 10');
+assertEquals(parsedGs1.expirationDate, '2027-10-31', 'Converts YYMMDD (271031) to YYYY-MM-DD');
+
+// Test 10-digit NDC normalization
+const rawNdc = '0093226401';
+const normalizedNdcs = normalizeNdc(rawNdc);
+assertEquals(normalizedNdcs.includes('0093-2264-01'), true, 'Normalizes 10-digit raw NDC to 4-4-2 format');
+
+// Test 12-digit UPC-A with leading 3
+const upcA = '300932264014';
+const upcCandidates = normalizeNdc(upcA);
+assertEquals(upcCandidates.includes('0093-2264-01'), true, 'Normalizes 12-digit UPC-A to dashed NDC');
 
 console.log('\n============================================================');
 console.log('🎉 CHAOS TEST SUMMARY: ' + passed + '/' + (passed + failed) + ' Passed (' + failed + ' Failed)');
