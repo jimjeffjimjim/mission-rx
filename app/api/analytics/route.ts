@@ -91,10 +91,11 @@ export async function GET(request: Request) {
             const canonicalName = matched?.canonicalName || rawName;
 
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
-            const isUndispense = l.action_type === 'RESTOCK' || l.action_type === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
-            const resolvedActionType = isUndispense ? 'RESTOCK' : (l.action_type || 'DISPENSE');
+            const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+            const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
+            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE'));
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
 
             return {
               id: l.id,
@@ -148,10 +149,11 @@ export async function GET(request: Request) {
         const canonicalName = matched?.canonicalName || getStandardItemName(rawName, rawDosage);
 
         const detailsLower = (parsedMeta.details || log.details || '').toLowerCase();
-        const isUndispense = log.actionType === 'RESTOCK' || (log.actionType as string) === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
-        const resolvedActionType = isUndispense ? 'RESTOCK' : (log.actionType || 'DISPENSE');
+        const isUndispense = log.actionType === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+        const isRestock = log.actionType === 'RESTOCK' || detailsLower.includes('restocked');
+        const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (log.actionType || 'DISPENSE'));
         const rawQty = Number(log.quantityChanged) || 0;
-        const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+        const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
 
         return {
           id: log.id,
@@ -172,19 +174,23 @@ export async function GET(request: Request) {
     }
 
     // Aggregate Top Dispensed Items:
-    // Net Patient Usage = Math.max(0, sum(dispenses) - sum(undispenses/restocks))
-    const usageMap: { [canonicalName: string]: { dispensed: number; returned: number; category: string } } = {};
+    // Net Patient Usage = Math.max(0, sum(dispenses) - sum(undispenses))
+    // Note: RESTOCK adds inventory to stock, but does NOT undo patient dispensing history!
+    const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
 
     formattedLogs.forEach((log: any) => {
       const name = log.itemGenericName || 'General Inventory Item';
       if (!usageMap[name]) {
-        usageMap[name] = { dispensed: 0, returned: 0, category: log.category || 'General Medical' };
+        usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
       }
       const qty = Math.abs(log.quantityChanged);
-      const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+      const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
+      const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
       
-      if (isRestock) {
-        usageMap[name].returned += qty;
+      if (isUndispense) {
+        usageMap[name].undispensed += qty;
+      } else if (isRestock) {
+        usageMap[name].restocked += qty;
       } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
         usageMap[name].dispensed += qty;
       }
@@ -193,7 +199,7 @@ export async function GET(request: Request) {
     const topDispensedItems = Object.keys(usageMap)
       .map((name) => ({
         genericName: name,
-        totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].returned),
+        totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
         category: usageMap[name].category,
       }))
       .filter((item) => item.totalDispensed > 0)

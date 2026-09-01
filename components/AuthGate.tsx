@@ -268,7 +268,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.18 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.20 Live</span>
           <span className="text-slate-300">•</span>
           {isTestingMode && (
             <>

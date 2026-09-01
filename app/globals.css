@@ -45,3 +45,56 @@
 .card-hover:hover {
   transform: translateY(-2px);
 }
+
+/* Print Engine & Multi-Page Paged Media Optimization */
+@media print {
+  @page {
+    margin: 12mm 10mm 14mm 10mm;
+    size: letter portrait;
+  }
+
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    background: white !important;
+    color: #000 !important;
+    font-size: 10pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* When printing from PhysicalAuditModal or DeveloperQrModal, isolate modal content */
+  body:has(#physical-audit-modal-root) > *:not(:has(#physical-audit-modal-root)),
+  body:has(#developer-qr-modal-root) > *:not(:has(#developer-qr-modal-root)) {
+    display: none !important;
+  }
+
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Multi-page table flow */
+  table {
+    page-break-inside: auto !important;
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+}
+

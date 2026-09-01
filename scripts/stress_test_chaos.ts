@@ -183,18 +183,22 @@ assert(shiftLogTime >= chicagoShiftStart, 'Evening shift transaction is included
 console.log('\n📊 7. Order-Independent Top Dispensed Aggregation');
 
 function aggregateTopDispensed(logs: any[]) {
-  const usageMap: { [canonicalName: string]: { dispensed: number; returned: number; category: string } } = {};
+  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
 
   logs.forEach((log: any) => {
     const name = log.itemGenericName || 'General Inventory Item';
     if (!usageMap[name]) {
-      usageMap[name] = { dispensed: 0, returned: 0, category: log.category || 'General Medical' };
+      usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
     }
     const qty = Math.abs(log.quantityChanged);
-    const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+    const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
+    const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
 
-    if (isRestock) {
-      usageMap[name].returned += qty;
+    if (isUndispense) {
+      usageMap[name].undispensed += qty;
+    } else if (isRestock) {
+      usageMap[name].restocked += qty;
+      // RESTOCK does not deduct from dispensed count
     } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
       usageMap[name].dispensed += qty;
     }
@@ -203,7 +207,7 @@ function aggregateTopDispensed(logs: any[]) {
   return Object.keys(usageMap)
     .map((name) => ({
       genericName: name,
-      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].returned),
+      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
       category: usageMap[name].category,
     }))
     .filter((item) => item.totalDispensed > 0)
@@ -212,10 +216,11 @@ function aggregateTopDispensed(logs: any[]) {
 
 // Chaotic log stream with scrambled timestamps and reverse actions
 const chaoticLogs = [
-  { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: 1, actionType: 'RESTOCK', details: 'Undispensed 1' },
+  { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: 1, actionType: 'UNDISPENSE', details: 'Undispensed 1' },
   { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 50, actionType: 'DISPENSE', details: 'Dispensed 50' },
+  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 200, actionType: 'RESTOCK', details: 'Restocked 200' },
   { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: -1, actionType: 'DISPENSE', details: 'Dispensed 1' },
-  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 10, actionType: 'RESTOCK', details: 'Undispensed 10' },
+  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 10, actionType: 'UNDISPENSE', details: 'Undispensed 10' },
   { itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 30, actionType: 'DISPENSE', details: 'Dispensed 30' },
 ];
 
@@ -223,7 +228,7 @@ const chaoticResult = aggregateTopDispensed(chaoticLogs);
 assertEquals(chaoticResult, [
   { genericName: 'Ibuprofen (200 mg Tablet)', totalDispensed: 40, category: 'General Medical' },
   { genericName: 'Amoxicillin (500mg)', totalDispensed: 30, category: 'General Medical' },
-], 'Chaotic stream correctly calculates: Ibuprofen 40 (50-10), Amoxicillin 30, Amlodipine 0 (excluded)');
+], 'Chaotic stream correctly calculates: Ibuprofen 40 (50-10, restock of 200 ignored), Amoxicillin 30, Amlodipine 0 (excluded)');
 
 // -----------------------------------------------------------------
 // 8. Medical Equipment & Supplies Categorization & Stock Math
@@ -257,6 +262,13 @@ assertEquals(diagnosticItems.length, 1, 'Diagnostic filter matches Digital Blood
 const gloveItem = mockInventory.find((i) => i.genericName.includes('Gloves'))!;
 const totalGlovePairs = calculateTotalUnits(gloveItem.bottlesAvailable, gloveItem.pillsPerBottle, gloveItem.looseUnitsAvailable);
 assertEquals(totalGlovePairs, 500, 'Calculates 10 boxes * 50 pairs = 500 total pairs of gloves');
+
+// Equipment Restock Simulation
+const restockedGloveTotal = calculateTotalUnits(gloveItem.bottlesAvailable + 5, gloveItem.pillsPerBottle, gloveItem.looseUnitsAvailable + 10);
+assertEquals(restockedGloveTotal, 760, 'Restocking 5 boxes and 10 loose pairs yields 15 boxes and 10 pairs (760 total pairs)');
+const restockedGloveStock = convertTotalUnitsToStock(restockedGloveTotal, gloveItem.pillsPerBottle);
+assertEquals(restockedGloveStock.bottles, 15, 'Restocked glove boxes is 15');
+assertEquals(restockedGloveStock.loose, 10, 'Restocked loose pairs is 10');
 
 // ============================================================================
 // 9. Physical Count Audit Reconciliation & Undispense Preservation Test

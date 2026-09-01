@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   Tag,
   Camera,
-  Barcode
+  Barcode,
+  Truck,
+  PackagePlus,
+  ArrowUpRight
 } from 'lucide-react';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
 import BarcodeScannerModal from '@/components/BarcodeScannerModal';
@@ -108,6 +111,13 @@ export default function EquipmentEditModal({
 
   // Multi-Lot / Multi-Serial Tracking Rows
   const [lotEntries, setLotEntries] = useState<LotEntry[]>([]);
+
+  // Quick Inbound Restock State
+  const [inboundContainers, setInboundContainers] = useState('');
+  const [inboundLoose, setInboundLoose] = useState('');
+  const [inboundLotNumber, setInboundLotNumber] = useState('');
+  const [inboundExpDate, setInboundExpDate] = useState('');
+  const [restockSuccessBanner, setRestockSuccessBanner] = useState<string | null>(null);
 
   useEffect(() => {
     if (item) {
@@ -317,6 +327,57 @@ export default function EquipmentEditModal({
       looseUnitsAvailable: sumLoose,
       expirationDate: earliestExp || (doesNotExpire ? '3000-01-01' : prev.expirationDate),
     }));
+  };
+
+  const handleApplyInboundRestock = () => {
+    const addBottles = Math.max(0, parseInt(inboundContainers, 10) || 0);
+    const addLoose = Math.max(0, parseInt(inboundLoose, 10) || 0);
+    if (addBottles === 0 && addLoose === 0) return;
+
+    const newBottles = (formData.bottlesAvailable || 0) + addBottles;
+    const newLoose = (formData.looseUnitsAvailable || 0) + addLoose;
+
+    setFormData((prev) => ({
+      ...prev,
+      bottlesAvailable: newBottles,
+      looseUnitsAvailable: newLoose,
+      expirationDate: inboundExpDate && (!prev.expirationDate || prev.expirationDate.startsWith('3000') || inboundExpDate < prev.expirationDate)
+        ? inboundExpDate
+        : prev.expirationDate,
+    }));
+
+    if (inboundExpDate) {
+      setDoesNotExpire(false);
+    }
+
+    // Add a lot row if lot # or specific quantities were designated
+    if (inboundLotNumber.trim() || addBottles > 0 || addLoose > 0) {
+      setLotEntries((prev) => [
+        ...prev,
+        {
+          id: `lot-restock-${Date.now()}`,
+          lotNumber: inboundLotNumber.trim(),
+          expirationDate: inboundExpDate || (doesNotExpire ? '3000-01-01' : (formData.expirationDate || '3000-01-01')),
+          bottles: addBottles,
+          looseUnits: addLoose,
+        },
+      ]);
+    }
+
+    const pillsPerPack = Math.max(1, formData.pillsPerBottle || 1);
+    const totalPillsAdded = (addBottles * pillsPerPack) + addLoose;
+    const desc = addBottles > 0 && addLoose > 0
+      ? `+${addBottles} ${formData.stockUnit || 'containers'} & +${addLoose} ${formData.subUnit || 'pieces'} (${totalPillsAdded} total ${formData.subUnit || 'pieces'})`
+      : addBottles > 0
+      ? `+${addBottles} ${formData.stockUnit || 'containers'} (${totalPillsAdded} total ${formData.subUnit || 'pieces'})`
+      : `+${addLoose} ${formData.subUnit || 'pieces'}`;
+
+    setRestockSuccessBanner(`Successfully added restock of ${desc} to inventory!`);
+    setInboundContainers('');
+    setInboundLoose('');
+    setInboundLotNumber('');
+    setInboundExpDate('');
+    setTimeout(() => setRestockSuccessBanner(null), 4500);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -663,6 +724,21 @@ export default function EquipmentEditModal({
                   onChange={(e) => handleChange('bottlesAvailable', Math.max(0, parseInt(e.target.value) || 0))}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 />
+                {/* Quick Restock Container Steppers */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  <span className="text-[10px] text-slate-400 font-extrabold">Quick +:</span>
+                  {[1, 5, 10, 25, 50, 100].map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      onClick={() => handleChange('bottlesAvailable', (formData.bottlesAvailable || 0) + step)}
+                      className="px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black cursor-pointer transition-all active:scale-95"
+                      title={`Add ${step} ${formData.stockUnit || 'containers'}`}
+                    >
+                      +{step}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -677,6 +753,115 @@ export default function EquipmentEditModal({
                   onChange={(e) => handleChange('looseUnitsAvailable', Math.max(0, parseInt(e.target.value) || 0))}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 />
+                {/* Quick Restock Loose Steppers */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  <span className="text-[10px] text-slate-400 font-extrabold">Quick +:</span>
+                  {[1, 5, 10, 25, 50].map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      onClick={() => handleChange('looseUnitsAvailable', (formData.looseUnitsAvailable || 0) + step)}
+                      className="px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black cursor-pointer transition-all active:scale-95"
+                      title={`Add ${step} loose ${formData.subUnit || 'pieces'}`}
+                    >
+                      +{step}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Inbound Shipment Quick Restock Card */}
+            <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/60 border-2 border-emerald-300 rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-xl bg-emerald-600 text-white shadow-xs">
+                    <PackagePlus className="w-4 h-4 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
+                      <span>Inbound Shipment Restock</span>
+                      <span className="text-[9px] bg-emerald-200 text-emerald-900 font-extrabold px-2 py-0.5 rounded-full uppercase">Quick Add</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      Receive delivered shipment and automatically add counts to inventory & lot batches.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {restockSuccessBanner && (
+                <div className="p-2.5 bg-emerald-100 border border-emerald-400 rounded-xl text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+                  <Check className="w-4 h-4 text-emerald-700 shrink-0 stroke-[3]" />
+                  <span>{restockSuccessBanner}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-700 uppercase mb-0.5">
+                    + {formData.stockUnit || 'Packs'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={inboundContainers}
+                    onChange={(e) => setInboundContainers(e.target.value)}
+                    placeholder="e.g. 10"
+                    className="w-full min-h-[38px] px-3 bg-white border border-emerald-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-black text-slate-900 transition-all focus:outline-hidden shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-700 uppercase mb-0.5">
+                    + Loose {formData.subUnit || 'units'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={inboundLoose}
+                    onChange={(e) => setInboundLoose(e.target.value)}
+                    placeholder="e.g. 0"
+                    className="w-full min-h-[38px] px-3 bg-white border border-emerald-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-black text-slate-900 transition-all focus:outline-hidden shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-700 uppercase mb-0.5">
+                    Serial / Lot # (Opt)
+                  </label>
+                  <input
+                    type="text"
+                    value={inboundLotNumber}
+                    onChange={(e) => setInboundLotNumber(e.target.value)}
+                    placeholder="e.g. LOT-2026-X"
+                    className="w-full min-h-[38px] px-3 bg-white border border-emerald-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 transition-all focus:outline-hidden shadow-inner"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-700 uppercase mb-0.5">
+                    Batch Expiry (Opt)
+                  </label>
+                  <input
+                    type="date"
+                    value={inboundExpDate}
+                    onChange={(e) => setInboundExpDate(e.target.value)}
+                    className="w-full min-h-[38px] px-2.5 bg-white border border-emerald-300 focus:border-emerald-600 rounded-xl text-xs font-bold text-slate-900 transition-all focus:outline-hidden shadow-inner"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end pt-0.5">
+                <button
+                  type="button"
+                  onClick={handleApplyInboundRestock}
+                  disabled={(!inboundContainers && !inboundLoose) || (Number(inboundContainers || 0) <= 0 && Number(inboundLoose || 0) <= 0)}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Apply Restock to Inventory</span>
+                </button>
               </div>
             </div>
 

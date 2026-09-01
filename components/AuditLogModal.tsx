@@ -256,7 +256,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
             <span className="text-xs font-bold text-slate-400 uppercase mr-1 hidden lg:inline-flex items-center gap-1">
               <Filter className="w-3.5 h-3.5" /> Type:
             </span>
-            {['ALL', 'DISPENSE', 'RESTOCK', 'EDIT', 'AUDIT'].map((type) => {
+            {['ALL', 'DISPENSE', 'UNDISPENSE', 'RESTOCK', 'EDIT', 'AUDIT'].map((type) => {
               const isSelected = selectedAction === type;
               return (
                 <button
@@ -289,15 +289,17 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
           ) : (
             filteredLogs.map((log, index) => {
               const qtyNum = Number(log.quantityChanged) || 0;
-              const isDispense = log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK');
-              const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
-              const isPositive = isRestock && !isDispense;
+              const isDispense = log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE');
+              const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
+              const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
+              const isPositive = (isRestock || isUndispense) && !isDispense;
               const isNegative = isDispense;
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
               if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
+              else if (isUndispense) badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
               else if (isRestock) badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
-              else if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+              else if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-blue-50 text-blue-900 border-blue-300';
               else if (log.actionType === 'CREATE') badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
               else if (log.actionType === 'DELETE') badgeStyle = 'bg-red-50 text-red-800 border-red-300';
 
@@ -325,6 +327,8 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                     >
                       {log.actionType === 'DISPENSE' ? (
                         <ArrowDownRight className="w-5 h-5 text-rose-600 stroke-[3]" />
+                      ) : log.actionType === 'UNDISPENSE' ? (
+                        <RotateCcw className="w-5 h-5 text-amber-600 stroke-[2.5]" />
                       ) : log.actionType === 'RESTOCK' ? (
                         <ArrowUpRight className="w-5 h-5 text-emerald-600 stroke-[3]" />
                       ) : (
@@ -407,7 +411,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider sm:hidden">Qty Change</span>
                       <span
                         className={`font-mono font-black text-sm sm:text-base ${
-                          isNegative ? 'text-rose-600' : isPositive ? 'text-emerald-600' : 'text-slate-700'
+                          isNegative ? 'text-rose-600' : isUndispense ? 'text-amber-700' : isRestock ? 'text-emerald-600' : 'text-slate-700'
                         }`}
                       >
                         {log.dispensedUnit === 'bottle' ? (

@@ -41,3 +41,6 @@ next-env.d.ts
 *.log
 mcp*.json
 
+# large data dumps & seed dumps
+prisma/*.json
+data/seeds/*.json

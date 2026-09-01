@@ -159,10 +159,13 @@ export default function DeveloperQrModal({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white border-2 border-indigo-500 rounded-3xl p-5 sm:p-7 max-w-5xl w-full shadow-2xl space-y-6 text-slate-900 my-6 max-h-[94vh] flex flex-col justify-between">
+    <div
+      id="developer-qr-modal-root"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto print:static print:z-auto print:p-0 print:m-0 print:bg-white print:overflow-visible print:block print:w-full print:h-auto print:max-h-none print:inset-auto"
+    >
+      <div className="bg-white border-2 border-indigo-500 rounded-3xl p-5 sm:p-7 max-w-5xl w-full shadow-2xl space-y-6 text-slate-900 my-6 max-h-[94vh] flex flex-col justify-between print:border-none print:shadow-none print:p-0 print:m-0 print:max-h-none print:h-auto print:max-w-none print:w-full print:rounded-none print:block print:space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4 print:hidden">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-800 border border-indigo-300 shadow-inner">
               <QrCode className="w-6 h-6 stroke-[2.5]" />
@@ -234,9 +237,9 @@ export default function DeveloperQrModal({
           </div>
         ) : (
           /* Main Developer QR Workspace */
-          <div className="space-y-5 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-5 flex-1 overflow-y-auto pr-1 print:overflow-visible print:p-0 print:m-0 print:space-y-2">
             {/* View Tabs */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2 print:hidden">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -279,7 +282,7 @@ export default function DeveloperQrModal({
             {activeTab === 'SINGLE' && selectedItem && (
               <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
                 {/* Left Column: Item Selector */}
-                <div className="md:col-span-5 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="md:col-span-5 space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 print:hidden">
                   <label className="block text-xs font-black uppercase text-slate-700">
                     Select Medication or Equipment:
                   </label>
@@ -328,8 +331,8 @@ export default function DeveloperQrModal({
                 </div>
 
                 {/* Right Column: High-Density Clinical QR Label Card */}
-                <div className="md:col-span-7 space-y-4">
-                  <div className="p-5 bg-white border-2 border-slate-900 rounded-3xl shadow-lg flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden">
+                <div className="md:col-span-7 space-y-4 print:col-span-12 print:w-full print:max-w-xl print:mx-auto">
+                  <div className="p-5 bg-white border-2 border-slate-900 rounded-3xl shadow-lg flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden print:shadow-none print:break-inside-avoid">
                     {/* QR Code Container */}
                     <div className="shrink-0 bg-white p-2 border border-slate-200 rounded-2xl shadow-inner flex flex-col items-center">
                       {qrDataUrl ? (
@@ -395,7 +398,7 @@ export default function DeveloperQrModal({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 print:hidden">
                     <button
                       type="button"
                       onClick={handleDownloadSingleQr}
@@ -435,14 +438,14 @@ export default function DeveloperQrModal({
                     Rendering all high-density QR codes...
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 print:grid-cols-2 print:gap-2 print:w-full">
                     {items.map((item) => {
                       const qrUrl = bulkQrMap[item.id];
                       const lots = parseLotNumbers(item.lotNumbers);
                       return (
                         <div
                           key={item.id}
-                          className="p-3 bg-white border border-slate-300 rounded-2xl flex items-center gap-3 shadow-2xs text-left"
+                          className="p-3 bg-white border border-slate-300 rounded-2xl flex items-center gap-3 shadow-2xs text-left print:border-slate-400 print:shadow-none print:break-inside-avoid print:page-break-inside-avoid"
                         >
                           <div className="shrink-0 bg-white p-1 border border-slate-200 rounded-xl">
                             {qrUrl ? (

@@ -52,17 +52,18 @@ export async function GET() {
               }
             } catch (e) {}
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
-            const isUndispense = l.action_type === 'RESTOCK' || l.action_type === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
-            const resolvedActionType = isUndispense ? 'RESTOCK' : (l.action_type || 'DISPENSE');
+            const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+            const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
+            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE'));
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
 
             return {
               id: l.id,
               itemId: l.item_id || 'unknown',
               itemGenericName: l.item_generic_name || 'Medication Transaction Record',
               quantityChanged: resolvedQty,
-              actionType: resolvedActionType,
+              actionType: resolvedActionType as any,
               userRole: l.user_role || 'STAFF',
               details: parsedMeta.details || 'Clinical inventory adjustment logged.',
               createdAt: l.created_at || new Date().toISOString(),
@@ -102,10 +103,11 @@ export async function GET() {
       } catch (e) {}
 
       const detailsLower = (l.details || '').toLowerCase();
-      const isUndispense = l.actionType === 'RESTOCK' || (l.actionType as string) === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
-      const resolvedActionType = isUndispense ? 'RESTOCK' : (l.actionType || 'DISPENSE');
+      const isUndispense = l.actionType === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+      const isRestock = l.actionType === 'RESTOCK' || detailsLower.includes('restocked');
+      const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.actionType || 'DISPENSE'));
       const rawQty = Number(l.quantityChanged) || 0;
-      const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+      const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
 
       return {
         id: l.id,

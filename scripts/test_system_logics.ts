@@ -77,18 +77,22 @@ assertEquals(getStandardItemName('', ''), 'Medication Formulation', 'Handle empt
 console.log('\n📊 3. Analytics Net Dispense Calculations:');
 
 function aggregateTopDispensed(logs: any[]) {
-  const usageMap: { [canonicalName: string]: { dispensed: number; returned: number; category: string } } = {};
+  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
 
   logs.forEach((log: any) => {
     const name = log.itemGenericName || 'General Inventory Item';
     if (!usageMap[name]) {
-      usageMap[name] = { dispensed: 0, returned: 0, category: log.category || 'General Medical' };
+      usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
     }
     const qty = Math.abs(log.quantityChanged);
-    const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+    const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
+    const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
 
-    if (isRestock) {
-      usageMap[name].returned += qty;
+    if (isUndispense) {
+      usageMap[name].undispensed += qty;
+    } else if (isRestock) {
+      usageMap[name].restocked += qty;
+      // RESTOCK adds to inventory but does NOT reduce dispensed records
     } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
       usageMap[name].dispensed += qty;
     }
@@ -97,24 +101,32 @@ function aggregateTopDispensed(logs: any[]) {
   return Object.keys(usageMap)
     .map((name) => ({
       genericName: name,
-      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].returned),
+      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
       category: usageMap[name].category,
     }))
     .filter((item) => item.totalDispensed > 0)
     .sort((a, b) => b.totalDispensed - a.totalDispensed);
 }
 
-// Scenario 3.1: Dispense 3 Clotrimazole creams, then Undispense 3 Clotrimazole creams
+// Scenario 3.1: Dispense 3 Clotrimazole creams, then Undispense 3 Clotrimazole creams (reverses dispense)
 const clotrimazoleLogs = [
   { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'DISPENSE', details: 'Dispensed 3 units' },
-  { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'RESTOCK', details: 'Undispensed / Restocked 3 units back into inventory.' },
+  { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'UNDISPENSE', details: 'Undispensed 3 units back into inventory.' },
 ];
 const clotrimazoleResult = aggregateTopDispensed(clotrimazoleLogs);
 assertEquals(clotrimazoleResult.length, 0, 'Dispensing 3 creams and undispensing 3 creams nets to 0 (dropped from top dispensed list)');
 
-// Scenario 3.1b: REVERSE CHRONOLOGICAL ORDER (as received from database desc) - Amlodipine 1 Dispense, 1 Undispense
+// Scenario 3.1b: Restocking does NOT undo dispensing
+const restockTestLogs = [
+  { itemGenericName: 'Metformin (500mg)', quantityChanged: 50, actionType: 'DISPENSE', details: 'Dispensed 50 units to patient' },
+  { itemGenericName: 'Metformin (500mg)', quantityChanged: 100, actionType: 'RESTOCK', details: 'Restocked 100 units into inventory' },
+];
+const restockResult = aggregateTopDispensed(restockTestLogs);
+assertEquals(restockResult, [{ genericName: 'Metformin (500mg)', totalDispensed: 50, category: 'General Medical' }], 'Restocking 100 does NOT undo previous 50 dispenses (dispensed count remains 50)');
+
+// Scenario 3.1c: REVERSE CHRONOLOGICAL ORDER (as received from database desc) - Amlodipine 1 Dispense, 1 Undispense
 const amlodipineReverseLogs = [
-  { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: 1, actionType: 'RESTOCK', details: 'Undispensed / Restocked 1 units back into inventory.', createdAt: '2026-08-31T20:55:05Z' },
+  { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: 1, actionType: 'UNDISPENSE', details: 'Undispensed 1 units back into inventory.', createdAt: '2026-08-31T20:55:05Z' },
   { itemGenericName: 'Amlodipine Besylate (5 mg Tablet)', quantityChanged: -1, actionType: 'DISPENSE', details: 'Dispensed 1 units', createdAt: '2026-08-31T20:55:00Z' },
 ];
 const amlodipineResult = aggregateTopDispensed(amlodipineReverseLogs);
@@ -123,23 +135,24 @@ assertEquals(amlodipineResult.length, 0, 'Reverse chronological order: Undispens
 // Scenario 3.2: Dispense 5, Undispense 2 -> Net 3
 const partialUndispenseLogs = [
   { itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 5, actionType: 'DISPENSE', details: 'Dispensed 5 units' },
-  { itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 2, actionType: 'RESTOCK', details: 'Undispensed 2 units' },
+  { itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 2, actionType: 'UNDISPENSE', details: 'Undispensed 2 units' },
 ];
 const partialResult = aggregateTopDispensed(partialUndispenseLogs);
 assertEquals(partialResult, [{ genericName: 'Amoxicillin (500mg)', totalDispensed: 3, category: 'General Medical' }], 'Dispense 5 and undispense 2 nets exactly 3 units');
 
-// Scenario 3.3: Multiple medications ranking
+// Scenario 3.3: Multiple medications ranking with Restock and Undispense
 const multiMedLogs = [
   { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 100, actionType: 'DISPENSE', details: 'Dispensed 1 bottle' },
+  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 500, actionType: 'RESTOCK', details: 'Restocked 5 bottles' },
   { itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 21, actionType: 'DISPENSE', details: 'Dispensed 21 loose units' },
   { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'DISPENSE', details: 'Dispensed 3 tubes' },
-  { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'RESTOCK', details: 'Undispensed 3 tubes' },
+  { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'UNDISPENSE', details: 'Undispensed 3 tubes' },
 ];
 const multiResult = aggregateTopDispensed(multiMedLogs);
 assertEquals(multiResult, [
   { genericName: 'Ibuprofen (200 mg Tablet)', totalDispensed: 100, category: 'General Medical' },
   { genericName: 'Amoxicillin (500mg)', totalDispensed: 21, category: 'General Medical' }
-], 'Correct ranking: Ibuprofen (100), Amoxicillin (21), Clotrimazole (0 - excluded)');
+], 'Correct ranking: Ibuprofen (100 - unaffected by restock of 500), Amoxicillin (21), Clotrimazole (0 - excluded by undispense)');
 
 // -------------------------------------------------------------
 // 4. Lot Numbers Parsing & Formatting
