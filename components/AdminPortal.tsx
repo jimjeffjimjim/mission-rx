@@ -36,7 +36,10 @@ import {
   FileText,
   ArrowDownRight,
   ArrowUpRight,
-  User
+  User,
+  Stethoscope,
+  Boxes,
+  PackageCheck
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
@@ -49,7 +52,7 @@ interface AdminPortalProps {
   onAdjustStock?: (id: string, bottleDelta: number, looseDelta: number) => void;
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
-  onOpenCreateModal: () => void;
+  onOpenCreateModal: (defaultItem?: Partial<InventoryItem>) => void;
   onOpenAuditLogs?: (searchQuery?: string) => void;
   onRefreshData?: () => void;
   userRole?: string;
@@ -68,9 +71,11 @@ export default function AdminPortal({
   userRole = 'ADMIN',
   onAddTestAuditLog,
 }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'TABLE' | 'USAGE' | 'BACKUPS'>('TABLE');
+  const [activeTab, setActiveTab] = useState<'TABLE' | 'EQUIPMENT' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
+  const [equipmentSearchQuery, setEquipmentSearchQuery] = useState('');
+  const [equipmentSubFilter, setEquipmentSubFilter] = useState<'ALL' | 'DIAGNOSTIC' | 'SURGICAL' | 'CONSUMABLES'>('ALL');
 
   // Test Mode & Dispense Modal State
   const [isLocalTestMode, setIsLocalTestMode] = useState(false);
@@ -468,6 +473,59 @@ export default function AdminPortal({
       .sort((a, b) => b.totalDispensed - a.totalDispensed);
   }, [topDispensed, isTestingMode, testSimulatedLogs]);
 
+  const equipmentItems = useMemo(() => {
+    return displayItems.filter((i) => {
+      const isSupply = i.shelfLocation === 'Supplies' || i.itemType === 'Supply' || (i.stockUnit && ['Units', 'Kits', 'Sets', 'Boxes / Packs', 'Boxes', 'Pairs', 'Ampoules'].includes(i.stockUnit) && i.shelfLocation === 'Supplies');
+      if (!isSupply) return false;
+
+      if (equipmentSearchQuery.trim()) {
+        const q = equipmentSearchQuery.toLowerCase();
+        const matchName = i.genericName.toLowerCase().includes(q);
+        const matchBrand = (i.brandName || '').toLowerCase().includes(q);
+        const matchChem = (i.chemicalName || '').toLowerCase().includes(q);
+        const matchDosage = i.dosage.toLowerCase().includes(q);
+        const lots = parseLotNumbers(i.lotNumbers).join(' ').toLowerCase();
+        const matchLots = lots.includes(q);
+        if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots) return false;
+      }
+
+      if (equipmentSubFilter === 'DIAGNOSTIC') {
+        const text = (i.genericName + ' ' + (i.brandName || '') + ' ' + i.dosage).toLowerCase();
+        return text.includes('monitor') || text.includes('cuff') || text.includes('scope') || text.includes('meter') || text.includes('oximeter') || text.includes('thermometer') || text.includes('doppler') || text.includes('diagnostic');
+      }
+      if (equipmentSubFilter === 'SURGICAL') {
+        const text = (i.genericName + ' ' + (i.brandName || '') + ' ' + i.dosage).toLowerCase();
+        return text.includes('suture') || text.includes('scalpel') || text.includes('forcep') || text.includes('scissor') || text.includes('speculum') || text.includes('blade') || text.includes('kit') || text.includes('instrument') || text.includes('tray');
+      }
+      if (equipmentSubFilter === 'CONSUMABLES') {
+        const text = (i.genericName + ' ' + (i.brandName || '') + ' ' + i.dosage).toLowerCase();
+        return text.includes('glove') || text.includes('syringe') || text.includes('needle') || text.includes('gauze') || text.includes('bandage') || text.includes('swab') || text.includes('tubing') || text.includes('tape') || text.includes('mask') || text.includes('ppe');
+      }
+
+      return true;
+    });
+  }, [displayItems, equipmentSearchQuery, equipmentSubFilter]);
+
+  const equipmentTotalCount = displayItems.filter((i) => i.shelfLocation === 'Supplies' || i.itemType === 'Supply').length;
+
+  const handleOpenCreateEquipment = () => {
+    onOpenCreateModal({
+      genericName: '',
+      brandName: '',
+      dosage: 'Medical Supply / Device',
+      shelfLocation: 'Supplies',
+      itemType: 'Supply',
+      stockUnit: 'Units',
+      subUnit: 'pieces',
+      pillsPerBottle: 1,
+      expirationDate: '3000-01-01',
+      bottlesAvailable: 1,
+      looseUnitsAvailable: 0,
+      lotNumbers: [],
+      directions: 'Medical device / clinical supply for patient care.',
+    });
+  };
+
   const maxDispensed = displayTopDispensed.length > 0 ? displayTopDispensed[0].totalDispensed : 1;
 
   return (
@@ -608,7 +666,17 @@ export default function AdminPortal({
 
               <button
                 type="button"
-                onClick={onOpenCreateModal}
+                onClick={handleOpenCreateEquipment}
+                className="min-h-[44px] px-3.5 bg-teal-900 hover:bg-teal-950 text-teal-200 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer border border-teal-700/50"
+                title="Add new medical equipment, diagnostic device, or surgical supply"
+              >
+                <Stethoscope className="w-4 h-4 stroke-[2.5]" />
+                <span>Add Equipment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOpenCreateModal()}
                 className="min-h-[44px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[3]" />
@@ -618,11 +686,25 @@ export default function AdminPortal({
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
             <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3.5 border border-amber-400/40 shadow-xs select-text">
-              <span className="text-[11px] font-black uppercase text-slate-600 block">Total Formulations</span>
-              <span className="font-mono text-2xl font-black text-slate-900">{totalItems}</span>
+              <span className="text-[11px] font-black uppercase text-slate-600 block">Medications</span>
+              <span className="font-mono text-2xl font-black text-slate-900">{totalItems - equipmentTotalCount}</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('EQUIPMENT')}
+              className={`text-left transition-all rounded-2xl p-3.5 border shadow-xs cursor-pointer ${
+                activeTab === 'EQUIPMENT'
+                  ? 'bg-teal-700 border-teal-800 text-white shadow-md shadow-teal-700/30 scale-[1.02]'
+                  : 'bg-white/90 backdrop-blur-md border-amber-400/40 hover:bg-white'
+              }`}
+              title="Click to view all medical equipment and clinical supplies"
+            >
+              <span className={`text-[11px] font-black uppercase block ${activeTab === 'EQUIPMENT' ? 'text-teal-100' : 'text-teal-900'}`}>Equipment & Supplies</span>
+              <span className={`font-mono text-2xl font-black ${activeTab === 'EQUIPMENT' ? 'text-white' : 'text-teal-900'}`}>{equipmentTotalCount}</span>
+            </button>
 
             <button
               type="button"
@@ -654,12 +736,12 @@ export default function AdminPortal({
               }`}
               title="Click to view formulations expiring within 30 days"
             >
-              <span className={`text-[11px] font-black uppercase block ${adminStatusFilter === 'EXPIRING' ? 'text-slate-900' : 'text-amber-900'}`}>Expiring Within 30d</span>
+              <span className={`text-[11px] font-black uppercase block ${adminStatusFilter === 'EXPIRING' ? 'text-slate-900' : 'text-amber-900'}`}>Expiring (30d)</span>
               <span className={`font-mono text-2xl font-black ${adminStatusFilter === 'EXPIRING' ? 'text-slate-950' : 'text-amber-900'}`}>{expiringCount}</span>
             </button>
 
             <div className="bg-white/90 backdrop-blur-md rounded-2xl p-3.5 border border-amber-400/40 shadow-xs select-text">
-              <span className="text-[11px] font-black uppercase text-teal-800 block">Total Sealed Bottles</span>
+              <span className="text-[11px] font-black uppercase text-teal-800 block">Total Containers</span>
               <span className="font-mono text-2xl font-black text-teal-900">{totalBottles}</span>
             </div>
           </div>
@@ -667,24 +749,42 @@ export default function AdminPortal({
       </div>
 
       {/* Admin Section View Switcher Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
         <button
           type="button"
           onClick={() => setActiveTab('TABLE')}
-          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border ${
+          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border cursor-pointer ${
             activeTab === 'TABLE'
               ? 'bg-slate-900 text-white border-slate-950 shadow-md scale-[1.02]'
               : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
           }`}
         >
           <Table className="w-4 h-4 stroke-[2.5]" />
-          <span>Backdoor Inventory Table</span>
+          <span>Medications & Formulations</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('EQUIPMENT')}
+          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border cursor-pointer ${
+            activeTab === 'EQUIPMENT'
+              ? 'bg-teal-700 text-white border-teal-800 shadow-md shadow-teal-700/20 scale-[1.02]'
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          <Stethoscope className="w-4 h-4 stroke-[2.5]" />
+          <span>Medical Equipment & Supplies</span>
+          <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-mono font-black ${
+            activeTab === 'EQUIPMENT' ? 'bg-teal-800 text-teal-100' : 'bg-teal-50 text-teal-800 border border-teal-200'
+          }`}>
+            {equipmentTotalCount}
+          </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('USAGE')}
-          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border ${
+          className={`min-h-[48px] px-5 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-all touch-manipulation border cursor-pointer ${
             activeTab === 'USAGE'
               ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md shadow-amber-500/20 scale-[1.02]'
               : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -1018,6 +1118,288 @@ export default function AdminPortal({
                               title="Delete Item"
                             >
                               <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: MEDICAL EQUIPMENT & CLINICAL SUPPLIES */}
+      {activeTab === 'EQUIPMENT' && (
+        <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none stroke-[2.5]" />
+              <input
+                type="text"
+                value={equipmentSearchQuery}
+                onChange={(e) => setEquipmentSearchQuery(e.target.value)}
+                placeholder="Search medical equipment, model, serial #, lot #, or storage location..."
+                className="w-full pl-10 pr-4 min-h-[48px] bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden select-text"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Sub-Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                {(
+                  [
+                    { id: 'ALL', label: 'All Supplies' },
+                    { id: 'DIAGNOSTIC', label: '🩺 Diagnostic Devices' },
+                    { id: 'SURGICAL', label: '✂️ Surgical & Kits' },
+                    { id: 'CONSUMABLES', label: '🧤 Consumables & PPE' },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setEquipmentSubFilter(tab.id)}
+                    className={`min-h-[40px] px-3.5 rounded-xl text-xs font-black transition-all border shrink-0 touch-manipulation cursor-pointer ${
+                      equipmentSubFilter === tab.id
+                        ? 'bg-teal-700 text-white border-teal-800 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOpenCreateEquipment}
+                className="min-h-[48px] px-4 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Add Medical Equipment</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs">
+            <table className="w-full text-left border-collapse bg-white">
+              <thead>
+                <tr className="bg-teal-900/5 text-slate-700 text-xs font-black uppercase tracking-wider border-b border-slate-200">
+                  <th className="py-3.5 px-4">Type / Category</th>
+                  <th className="py-3.5 px-4">Equipment / Model Name</th>
+                  <th className="py-3.5 px-4">Storage Location</th>
+                  <th className="py-3.5 px-4">Stock Count</th>
+                  <th className="py-3.5 px-4">Total Available</th>
+                  <th className="py-3.5 px-4">Serial / Lot #</th>
+                  <th className="py-3.5 px-4">Maintenance / Expiry</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                {equipmentItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-14 text-center">
+                      <div className="max-w-md mx-auto space-y-4">
+                        <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center mx-auto shadow-inner">
+                          <Stethoscope className="w-6 h-6 stroke-[2.5]" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-black text-slate-800">No Medical Equipment Found</h4>
+                          <p className="text-xs text-slate-500 font-semibold">
+                            Add clinical diagnostic devices, surgical instruments, and consumable hospital supplies to track physical clinic equipment.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={handleOpenCreateEquipment}
+                            className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                          >
+                            + Add First Equipment Item
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  equipmentItems.map((item) => {
+                    const style = getSpecialtyColor(item.shelfLocation);
+                    const lotList = parseLotNumbers(item.lotNumbers);
+                    const totalUnits = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+
+                    // Check expiration
+                    let isExp = false;
+                    let expText = 'Does Not Expire / Clinical Device';
+                    if (item.expirationDate && !item.expirationDate.startsWith('3000') && !item.expirationDate.startsWith('2099')) {
+                      try {
+                        const days = differenceInDays(parseISO(item.expirationDate), new Date());
+                        if (days < 0) {
+                          isExp = true;
+                          expText = `Expired (${Math.abs(days)}d ago)`;
+                        } else if (days <= 30) {
+                          isExp = true;
+                          expText = `Expiring in ${days}d`;
+                        } else {
+                          expText = `Expires ${new Date(item.expirationDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+                        }
+                      } catch (e) {}
+                    }
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs uppercase font-extrabold ${style.badge}`}>
+                            {style.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-extrabold text-slate-900 text-sm">
+                            {item.genericName}
+                          </div>
+                          <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-2">
+                            {item.brandName && <span>Brand/Model: {item.brandName}</span>}
+                            {item.brandName && item.dosage && item.dosage !== 'N/A' && <span>•</span>}
+                            {item.dosage && item.dosage !== 'N/A' && <span>Spec: {item.dosage}</span>}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">
+                            {item.shelfLocation || 'General Medical'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="space-y-0.5 text-xs font-mono font-bold">
+                            <div>{item.bottlesAvailable || 0} {item.stockUnit || 'Units'}</div>
+                            {item.looseUnitsAvailable > 0 && (
+                              <div className="text-[11px] text-slate-500 font-medium">
+                                + {item.looseUnitsAvailable} {item.subUnit || 'pieces'}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDispenseItem(item);
+                              setDispenseAmount('');
+                              setUndispenseAmount('');
+                              setDispenseModalMode('units');
+                              setDispenseModalOpen(true);
+                            }}
+                            className="text-left group cursor-pointer"
+                            title="Click to dispense/use or return equipment"
+                          >
+                            <div className="font-mono text-sm font-black text-teal-800 group-hover:text-teal-950 flex items-center gap-1">
+                              <span>{totalUnits.toLocaleString()}</span>
+                              <span className="text-[10px] uppercase font-bold text-teal-600 group-hover:underline">
+                                {item.subUnit || 'units'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-teal-600 font-bold opacity-80 group-hover:opacity-100 flex items-center gap-0.5">
+                              <span>Use / Dispense</span>
+                            </span>
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {lotList.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[180px]">
+                              {lotList.map((lot, idx) => (
+                                <span
+                                  key={idx}
+                                  className="font-mono text-[10px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md"
+                                >
+                                  {lot}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">N/A</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                              isExp
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isExp ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+                            <span>{expText}</span>
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Quick +1 / -1 Stock Adjustments */}
+                            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onAdjustStock) {
+                                    onAdjustStock(item.id, -1, 0);
+                                  } else {
+                                    onUpdateStock(item.id, Math.max(0, (item.bottlesAvailable || 0) - 1), item.looseUnitsAvailable || 0);
+                                  }
+                                }}
+                                disabled={item.bottlesAvailable <= 0}
+                                className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-30 cursor-pointer"
+                                title={`Subtract 1 ${item.stockUnit || 'Unit'}`}
+                              >
+                                <Minus className="w-3 h-3 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onAdjustStock) {
+                                    onAdjustStock(item.id, 1, 0);
+                                  } else {
+                                    onUpdateStock(item.id, (item.bottlesAvailable || 0) + 1, item.looseUnitsAvailable || 0);
+                                  }
+                                }}
+                                className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors cursor-pointer"
+                                title={`Add 1 ${item.stockUnit || 'Unit'}`}
+                              >
+                                <Plus className="w-3 h-3 stroke-[3]" />
+                              </button>
+                            </div>
+
+                            {/* View Audit Logs for Item */}
+                            {onOpenAuditLogs && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenAuditLogs(item.genericName)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
+                                title="View History & Logs"
+                              >
+                                <Clock className="w-3.5 h-3.5 stroke-[2.5]" />
+                              </button>
+                            )}
+
+                            {/* Edit Item */}
+                            <button
+                              type="button"
+                              onClick={() => onEditItem(item)}
+                              className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
+                              title="Edit Equipment Details"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+
+                            {/* Delete Item */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to permanently remove "${item.genericName}" from equipment inventory?`)) {
+                                  onDeleteItem(item.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
+                              title="Delete Equipment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                             </button>
                           </div>
                         </td>

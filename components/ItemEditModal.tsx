@@ -840,10 +840,13 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 >
                   <option value="Bottles">🍼 Bottles (Tablets/Liquids)</option>
+                  <option value="Units">⚙️ Units / Devices / Machines</option>
+                  <option value="Boxes / Packs">📦 Boxes / Cartons / Packs</option>
+                  <option value="Kits">🧰 Kits / Trays / Sets</option>
+                  <option value="Pairs">🧤 Pairs (Gloves / Footwear)</option>
                   <option value="Tubes">🧴 Tubes (Creams/Ointments)</option>
                   <option value="Vials">🧪 Vials (Injectables/Drops)</option>
                   <option value="Inhalers">💨 Inhalers / Canisters</option>
-                  <option value="Boxes / Packs">📦 Boxes / Cartons / Packs</option>
                   <option value="Ampoules">💉 Ampoules / Syringes</option>
                 </select>
               </div>
@@ -857,17 +860,19 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
                   onChange={(e) => handleChange('subUnit', e.target.value)}
                   className="w-full min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                 >
-                  <option value="g">⚖️ g (Grams - Ointments/Creams)</option>
-                  <option value="mL">💧 mL (Milliliters - Liquids)</option>
                   <option value="tablets">💊 Tablets</option>
                   <option value="capsules">💊 Capsules</option>
+                  <option value="pieces">🧩 Pieces / Items</option>
+                  <option value="units">🔢 Individual Units / Doses</option>
+                  <option value="g">⚖️ g (Grams - Ointments/Creams)</option>
+                  <option value="mL">💧 mL (Milliliters - Liquids)</option>
                   <option value="puffs">💨 Puffs / Actuations (Inhalers)</option>
                   <option value="drops">💧 Drops / gtt (Otic/Ophthalmic)</option>
                   <option value="strips">🩸 Test Strips</option>
-                  <option value="units">🔢 Individual Units / Doses</option>
                   <option value="packets">🎒 Packets / Sachets</option>
                   <option value="suppositories">💊 Suppositories</option>
                   <option value="needles">💉 Needles</option>
+                  <option value="pairs">🧤 Pairs</option>
                 </select>
               </div>
             </div>

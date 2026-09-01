@@ -224,6 +224,39 @@ assertEquals(chaoticResult, [
   { genericName: 'Amoxicillin (500mg)', totalDispensed: 30, category: 'General Medical' },
 ], 'Chaotic stream correctly calculates: Ibuprofen 40 (50-10), Amoxicillin 30, Amlodipine 0 (excluded)');
 
+// -----------------------------------------------------------------
+// 8. Medical Equipment & Supplies Categorization & Stock Math
+// -----------------------------------------------------------------
+console.log('\n🩺 8. Medical Equipment & Supplies Categorization & Stock Math');
+
+const mockInventory = [
+  { id: '1', genericName: 'Amoxicillin (500mg)', shelfLocation: 'General Medical', itemType: 'Medication', bottlesAvailable: 5, pillsPerBottle: 100, looseUnitsAvailable: 0 },
+  { id: '2', genericName: 'Digital Blood Pressure Monitor', brandName: 'Omron', dosage: 'Medical Supply / Device', shelfLocation: 'Supplies', itemType: 'Supply', stockUnit: 'Units', subUnit: 'pieces', bottlesAvailable: 4, pillsPerBottle: 1, looseUnitsAvailable: 0 },
+  { id: '3', genericName: 'Sterile Suture Removal Kit', brandName: 'Dynarex', dosage: 'Disposable Kit', shelfLocation: 'Supplies', itemType: 'Supply', stockUnit: 'Kits', subUnit: 'kits', bottlesAvailable: 25, pillsPerBottle: 1, looseUnitsAvailable: 0 },
+  { id: '4', genericName: 'Nitrile Exam Gloves (Box of 100)', brandName: 'Halyard', dosage: 'Large', shelfLocation: 'Supplies', itemType: 'Supply', stockUnit: 'Boxes / Packs', subUnit: 'pairs', bottlesAvailable: 10, pillsPerBottle: 50, looseUnitsAvailable: 0 },
+  { id: '5', genericName: 'Ibuprofen (200 mg Tablet)', shelfLocation: 'Analgesics', itemType: 'Medication', bottlesAvailable: 3, pillsPerBottle: 100, looseUnitsAvailable: 20 },
+];
+
+// Equipment count
+const equipmentCount = mockInventory.filter((i) => i.shelfLocation === 'Supplies' || i.itemType === 'Supply').length;
+assertEquals(equipmentCount, 3, 'Identifies 3 medical equipment / supply items in catalog');
+
+const medicationCount = mockInventory.filter((i) => i.shelfLocation !== 'Supplies' && i.itemType !== 'Supply').length;
+assertEquals(medicationCount, 2, 'Identifies 2 pharmaceutical medication formulations');
+
+// Equipment diagnostic filter
+const diagnosticItems = mockInventory.filter((i) => {
+  if (i.shelfLocation !== 'Supplies' && i.itemType !== 'Supply') return false;
+  const text = (i.genericName + ' ' + (i.brandName || '') + ' ' + i.dosage).toLowerCase();
+  return text.includes('monitor') || text.includes('cuff') || text.includes('scope');
+});
+assertEquals(diagnosticItems.length, 1, 'Diagnostic filter matches Digital Blood Pressure Monitor');
+
+// Equipment consumable stock math
+const gloveItem = mockInventory.find((i) => i.genericName.includes('Gloves'))!;
+const totalGlovePairs = calculateTotalUnits(gloveItem.bottlesAvailable, gloveItem.pillsPerBottle, gloveItem.looseUnitsAvailable);
+assertEquals(totalGlovePairs, 500, 'Calculates 10 boxes * 50 pairs = 500 total pairs of gloves');
+
 console.log('\n============================================================');
 console.log('🎉 CHAOS TEST SUMMARY: ' + passed + '/' + (passed + failed) + ' Passed (' + failed + ' Failed)');
 console.log('============================================================\n');

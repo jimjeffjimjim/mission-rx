@@ -696,8 +696,28 @@ export default function Home() {
     }
   };
 
-  const openCreateModal = () => {
-    setActiveItem(null);
+  const openCreateModal = (defaultItem?: Partial<InventoryItem>) => {
+    if (defaultItem) {
+      setActiveItem({
+        id: '',
+        genericName: defaultItem.genericName || '',
+        brandName: defaultItem.brandName || null,
+        chemicalName: defaultItem.chemicalName || null,
+        dosage: defaultItem.dosage || '200 mg Tablet',
+        shelfLocation: defaultItem.shelfLocation || 'General Medical',
+        stockUnit: defaultItem.stockUnit || 'Bottles',
+        subUnit: defaultItem.subUnit || 'tablets',
+        bottlesAvailable: defaultItem.bottlesAvailable ?? 1,
+        looseUnitsAvailable: defaultItem.looseUnitsAvailable ?? 0,
+        pillsPerBottle: defaultItem.pillsPerBottle ?? 100,
+        expirationDate: defaultItem.expirationDate || new Date(Date.now() + 2 * 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        lotNumbers: defaultItem.lotNumbers || [],
+        directions: defaultItem.directions || '',
+        itemType: defaultItem.itemType || 'Medication',
+      } as InventoryItem);
+    } else {
+      setActiveItem(null);
+    }
     setIsEditModalOpen(true);
   };
 
@@ -947,7 +967,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.17 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.18 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
