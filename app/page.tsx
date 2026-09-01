@@ -14,7 +14,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers } from '@/lib/stockMath';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -388,11 +388,7 @@ export default function Home() {
           const verb = actualPillDiff < 0 ? 'Dispensed' : 'Restocked';
           const bottleCount = isBottle ? Math.abs(bottleDelta) : 0;
 
-          let itemLots: string[] = [];
-          try {
-            if (Array.isArray(target.lotNumbers)) itemLots = target.lotNumbers;
-            else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-          } catch (e) {}
+          const itemLots = parseLotNumbers(target.lotNumbers);
 
           const canonicalName = getStandardItemName(target.genericName, target.dosage);
 
@@ -448,11 +444,7 @@ export default function Home() {
       const itemKey = `${target.id}_${unitKey}`;
       const canonicalName = getStandardItemName(target.genericName, target.dosage);
 
-      let itemLots: string[] = [];
-      try {
-        if (Array.isArray(target.lotNumbers)) itemLots = target.lotNumbers;
-        else if (typeof target.lotNumbers === 'string') itemLots = target.lotNumbers.startsWith('[') ? JSON.parse(target.lotNumbers) : target.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-      } catch (e) {}
+      const itemLots = parseLotNumbers(target.lotNumbers);
 
       if (!auditLogAccumulatorsRef.current[itemKey]) {
         auditLogAccumulatorsRef.current[itemKey] = {
@@ -812,15 +804,8 @@ export default function Home() {
             const packSize = existing.pillsPerBottle || item.pillsPerBottle || 0;
             const { bottles, loose } = convertTotalUnitsToStock(combinedTotal, packSize);
 
-            let existingLots: string[] = Array.isArray(existing.lotNumbers) ? existing.lotNumbers : [];
-            let itemLots: string[] = [];
-            try {
-              itemLots = Array.isArray(item.lotNumbers)
-                ? item.lotNumbers
-                : (typeof item.lotNumbers === 'string' ? JSON.parse(item.lotNumbers || '[]') : []);
-            } catch (e) {
-              itemLots = [];
-            }
+            const existingLots = parseLotNumbers(existing.lotNumbers);
+            const itemLots = parseLotNumbers(item.lotNumbers);
             const mergedLots = Array.from(new Set([...existingLots, ...itemLots]));
 
             consolidatedMap.set(key, {
@@ -962,7 +947,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.16 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.17 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

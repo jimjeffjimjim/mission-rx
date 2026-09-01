@@ -39,7 +39,7 @@ import {
   User
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
@@ -320,7 +320,8 @@ export default function AdminPortal({
   const fetchAnalytics = async (tf: 'today' | 'week' | 'month' | 'all') => {
     setLoadingAnalytics(true);
     try {
-      const res = await fetch(`/api/analytics?timeframe=${tf}`);
+      const tzOffset = typeof window !== 'undefined' ? new Date().getTimezoneOffset() : 0;
+      const res = await fetch(`/api/analytics?timeframe=${tf}&tzOffset=${tzOffset}`);
       if (res.ok) {
         const data = await res.json();
         setAnalyticsLogs(data.logs || []);
@@ -408,9 +409,7 @@ export default function AdminPortal({
       const matchBrand = (item.brandName || '').toLowerCase().includes(q);
       const matchChem = (item.chemicalName || '').toLowerCase().includes(q);
       const matchDosage = item.dosage.toLowerCase().includes(q);
-      const lots = Array.isArray(item.lotNumbers)
-        ? item.lotNumbers.join(' ').toLowerCase()
-        : String(item.lotNumbers || '').toLowerCase();
+      const lots = parseLotNumbers(item.lotNumbers).join(' ').toLowerCase();
       const matchLots = lots.includes(q);
       if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots) return false;
     }
@@ -778,19 +777,7 @@ export default function AdminPortal({
                 ) : (
                   filtered.map((item) => {
                     const style = getSpecialtyColor(item.shelfLocation);
-                    let lotList: string[] = [];
-                    try {
-                      if (Array.isArray(item.lotNumbers)) {
-                        lotList = item.lotNumbers;
-                      } else if (typeof item.lotNumbers === 'string') {
-                        lotList = item.lotNumbers.startsWith('[')
-                          ? JSON.parse(item.lotNumbers)
-                          : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-                      }
-                      if (!Array.isArray(lotList)) lotList = lotList ? [String(lotList)] : [];
-                    } catch (e) {
-                      lotList = [];
-                    }
+                    const lotList = parseLotNumbers(item.lotNumbers);
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1216,17 +1203,7 @@ export default function AdminPortal({
                             (logName && logName.startsWith(i.genericName.toLowerCase())))
                           );
 
-                          let lotStr = 'N/A';
-                          if (log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0) {
-                            lotStr = log.lotNumbers.join(', ');
-                          } else if (corrItem && corrItem.lotNumbers) {
-                            try {
-                              const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
-                              lotStr = Array.isArray(parsed) ? parsed.join(', ') : String(parsed);
-                            } catch (e) {
-                              lotStr = String(corrItem.lotNumbers);
-                            }
-                          }
+                          const lotStr = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
 
                           const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
                           const signedQty = isRestock ? `+${Math.abs(log.quantityChanged)}` : `-${Math.abs(log.quantityChanged)}`;
@@ -1311,17 +1288,7 @@ export default function AdminPortal({
                             (logName && logName.startsWith(i.genericName.toLowerCase())))
                           );
 
-                          let lotList: string[] = [];
-                          if (log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0) {
-                            lotList = log.lotNumbers;
-                          } else if (corrItem && corrItem.lotNumbers) {
-                            try {
-                              const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
-                              lotList = Array.isArray(parsed) ? parsed : [String(parsed)];
-                            } catch (e) {
-                              lotList = [String(corrItem.lotNumbers)];
-                            }
-                          }
+                          const lotList = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers);
 
                           return (
                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1688,6 +1655,7 @@ export default function AdminPortal({
               </p>
             </div>
 
+            {/* Dispensary Actions */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
               {/* Section 1: Dispense */}
               <div>
@@ -1706,90 +1674,110 @@ export default function AdminPortal({
                     />
                     {dispenseModalMode === 'bottles' && dispenseAmount && !isNaN(Number(dispenseAmount)) && (
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-rose-50 text-rose-700 font-extrabold border border-rose-200 px-2 py-0.5 rounded-md">
-                        = {Number(dispenseAmount) * (dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
+                        = {Math.max(0, Number(dispenseAmount)) * Math.max(1, dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    disabled={!dispenseAmount || Number(dispenseAmount) <= 0 || dispensingAction}
-                    onClick={async () => {
-                      const inputAmt = parseInt(dispenseAmount, 10);
-                      if (isNaN(inputAmt) || inputAmt <= 0) return;
-                      const isBottle = dispenseModalMode === 'bottles';
-                      const pillsPerBottle = dispenseItem.pillsPerBottle || 1;
-                      const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
-                      const bottleAmount = isBottle ? inputAmt : 0;
-                      setDispensingAction(true);
-                      try {
-                        const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
-                        const newTotal = Math.max(0, currentTotal - pillAmount);
-                        const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
+                  {(() => {
+                    const inputAmt = Math.max(0, parseInt(dispenseAmount, 10) || 0);
+                    const isBottle = dispenseModalMode === 'bottles';
+                    const pillsPerBottle = Math.max(1, dispenseItem.pillsPerBottle || 1);
+                    const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
+                    const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, pillsPerBottle, dispenseItem.looseUnitsAvailable || 0);
+                    const isOverStock = inputAmt > 0 && pillAmount > currentTotal;
 
-                        let itemLots: string[] = [];
-                        try {
-                          if (Array.isArray(dispenseItem.lotNumbers)) itemLots = dispenseItem.lotNumbers;
-                          else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-                        } catch (e) {}
+                    return (
+                      <button
+                        type="button"
+                        disabled={!dispenseAmount || inputAmt <= 0 || isOverStock || dispensingAction}
+                        onClick={async () => {
+                          if (inputAmt <= 0 || isOverStock) return;
+                          const bottleAmount = isBottle ? inputAmt : 0;
+                          setDispensingAction(true);
+                          try {
+                            const newTotal = Math.max(0, currentTotal - pillAmount);
+                            const { bottles, loose } = convertTotalUnitsToStock(newTotal, pillsPerBottle);
+                            const itemLots = parseLotNumbers(dispenseItem.lotNumbers);
+                            const fullName = dispenseItem.dosage ? `${dispenseItem.genericName} (${dispenseItem.dosage})` : dispenseItem.genericName;
 
-                        const fullName = dispenseItem.dosage ? `${dispenseItem.genericName} (${dispenseItem.dosage})` : dispenseItem.genericName;
-
-                        if (isTestingMode) {
-                          setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
-                          setTestSimulatedLogs((prev) => [
-                            ...prev,
-                            { genericName: fullName, quantity: pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
-                          ]);
-                          if (onAddTestAuditLog) {
-                            onAddTestAuditLog({
-                              id: 'test-dispense-' + Date.now(),
-                              itemId: dispenseItem.id,
-                              itemGenericName: fullName,
-                              quantityChanged: pillAmount,
-                              actionType: 'DISPENSE',
-                              userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
-                              details: `[TESTING MODE - NOT REAL]: Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} in test sandbox`,
-                              isTestMode: true,
-                              createdAt: new Date().toISOString(),
-                              dispensedUnit: isBottle ? 'bottle' : 'unit',
-                              dispensedBottles: bottleAmount,
-                              dispensedPillsPerBottle: pillsPerBottle,
-                              lotNumbers: itemLots,
-                            } as any);
+                            if (isTestingMode) {
+                              setTestItemsMap((prev) => ({ ...prev, [dispenseItem.id]: { bottles, loose } }));
+                              setTestSimulatedLogs((prev) => [
+                                ...prev,
+                                { genericName: fullName, quantity: pillAmount, category: dispenseItem.shelfLocation || 'General Medical' }
+                              ]);
+                              if (onAddTestAuditLog) {
+                                onAddTestAuditLog({
+                                  id: 'test-dispense-' + Date.now(),
+                                  itemId: dispenseItem.id,
+                                  itemGenericName: fullName,
+                                  quantityChanged: pillAmount,
+                                  actionType: 'DISPENSE',
+                                  userRole: userRole ? `${userRole} (TEST)` : 'ADMIN (TEST)',
+                                  details: `[TESTING MODE - NOT REAL]: Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} in test sandbox`,
+                                  isTestMode: true,
+                                  createdAt: new Date().toISOString(),
+                                  dispensedUnit: isBottle ? 'bottle' : 'unit',
+                                  dispensedBottles: bottleAmount,
+                                  dispensedPillsPerBottle: pillsPerBottle,
+                                  lotNumbers: itemLots,
+                                } as any);
+                              }
+                            } else {
+                              onUpdateStock(dispenseItem.id, bottles, loose);
+                              await fetch('/api/logs', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  itemId: dispenseItem.id,
+                                  itemGenericName: fullName,
+                                  quantityChanged: pillAmount,
+                                  actionType: 'DISPENSE',
+                                  userRole: userRole || 'ADMIN',
+                                  details: `Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} directly via Backdoor Inventory table.`,
+                                  createdAt: new Date().toISOString(),
+                                  dispensedUnit: isBottle ? 'bottle' : 'unit',
+                                  dispensedBottles: bottleAmount,
+                                  dispensedPillsPerBottle: pillsPerBottle,
+                                  lotNumbers: itemLots,
+                                }),
+                              }).catch(() => null);
+                              if (onRefreshData) onRefreshData();
+                            }
+                            setDispenseModalOpen(false);
+                            setDispenseItem(null);
+                          } finally {
+                            setDispensingAction(false);
                           }
-                        } else {
-                          onUpdateStock(dispenseItem.id, bottles, loose);
-                          await fetch('/api/logs', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              itemId: dispenseItem.id,
-                              itemGenericName: fullName,
-                              quantityChanged: pillAmount,
-                              actionType: 'DISPENSE',
-                              userRole: userRole || 'ADMIN',
-                              details: `Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} directly via Backdoor Inventory table.`,
-                              createdAt: new Date().toISOString(),
-                              dispensedUnit: isBottle ? 'bottle' : 'unit',
-                              dispensedBottles: bottleAmount,
-                              dispensedPillsPerBottle: pillsPerBottle,
-                              lotNumbers: itemLots,
-                            }),
-                          }).catch(() => null);
-                          if (onRefreshData) onRefreshData();
-                        }
-                        setDispenseModalOpen(false);
-                        setDispenseItem(null);
-                      } finally {
-                        setDispensingAction(false);
-                      }
-                    }}
-                    className="px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
-                  >
-                    <Minus className="w-4 h-4 stroke-[3]" />
-                    <span>Dispense</span>
-                  </button>
+                        }}
+                        className="px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <Minus className="w-4 h-4 stroke-[3]" />
+                        <span>Dispense</span>
+                      </button>
+                    );
+                  })()}
                 </div>
+
+                {/* Over-dispense stock validation warning banner */}
+                {dispenseAmount && !isNaN(Number(dispenseAmount)) && (() => {
+                  const inputAmt = Math.max(0, parseInt(dispenseAmount, 10) || 0);
+                  const isBottle = dispenseModalMode === 'bottles';
+                  const pillsPerBottle = Math.max(1, dispenseItem.pillsPerBottle || 1);
+                  const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
+                  const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, pillsPerBottle, dispenseItem.looseUnitsAvailable || 0);
+                  if (inputAmt > 0 && pillAmount > currentTotal) {
+                    return (
+                      <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>Insufficient Stock Available:</strong> You requested {pillAmount.toLocaleString()} {dispenseItem.subUnit || 'units'}, but only {currentTotal.toLocaleString()} {dispenseItem.subUnit || 'units'} exist in dispensary inventory.
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Section 2: Undispense */}
@@ -1809,7 +1797,7 @@ export default function AdminPortal({
                     />
                     {dispenseModalMode === 'bottles' && undispenseAmount && !isNaN(Number(undispenseAmount)) && (
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-200 px-2 py-0.5 rounded-md">
-                        = {Number(undispenseAmount) * (dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
+                        = {Math.max(0, Number(undispenseAmount)) * Math.max(1, dispenseItem.pillsPerBottle || 1)} {dispenseItem.subUnit || 'pills'}
                       </span>
                     )}
                   </div>
@@ -1817,24 +1805,18 @@ export default function AdminPortal({
                     type="button"
                     disabled={!undispenseAmount || Number(undispenseAmount) <= 0 || dispensingAction}
                     onClick={async () => {
-                      const inputAmt = parseInt(undispenseAmount, 10);
-                      if (isNaN(inputAmt) || inputAmt <= 0) return;
+                      const inputAmt = Math.max(0, parseInt(undispenseAmount, 10) || 0);
+                      if (inputAmt <= 0) return;
                       const isBottle = dispenseModalMode === 'bottles';
-                      const pillsPerBottle = dispenseItem.pillsPerBottle || 1;
+                      const pillsPerBottle = Math.max(1, dispenseItem.pillsPerBottle || 1);
                       const pillAmount = isBottle ? inputAmt * pillsPerBottle : inputAmt;
                       const bottleAmount = isBottle ? inputAmt : 0;
                       setDispensingAction(true);
                       try {
-                        const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0);
+                        const currentTotal = calculateTotalUnits(dispenseItem.bottlesAvailable || 0, pillsPerBottle, dispenseItem.looseUnitsAvailable || 0);
                         const newTotal = currentTotal + pillAmount;
-                        const { bottles, loose } = convertTotalUnitsToStock(newTotal, dispenseItem.pillsPerBottle || 0);
-
-                        let itemLots: string[] = [];
-                        try {
-                          if (Array.isArray(dispenseItem.lotNumbers)) itemLots = dispenseItem.lotNumbers;
-                          else if (typeof dispenseItem.lotNumbers === 'string') itemLots = dispenseItem.lotNumbers.startsWith('[') ? JSON.parse(dispenseItem.lotNumbers) : dispenseItem.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-                        } catch (e) {}
-
+                        const { bottles, loose } = convertTotalUnitsToStock(newTotal, pillsPerBottle);
+                        const itemLots = parseLotNumbers(dispenseItem.lotNumbers);
                         const fullName = dispenseItem.dosage ? `${dispenseItem.genericName} (${dispenseItem.dosage})` : dispenseItem.genericName;
 
                         if (isTestingMode) {
@@ -1887,7 +1869,7 @@ export default function AdminPortal({
                         setDispensingAction(false);
                       }
                     }}
-                    className="px-5 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-40 cursor-pointer"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" />
                     <span>Undispense</span>

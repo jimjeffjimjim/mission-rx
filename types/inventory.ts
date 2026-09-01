@@ -1,3 +1,11 @@
+export interface LotEntry {
+  id?: string;
+  lotNumber: string;
+  expirationDate?: string;
+  bottles?: number;
+  looseUnits?: number;
+}
+
 export interface InventoryItem {
   id: string;
   shelfLocation: string;
@@ -14,7 +22,7 @@ export interface InventoryItem {
   initialBottlesAvailable?: number;
   initialLooseUnitsAvailable?: number;
   expirationDate: string; // YYYY-MM-DD
-  lotNumbers: string | string[]; // JSON string array or array of strings
+  lotNumbers: string | string[] | LotEntry[]; // JSON string array or array of strings or LotEntry objects
   directions?: string | null; // Directions / Provider Notes from Excel
   createdAt?: string | Date;
   updatedAt?: string | Date;

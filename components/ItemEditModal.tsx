@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { InventoryItem } from '@/types/inventory';
+import { InventoryItem, LotEntry } from '@/types/inventory';
 import { 
   X, 
   Plus, 
@@ -16,11 +16,13 @@ import {
   ToggleRight, 
   Check,
   Globe,
-  AlertTriangle
+  AlertTriangle,
+  Calendar,
+  Layers
 } from 'lucide-react';
 import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
-import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
 
 const DEFAULT_DOSAGE_VARIETIES = [
   '200 mg Tablet',
@@ -72,6 +74,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
   });
 
   const [newLotInput, setNewLotInput] = useState('');
+  const [lotEntries, setLotEntries] = useState<LotEntry[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
   
   // Smart Auto-fill & Quizlet State
@@ -100,21 +103,45 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
   useEffect(() => {
     if (item) {
-      let parsedLots: string[] = [];
-      if (Array.isArray(item.lotNumbers)) {
-        parsedLots = item.lotNumbers;
-      } else if (typeof item.lotNumbers === 'string') {
-        try {
-          if (item.lotNumbers.startsWith('[')) {
-            parsedLots = JSON.parse(item.lotNumbers);
-            if (!Array.isArray(parsedLots)) parsedLots = parsedLots ? [String(parsedLots)] : [];
-          } else {
-            parsedLots = item.lotNumbers.split(',').map((s) => s.trim()).filter(Boolean);
-          }
-        } catch (e) {
-          parsedLots = [item.lotNumbers];
+      const parsedLots = parseLotNumbers(item.lotNumbers);
+      let initialLotRows: LotEntry[] = [];
+      try {
+        let raw = item.lotNumbers;
+        if (typeof raw === 'string' && raw.startsWith('[')) {
+          raw = JSON.parse(raw);
         }
+        if (Array.isArray(raw)) {
+          initialLotRows = raw.map((entry, idx) => {
+            if (typeof entry === 'object' && entry && entry.lotNumber) {
+              return {
+                id: entry.id || `lot-${idx}-${Date.now()}`,
+                lotNumber: entry.lotNumber,
+                expirationDate: entry.expirationDate || item.expirationDate || '',
+                bottles: Number(entry.bottles) || 0,
+                looseUnits: Number(entry.looseUnits) || 0,
+              };
+            }
+            return {
+              id: `lot-${idx}-${Date.now()}`,
+              lotNumber: String(entry),
+              expirationDate: item.expirationDate || '',
+              bottles: idx === 0 ? (item.bottlesAvailable || 0) : 0,
+              looseUnits: idx === 0 ? (item.looseUnitsAvailable || 0) : 0,
+            };
+          });
+        }
+      } catch (e) {}
+
+      if (initialLotRows.length === 0) {
+        initialLotRows = [{
+          id: `lot-${Date.now()}`,
+          lotNumber: parsedLots[0] || '',
+          expirationDate: item.expirationDate || '',
+          bottles: item.bottlesAvailable || 0,
+          looseUnits: item.looseUnitsAvailable || 0,
+        }];
       }
+      setLotEntries(initialLotRows);
 
       setFormData({
         id: item.id,
@@ -127,7 +154,7 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         subUnit: item.subUnit || 'tablets',
         bottlesAvailable: item.bottlesAvailable || 0,
         looseUnitsAvailable: item.looseUnitsAvailable || 0,
-        pillsPerBottle: item.pillsPerBottle || 100,
+        pillsPerBottle: Math.max(1, Number(item.pillsPerBottle) || 100),
         expirationDate: item.expirationDate || '',
         lotNumbers: parsedLots,
         directions: item.directions || '',
@@ -140,6 +167,16 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     } else {
       const defaultExp = new Date();
       defaultExp.setFullYear(defaultExp.getFullYear() + 2);
+      const defaultExpStr = defaultExp.toISOString().split('T')[0];
+
+      setLotEntries([{
+        id: `lot-${Date.now()}`,
+        lotNumber: '',
+        expirationDate: defaultExpStr,
+        bottles: 1,
+        looseUnits: 0,
+      }]);
+
       setFormData({
         genericName: '',
         brandName: '',
@@ -151,8 +188,8 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
         bottlesAvailable: 1,
         looseUnitsAvailable: 0,
         pillsPerBottle: 100,
-        expirationDate: defaultExp.toISOString().split('T')[0],
-        lotNumbers: ['LOT-1001'],
+        expirationDate: defaultExpStr,
+        lotNumbers: [],
         directions: '',
       });
       setDosageOptionsList(DEFAULT_DOSAGE_VARIETIES);
@@ -258,21 +295,64 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
     }
   };
 
-  const handleAddLot = () => {
-    if (!newLotInput.trim()) return;
-    const currentLots = (formData.lotNumbers as string[]) || [];
-    if (!currentLots.includes(newLotInput.trim())) {
-      handleChange('lotNumbers', [...currentLots, newLotInput.trim()]);
-    }
-    setNewLotInput('');
+  const handleAddLotRow = () => {
+    setLotEntries((prev) => [
+      ...prev,
+      {
+        id: `lot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        lotNumber: '',
+        expirationDate: formData.expirationDate || '',
+        bottles: 0,
+        looseUnits: 0,
+      },
+    ]);
   };
 
-  const handleRemoveLot = (indexToRemove: number) => {
-    const currentLots = (formData.lotNumbers as string[]) || [];
-    handleChange(
-      'lotNumbers',
-      currentLots.filter((_, idx) => idx !== indexToRemove)
-    );
+  const handleUpdateLotRow = (index: number, field: keyof LotEntry, value: any) => {
+    setLotEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleRemoveLotRow = (index: number) => {
+    setLotEntries((prev) => {
+      const updated = prev.filter((_, idx) => idx !== index);
+      return updated.length > 0 ? updated : [{
+        id: `lot-${Date.now()}`,
+        lotNumber: '',
+        expirationDate: formData.expirationDate || '',
+        bottles: 0,
+        looseUnits: 0,
+      }];
+    });
+  };
+
+  const handleSyncLotsToMasterStock = () => {
+    const validLots = lotEntries.filter((l) => l.lotNumber && l.lotNumber.trim() !== '');
+    if (validLots.length === 0) return;
+
+    let totalB = 0;
+    let totalL = 0;
+    let earliestExp = '';
+
+    validLots.forEach((l) => {
+      totalB += Math.max(0, Number(l.bottles) || 0);
+      totalL += Math.max(0, Number(l.looseUnits) || 0);
+      if (l.expirationDate) {
+        if (!earliestExp || l.expirationDate < earliestExp) {
+          earliestExp = l.expirationDate;
+        }
+      }
+    });
+
+    setFormData((prev) => ({
+      ...prev,
+      bottlesAvailable: totalB,
+      looseUnitsAvailable: totalL,
+      expirationDate: earliestExp || prev.expirationDate,
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -282,12 +362,23 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
       return;
     }
 
+    const validLots = lotEntries
+      .filter((l) => l.lotNumber && l.lotNumber.trim() !== '')
+      .map((l) => ({
+        lotNumber: l.lotNumber.trim(),
+        expirationDate: l.expirationDate || formData.expirationDate,
+        bottles: Math.max(0, Number(l.bottles) || 0),
+        looseUnits: Math.max(0, Number(l.looseUnits) || 0),
+      }));
+
+    const lotNames = validLots.map((l) => l.lotNumber);
+
     const cleanedData = {
       ...formData,
-      bottlesAvailable: Number(formData.bottlesAvailable) || 0,
-      looseUnitsAvailable: Number(formData.looseUnitsAvailable) || 0,
-      pillsPerBottle: Number(formData.pillsPerBottle) || 0,
-      lotNumbers: JSON.stringify(formData.lotNumbers || []),
+      bottlesAvailable: Math.max(0, Number(formData.bottlesAvailable) || 0),
+      looseUnitsAvailable: Math.max(0, Number(formData.looseUnitsAvailable) || 0),
+      pillsPerBottle: Math.max(1, Number(formData.pillsPerBottle) || 1),
+      lotNumbers: JSON.stringify(validLots.length > 0 ? validLots : (lotNames.length > 0 ? lotNames : [])),
       isFullEdit: true,
     };
 
@@ -909,56 +1000,108 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
             </div>
           </div>
 
-          {/* Section 4: Lot Numbers */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
-              4. Manufacturer Lot Numbers & Recalls
-            </h3>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Type lot number & tap Add..."
-                value={newLotInput}
-                onChange={(e) => setNewLotInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddLot();
-                  }
-                }}
-                className="flex-1 min-h-[48px] px-3.5 bg-slate-50 border border-slate-300 focus:border-teal-600 focus:bg-white rounded-xl text-sm font-bold text-slate-900 font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleAddLot}
-                className="min-h-[48px] px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition-all flex items-center gap-1 shrink-0 active:scale-95"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add Lot</span>
-              </button>
+          {/* Section 4: Multi-Lot Shipment & Expiration Tracking */}
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-slate-200 gap-2">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-amber-600" />
+                  <span>4. Multi-Lot Shipments, Expirations & Quantities</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 font-semibold">
+                  Track individual lot batches with their own expiration date and stock allocation.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSyncLotsToMasterStock}
+                  className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 font-extrabold text-[11px] transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Auto-calculate master bottles, loose units, and earliest expiration date from the rows below"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Auto-Sum to Stock</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddLotRow}
+                  className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[11px] transition-all flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Add New Lot</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              {currentLots.length > 0 ? (
-                currentLots.map((lot: string, idx: number) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-300 rounded-xl text-xs font-bold font-mono text-slate-900"
-                  >
-                    <Tag className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{lot}</span>
+            <div className="space-y-2.5">
+              {lotEntries.map((lot, idx) => (
+                <div
+                  key={lot.id || idx}
+                  className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2.5 shadow-2xs hover:border-amber-300 transition-colors"
+                >
+                  <div className="flex-1 w-full sm:w-auto min-w-[130px]">
+                    <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-0.5">
+                      Lot Number #{idx + 1} *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 22B0567"
+                      value={lot.lotNumber}
+                      onChange={(e) => handleUpdateLotRow(idx, 'lotNumber', e.target.value)}
+                      className="w-full min-h-[38px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-mono font-bold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-[140px]">
+                    <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-0.5">
+                      Lot Expiration
+                    </label>
+                    <input
+                      type="date"
+                      value={lot.expirationDate || ''}
+                      onChange={(e) => handleUpdateLotRow(idx, 'expirationDate', e.target.value)}
+                      className="w-full min-h-[38px] px-2 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-mono font-bold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-[85px]">
+                    <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-0.5 truncate">
+                      {formData.stockUnit || 'Bottles'}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={lot.bottles ?? 0}
+                      onChange={(e) => handleUpdateLotRow(idx, 'bottles', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full min-h-[38px] px-2 bg-white border border-slate-300 focus:border-teal-600 rounded-xl text-xs font-mono font-bold text-center text-slate-900"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-[85px]">
+                    <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-0.5 truncate">
+                      Loose {formData.subUnit || 'Units'}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={lot.looseUnits ?? 0}
+                      onChange={(e) => handleUpdateLotRow(idx, 'looseUnits', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full min-h-[38px] px-2 bg-white border border-slate-300 focus:border-teal-600 rounded-xl text-xs font-mono font-bold text-center text-slate-900"
+                    />
+                  </div>
+
+                  <div className="self-end sm:self-center sm:pt-4">
                     <button
                       type="button"
-                      onClick={() => handleRemoveLot(idx)}
-                      className="text-amber-700 hover:text-rose-600 min-w-[28px] min-h-[28px] flex items-center justify-center rounded-md hover:bg-rose-50 ml-1"
+                      onClick={() => handleRemoveLotRow(idx)}
+                      className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-300 transition-colors cursor-pointer"
+                      title="Remove this lot row"
                     >
-                      <X className="w-3.5 h-3.5 stroke-[3]" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
-                  </span>
-                ))
-              ) : (
-                <p className="text-xs text-slate-400 italic font-medium">No active lot numbers added yet.</p>
-              )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

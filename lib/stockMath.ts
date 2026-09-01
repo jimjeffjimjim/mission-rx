@@ -50,3 +50,36 @@ export function getStandardItemName(genericName?: string | null, dosage?: string
   }
   return `${gName} (${dStr})`;
 }
+
+/**
+ * Universal lot number parser that safely extracts string lot numbers from:
+ * - string arrays: ["22B0567", "LOT-441"]
+ * - JSON strings: '["22B0567", "LOT-441"]'
+ * - comma-separated strings: '22B0567, LOT-441'
+ * - structured LotEntry objects: [{ lotNumber: "22B0567", expirationDate: "2026-12-31" }]
+ */
+export function parseLotNumbers(rawLots: any): string[] {
+  if (!rawLots) return [];
+  if (Array.isArray(rawLots)) {
+    return rawLots
+      .map((item) => (typeof item === 'object' && item && item.lotNumber ? item.lotNumber : String(item)))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (typeof rawLots === 'string') {
+    const trimmed = rawLots.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((item) => (typeof item === 'object' && item && item.lotNumber ? item.lotNumber : String(item)))
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      } catch (e) {}
+    }
+    return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}

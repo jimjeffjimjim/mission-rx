@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
-import { getStandardItemName } from '@/lib/stockMath';
+import { getStandardItemName, parseLotNumbers } from '@/lib/stockMath';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,9 +20,9 @@ function parseLogDetails(detailsText: string) {
     try {
       const meta = JSON.parse(metaStr);
       dispensedUnit = meta.dispensedUnit || null;
-      dispensedBottles = meta.dispensedBottles || 0;
-      dispensedPillsPerBottle = meta.dispensedPillsPerBottle || 0;
-      lotNumbers = Array.isArray(meta.lotNumbers) ? meta.lotNumbers : [];
+      dispensedBottles = Number(meta.dispensedBottles) || 0;
+      dispensedPillsPerBottle = Number(meta.dispensedPillsPerBottle) || 0;
+      lotNumbers = parseLotNumbers(meta.lotNumbers);
     } catch (e) {}
   }
   return { details, dispensedUnit, dispensedBottles, dispensedPillsPerBottle, lotNumbers };
@@ -32,12 +32,16 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const timeframe = searchParams.get('timeframe') || 'all';
+    const tzOffsetMinutes = Number(searchParams.get('tzOffset')) || 0;
 
     let startDate: Date | null = null;
     const now = new Date();
 
     if (timeframe === 'today') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Accurately compute client-side midnight for shift workers across all timezones
+      const clientNow = new Date(now.getTime() - tzOffsetMinutes * 60 * 1000);
+      const clientMidnightUtc = Date.UTC(clientNow.getUTCFullYear(), clientNow.getUTCMonth(), clientNow.getUTCDate(), 0, 0, 0, 0);
+      startDate = new Date(clientMidnightUtc + tzOffsetMinutes * 60 * 1000);
     } else if (timeframe === 'week') {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     } else if (timeframe === 'month') {
@@ -80,13 +84,7 @@ export async function GET(request: Request) {
         if (cloudLogs && !error && cloudLogs.length > 0) {
           formattedLogs = cloudLogs.map((l: any) => {
             const parsedMeta = parseLogDetails(l.details || '');
-            let lotList = parsedMeta.lotNumbers;
-            try {
-              if (l.lot_numbers) {
-                const addList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
-                lotList = Array.from(new Set([...lotList, ...addList]));
-              }
-            } catch (e) {}
+            const lotList = Array.from(new Set([...parsedMeta.lotNumbers, ...parseLotNumbers(l.lot_numbers)]));
 
             const rawName = l.item_generic_name || 'Medication Formulation';
             const matched = (l.item_id && itemLookup.get(l.item_id)) || itemLookup.get(rawName.toLowerCase()) || null;
@@ -142,13 +140,7 @@ export async function GET(request: Request) {
 
       formattedLogs = logs.map((log: any) => {
         const parsedMeta = parseLogDetails(log.details || '');
-        let lotList = parsedMeta.lotNumbers;
-        try {
-          if (log.lotNumbers) {
-            const addList = log.lotNumbers.startsWith('[') ? JSON.parse(log.lotNumbers) : log.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-            lotList = Array.from(new Set([...lotList, ...addList]));
-          }
-        } catch (e) {}
+        const lotList = Array.from(new Set([...parsedMeta.lotNumbers, ...parseLotNumbers(log.lotNumbers)]));
 
         const rawName = log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation';
         const rawDosage = log.item?.dosage;
