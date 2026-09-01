@@ -92,12 +92,18 @@ export async function GET(request: Request) {
             const matched = (l.item_id && itemLookup.get(l.item_id)) || itemLookup.get(rawName.toLowerCase()) || null;
             const canonicalName = matched?.canonicalName || rawName;
 
+            const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
+            const isUndispense = l.action_type === 'RESTOCK' || l.action_type === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
+            const resolvedActionType = isUndispense ? 'RESTOCK' : (l.action_type || 'DISPENSE');
+            const rawQty = Number(l.quantity_changed) || 0;
+            const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+
             return {
               id: l.id,
               itemId: l.item_id || 'unknown',
               itemGenericName: canonicalName,
-              quantityChanged: Number(l.quantity_changed) || 0,
-              actionType: l.action_type || 'DISPENSE',
+              quantityChanged: resolvedQty,
+              actionType: resolvedActionType,
               userRole: l.user_role || 'STAFF',
               details: parsedMeta.details || '',
               category: matched?.shelfLocation || matched?.shelf_location || 'General Medical',
@@ -149,12 +155,18 @@ export async function GET(request: Request) {
         const matched = (log.itemId && itemLookup.get(log.itemId)) || itemLookup.get(rawName.toLowerCase()) || null;
         const canonicalName = matched?.canonicalName || getStandardItemName(rawName, rawDosage);
 
+        const detailsLower = (parsedMeta.details || log.details || '').toLowerCase();
+        const isUndispense = log.actionType === 'RESTOCK' || (log.actionType as string) === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
+        const resolvedActionType = isUndispense ? 'RESTOCK' : (log.actionType || 'DISPENSE');
+        const rawQty = Number(log.quantityChanged) || 0;
+        const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+
         return {
           id: log.id,
           itemId: log.itemId,
           itemGenericName: canonicalName,
-          quantityChanged: log.quantityChanged,
-          actionType: log.actionType,
+          quantityChanged: resolvedQty,
+          actionType: resolvedActionType,
           userRole: log.userRole || 'STAFF',
           details: parsedMeta.details || '',
           category: log.item?.shelfLocation || matched?.shelfLocation || 'General Medical',
@@ -167,29 +179,30 @@ export async function GET(request: Request) {
       });
     }
 
-    // Aggregate Top Dispensed Items (Dispenses add usage, Undispenses/Restocks deduct usage)
-    const topMap: { [canonicalName: string]: { totalDispensed: number; category: string } } = {};
+    // Aggregate Top Dispensed Items:
+    // Net Patient Usage = Math.max(0, sum(dispenses) - sum(undispenses/restocks))
+    const usageMap: { [canonicalName: string]: { dispensed: number; returned: number; category: string } } = {};
 
     formattedLogs.forEach((log: any) => {
       const name = log.itemGenericName || 'General Inventory Item';
-      if (!topMap[name]) {
-        topMap[name] = { totalDispensed: 0, category: log.category || 'General Medical' };
+      if (!usageMap[name]) {
+        usageMap[name] = { dispensed: 0, returned: 0, category: log.category || 'General Medical' };
       }
       const qty = Math.abs(log.quantityChanged);
       const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
       
       if (isRestock) {
-        topMap[name].totalDispensed = Math.max(0, topMap[name].totalDispensed - qty);
+        usageMap[name].returned += qty;
       } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
-        topMap[name].totalDispensed += qty;
+        usageMap[name].dispensed += qty;
       }
     });
 
-    const topDispensedItems = Object.keys(topMap)
+    const topDispensedItems = Object.keys(usageMap)
       .map((name) => ({
         genericName: name,
-        totalDispensed: topMap[name].totalDispensed,
-        category: topMap[name].category,
+        totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].returned),
+        category: usageMap[name].category,
       }))
       .filter((item) => item.totalDispensed > 0)
       .sort((a, b) => b.totalDispensed - a.totalDispensed)

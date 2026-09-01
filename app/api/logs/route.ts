@@ -51,12 +51,18 @@ export async function GET() {
                 lotList = Array.from(new Set([...lotList, ...addList]));
               }
             } catch (e) {}
+            const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
+            const isUndispense = l.action_type === 'RESTOCK' || l.action_type === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
+            const resolvedActionType = isUndispense ? 'RESTOCK' : (l.action_type || 'DISPENSE');
+            const rawQty = Number(l.quantity_changed) || 0;
+            const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+
             return {
               id: l.id,
               itemId: l.item_id || 'unknown',
               itemGenericName: l.item_generic_name || 'Medication Transaction Record',
-              quantityChanged: Number(l.quantity_changed) || 0,
-              actionType: l.action_type || 'DISPENSE',
+              quantityChanged: resolvedQty,
+              actionType: resolvedActionType,
               userRole: l.user_role || 'STAFF',
               details: parsedMeta.details || 'Clinical inventory adjustment logged.',
               createdAt: l.created_at || new Date().toISOString(),
@@ -94,12 +100,19 @@ export async function GET() {
           lotList = l.lotNumbers.startsWith('[') ? JSON.parse(l.lotNumbers) : l.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
         }
       } catch (e) {}
+
+      const detailsLower = (l.details || '').toLowerCase();
+      const isUndispense = l.actionType === 'RESTOCK' || (l.actionType as string) === 'UNDISPENSE' || detailsLower.includes('undispensed') || detailsLower.includes('restocked');
+      const resolvedActionType = isUndispense ? 'RESTOCK' : (l.actionType || 'DISPENSE');
+      const rawQty = Number(l.quantityChanged) || 0;
+      const resolvedQty = isUndispense ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+
       return {
         id: l.id,
         itemId: l.itemId,
         itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
-        quantityChanged: l.quantityChanged,
-        actionType: (l.actionType as any) || 'DISPENSE',
+        quantityChanged: resolvedQty,
+        actionType: resolvedActionType as any,
         userRole: l.userRole || 'STAFF',
         details: l.details || 'Clinical inventory adjustment logged.',
         createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),

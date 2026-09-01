@@ -31,6 +31,7 @@ export default function Home() {
   const [isAutofillEnabled, setIsAutofillEnabled] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
 
   // Testing Sandbox Isolation State
@@ -860,7 +861,10 @@ export default function Home() {
           onEditItem={openEditModal}
           onDeleteItem={handleDeleteItem}
           onOpenCreateModal={openCreateModal}
-          onOpenAuditLogs={() => setIsAuditModalOpen(true)}
+          onOpenAuditLogs={(query?: string) => {
+            setAuditSearchQuery(query || '');
+            setIsAuditModalOpen(true);
+          }}
           onRefreshData={fetchInventory}
           userRole={actorTag}
           onAddTestAuditLog={(log) => setTestAuditLogs((prev) => [log, ...prev])}
@@ -958,7 +962,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.15 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.16 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
@@ -978,9 +982,13 @@ export default function Home() {
       {/* Regulatory Compliance & Dispense Audit Log Viewer */}
       <AuditLogModal
         isOpen={isAuditModalOpen}
-        onClose={() => setIsAuditModalOpen(false)}
+        onClose={() => {
+          setIsAuditModalOpen(false);
+          setAuditSearchQuery('');
+        }}
         onLogsCleared={fetchInventory}
         testLogs={testAuditLogs}
+        initialSearchQuery={auditSearchQuery}
       />
     </main>
   );

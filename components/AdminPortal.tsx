@@ -50,7 +50,7 @@ interface AdminPortalProps {
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
   onOpenCreateModal: () => void;
-  onOpenAuditLogs?: () => void;
+  onOpenAuditLogs?: (searchQuery?: string) => void;
   onRefreshData?: () => void;
   userRole?: string;
   onAddTestAuditLog?: (log: DispenseLog) => void;
@@ -568,7 +568,7 @@ export default function AdminPortal({
               {onOpenAuditLogs && (
                 <button
                   type="button"
-                  onClick={onOpenAuditLogs}
+                  onClick={() => onOpenAuditLogs()}
                   className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-400/30 cursor-pointer"
                 >
                   <Activity className="w-4 h-4 text-amber-400 stroke-[2.5]" />
@@ -780,11 +780,14 @@ export default function AdminPortal({
                     const style = getSpecialtyColor(item.shelfLocation);
                     let lotList: string[] = [];
                     try {
-                      if (typeof item.lotNumbers === 'string') {
+                      if (Array.isArray(item.lotNumbers)) {
+                        lotList = item.lotNumbers;
+                      } else if (typeof item.lotNumbers === 'string') {
                         lotList = item.lotNumbers.startsWith('[')
                           ? JSON.parse(item.lotNumbers)
                           : item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
                       }
+                      if (!Array.isArray(lotList)) lotList = lotList ? [String(lotList)] : [];
                     } catch (e) {
                       lotList = [];
                     }
@@ -998,11 +1001,22 @@ export default function AdminPortal({
                         </td>
 
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {onOpenAuditLogs && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenAuditLogs(item.genericName)}
+                                className="p-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
+                                title={`View Dispense & Audit History for ${item.genericName}`}
+                              >
+                                <Clock className="w-4 h-4" />
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => onEditItem(item)}
-                              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs transition-colors active:scale-95"
+                              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
                               title="Edit Record"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -1013,7 +1027,7 @@ export default function AdminPortal({
                               onClick={() => {
                                 if (confirm(`Delete ${item.genericName}?`)) onDeleteItem(item.id);
                               }}
-                              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95"
+                              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
                               title="Delete Item"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1195,9 +1209,17 @@ export default function AdminPortal({
                         .filter((log) => log.actionType === 'DISPENSE' || log.quantityChanged < 0)
                         .map((log) => {
                           const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
-                          const corrItem = items.find((i) => i.id === log.itemId || i.genericName === log.itemGenericName);
+                          const logName = (log.itemGenericName || '').toLowerCase();
+                          const corrItem = items.find((i) =>
+                            Boolean((log.itemId && i.id === log.itemId) ||
+                            (logName && i.genericName.toLowerCase() === logName) ||
+                            (logName && logName.startsWith(i.genericName.toLowerCase())))
+                          );
+
                           let lotStr = 'N/A';
-                          if (corrItem && corrItem.lotNumbers) {
+                          if (log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0) {
+                            lotStr = log.lotNumbers.join(', ');
+                          } else if (corrItem && corrItem.lotNumbers) {
                             try {
                               const parsed = typeof corrItem.lotNumbers === 'string' ? JSON.parse(corrItem.lotNumbers) : corrItem.lotNumbers;
                               lotStr = Array.isArray(parsed) ? parsed.join(', ') : String(parsed);
@@ -1205,25 +1227,31 @@ export default function AdminPortal({
                               lotStr = String(corrItem.lotNumbers);
                             }
                           }
+
+                          const isRestock = log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.details?.toLowerCase().includes('undispensed') || log.details?.toLowerCase().includes('restocked');
+                          const signedQty = isRestock ? `+${Math.abs(log.quantityChanged)}` : `-${Math.abs(log.quantityChanged)}`;
+
                           return [
                             `"${dateStr}"`,
-                            `"${log.actionType || 'DISPENSE'}"`,
+                            `"${isRestock ? 'UNDISPENSE' : 'DISPENSE'}"`,
                             `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
                             `"${lotStr.replace(/"/g, '""')}"`,
-                            Math.abs(log.quantityChanged),
-                            `"${log.userRole || 'STAFF'}"`,
+                            `"${signedQty}"`,
+                            `"${(log.userRole || 'STAFF').replace(/"/g, '""')}"`,
                             `"${(log.details || '').replace(/"/g, '""')}"`
                           ];
                         });
 
-                      const csv = [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
+                      const csv = '\uFEFF' + [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
                       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
                       const link = document.createElement('a');
-                      link.href = URL.createObjectURL(blob);
+                      link.href = url;
                       link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`);
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
                     } catch (e) {
                       console.error('CSV Dispense download error:', e);
                     }

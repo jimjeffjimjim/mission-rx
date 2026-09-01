@@ -10,12 +10,13 @@ interface AuditLogModalProps {
   onClose: () => void;
   onLogsCleared?: () => void;
   testLogs?: DispenseLog[];
+  initialSearchQuery?: string;
 }
 
-export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs = [] }: AuditLogModalProps) {
+export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs = [], initialSearchQuery = '' }: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [selectedAction, setSelectedAction] = useState<string>('ALL');
   const [editingLog, setEditingLog] = useState<DispenseLog | null>(null);
   const [editQty, setEditQty] = useState<number | string>('');
@@ -61,9 +62,10 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
 
   useEffect(() => {
     if (isOpen) {
+      setSearchQuery(initialSearchQuery || '');
       fetchLogs();
     }
-  }, [isOpen]);
+  }, [isOpen, initialSearchQuery]);
 
   const handleResetAuditLogs = async () => {
     if (!isTestingMode) {
@@ -365,16 +367,37 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                       <p className="text-xs font-medium text-slate-600 leading-normal">
                         {log.details || 'Routine clinical dispensary action.'}
                       </p>
-                      {log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1 mt-1">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase self-center mr-1">Lots:</span>
-                          {log.lotNumbers.map((lot, idx) => (
-                            <span key={idx} className="font-mono text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
-                              {lot}
+                      {(() => {
+                        const rawLots = (log as any).lotNumbers;
+                        let parsedLots: string[] = [];
+                        if (Array.isArray(rawLots)) {
+                          parsedLots = rawLots;
+                        } else if (typeof rawLots === 'string') {
+                          try {
+                            if (rawLots.startsWith('[')) {
+                              const p = JSON.parse(rawLots);
+                              parsedLots = Array.isArray(p) ? p : [String(p)];
+                            } else {
+                              parsedLots = rawLots.split(',').map((s: string) => s.trim()).filter(Boolean);
+                            }
+                          } catch (e) {
+                            parsedLots = [rawLots];
+                          }
+                        }
+                        if (parsedLots.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                            <span className="text-[10px] text-amber-800 font-extrabold uppercase self-center mr-1 bg-amber-100/80 px-1.5 py-0.5 rounded border border-amber-300">
+                              Lot #:
                             </span>
-                          ))}
-                        </div>
-                      )}
+                            {parsedLots.map((lot, idx) => (
+                              <span key={idx} className="font-mono text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded shadow-2xs">
+                                {lot}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
