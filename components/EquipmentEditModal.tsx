@@ -245,6 +245,10 @@ export default function EquipmentEditModal({
   };
 
   const handleBarcodeScanned = (data: ScannedMedicationData) => {
+    if (data.expirationDate && data.expirationDate !== '3000-01-01') {
+      setDoesNotExpire(false);
+    }
+
     setFormData((prev) => ({
       ...prev,
       genericName: data.genericName,
@@ -258,11 +262,11 @@ export default function EquipmentEditModal({
       directions: data.directions || prev.directions,
     }));
 
-    if (data.lotNumber) {
+    if (data.lotNumber || data.expirationDate) {
       setLotEntries([
         {
           id: `lot-${Date.now()}`,
-          lotNumber: data.lotNumber,
+          lotNumber: data.lotNumber || '',
           expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
           bottles: 1,
           looseUnits: 0,

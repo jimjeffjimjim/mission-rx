@@ -5,7 +5,7 @@
 
 import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers } from '../lib/stockMath';
 import { LotEntry } from '../types/inventory';
-import { parseGs1Barcode, normalizeNdc } from '../lib/ndcLookup';
+import { parseGs1Barcode, normalizeNdc, lookupSupplyByRefOrGtin, parseLabelText } from '../lib/ndcLookup';
 
 let passed = 0;
 let failed = 0;
@@ -370,6 +370,72 @@ assertEquals(normalizedNdcs.includes('0093-2264-01'), true, 'Normalizes 10-digit
 const upcA = '300932264014';
 const upcCandidates = normalizeNdc(upcA);
 assertEquals(upcCandidates.includes('0093-2264-01'), true, 'Normalizes 12-digit UPC-A to dashed NDC');
+
+// Test User Sample 1: BD Eclipse Needle Box Barcodes
+console.log('  Testing User Sample Item 1: BD Eclipse Needle Box');
+const bdBarcode1 = '(01)30382903057611';
+const parsedBdBarcode1 = parseGs1Barcode(bdBarcode1);
+assertEquals(parsedBdBarcode1.gtin, '30382903057611', 'Extracts BD GTIN 30382903057611');
+
+const bdBarcode2 = '(17)290930(10)4275769(30)100';
+const parsedBdBarcode2 = parseGs1Barcode(bdBarcode2);
+assertEquals(parsedBdBarcode2.expirationDate, '2029-09-30', 'Extracts BD Exp 2029-09-30 from AI 17');
+assertEquals(parsedBdBarcode2.lotNumber, '4275769', 'Extracts BD Lot 4275769 from AI 10');
+assertEquals(parsedBdBarcode2.quantity, 100, 'Extracts BD Quantity 100 from AI 30');
+
+// Test Supply Catalog lookup for BD Eclipse by GTIN and REF
+const supplyByGtin = lookupSupplyByRefOrGtin('30382903057611');
+assert(supplyByGtin !== null && supplyByGtin.name === 'BD Eclipse Injection Needle', 'Looks up BD Eclipse needle by GTIN');
+assertEquals(supplyByGtin?.spec, '25G x 1" TW (0.5mm x 25mm)', 'BD Eclipse needle gauge matches 25G x 1"');
+assertEquals(supplyByGtin?.itemType, 'Supply', 'BD Eclipse item type is Supply');
+
+const supplyByRef = lookupSupplyByRefOrGtin('305761');
+assert(supplyByRef !== null && supplyByRef.brand.includes('BD'), 'Looks up BD Eclipse by REF 305761');
+
+// Test User Sample 2: Hospira Bacteriostatic 0.9% Sodium Chloride
+console.log('  Testing User Sample Item 2: Hospira 0.9% Sodium Chloride Vial');
+const hospiraByNdc = lookupSupplyByRefOrGtin('0409-1966-02');
+assert(hospiraByNdc !== null, 'Looks up Hospira Sodium Chloride by NDC 0409-1966-02');
+assertEquals(hospiraByNdc?.name, 'Bacteriostatic 0.9% Sodium Chloride Injection, USP', 'Correct generic name for Hospira diluent');
+assertEquals(hospiraByNdc?.spec, '0.9% (30 mL Vial)', 'Correct dosage spec 0.9% (30 mL)');
+assertEquals(hospiraByNdc?.unit, 'Vials', 'Unit is Vials');
+
+const hospiraByPaa = lookupSupplyByRefOrGtin('PAA222240');
+assert(hospiraByPaa !== null, 'Looks up Hospira Sodium Chloride by bottle packaging code PAA222240');
+
+// Test Label OCR Parsing on BD Box Text
+const bdOcrSample = `
+  100
+  BD Eclipse Injection Needle
+  25G x 1" TW (0.5mm x 25mm)
+  REF 305761
+  LOT 4275769
+  2029-09-30
+`;
+const parsedBdOcr = parseLabelText(bdOcrSample);
+assert(parsedBdOcr !== null, 'Parses BD Eclipse label OCR text');
+assertEquals(parsedBdOcr?.genericName, 'BD Eclipse Injection Needle', 'BD OCR generic name');
+assertEquals(parsedBdOcr?.lotNumber, '4275769', 'BD OCR lot number 4275769');
+assertEquals(parsedBdOcr?.expirationDate, '2029-09-30', 'BD OCR expiration date 2029-09-30');
+assertEquals(parsedBdOcr?.pillsPerBottle, 100, 'BD OCR pack count 100');
+
+// Test Label OCR Parsing on Hospira Vial Text
+const hospiraOcrSample = `
+  30 mL Multiple-dose
+  Bacteriostatic
+  0.9% Sodium Chloride
+  Injection, USP
+  Distributed by Hospira, Inc.
+  LOT: LM2143
+  EXP.: 2026-OCT-31
+  NDC 0409-1966-02
+`;
+const parsedHospiraOcr = parseLabelText(hospiraOcrSample);
+assert(parsedHospiraOcr !== null, 'Parses Hospira vial label OCR text');
+assertEquals(parsedHospiraOcr?.genericName, 'Bacteriostatic 0.9% Sodium Chloride Injection, USP', 'Hospira OCR name');
+assertEquals(parsedHospiraOcr?.lotNumber, 'LM2143', 'Hospira OCR lot number LM2143');
+assertEquals(parsedHospiraOcr?.expirationDate, '2026-10-31', 'Hospira OCR expiration date 2026-10-31 (from 2026-OCT-31)');
+assertEquals(parsedHospiraOcr?.pillsPerBottle, 30, 'Hospira OCR 30 mL pack size');
 
 console.log('\n============================================================');
 console.log('🎉 CHAOS TEST SUMMARY: ' + passed + '/' + (passed + failed) + ' Passed (' + failed + ' Failed)');
