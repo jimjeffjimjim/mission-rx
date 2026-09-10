@@ -1263,23 +1263,67 @@ export default function AdminPortal({
                 ) : (
                   equipmentItems.map((item) => {
                     const style = getSpecialtyColor(item.shelfLocation);
-                    const lotList = parseLotNumbers(item.lotNumbers);
                     const totalUnits = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+
+                    let rawLots: any = item.lotNumbers;
+                    if (typeof rawLots === 'string' && rawLots.trim().startsWith('[')) {
+                      try {
+                        rawLots = JSON.parse(rawLots);
+                      } catch (e) {}
+                    }
+
+                    let parsedStructuredLots: {
+                      lotNumber: string;
+                      expirationDate?: string;
+                      bottles?: number;
+                      looseUnits?: number;
+                    }[] = [];
+
+                    if (Array.isArray(rawLots)) {
+                      parsedStructuredLots = rawLots.map((l: any) => {
+                        if (l && typeof l === 'object' && l.lotNumber) {
+                          return {
+                            lotNumber: String(l.lotNumber).trim(),
+                            expirationDate: l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')
+                              ? String(l.expirationDate).slice(0, 10)
+                              : undefined,
+                            bottles: Number(l.bottles) || 0,
+                            looseUnits: Number(l.looseUnits) || 0,
+                          };
+                        }
+                        return { lotNumber: String(l).trim() };
+                      }).filter((l) => Boolean(l.lotNumber));
+                    } else if (typeof rawLots === 'string' && rawLots.trim()) {
+                      parsedStructuredLots = rawLots.split(',').map((s) => ({ lotNumber: s.trim() })).filter((l) => Boolean(l.lotNumber));
+                    }
+
+                    // Compute effective earliest expiration date from the lots (FEFO)
+                    const lotValidExps = parsedStructuredLots
+                      .map((l) => l.expirationDate)
+                      .filter(Boolean)
+                      .sort() as string[];
+
+                    const effectiveDate = lotValidExps.length > 0
+                      ? lotValidExps[0]
+                      : (item.expirationDate && !item.expirationDate.startsWith('3000') && !item.expirationDate.startsWith('2099') ? item.expirationDate : '');
 
                     // Check expiration
                     let isExp = false;
                     let expText = 'Does Not Expire / Clinical Device';
-                    if (item.expirationDate && !item.expirationDate.startsWith('3000') && !item.expirationDate.startsWith('2099')) {
+                    const hasMultipleDates = lotValidExps.length > 1;
+
+                    if (effectiveDate) {
                       try {
-                        const days = differenceInDays(parseISO(item.expirationDate), new Date());
+                        const days = differenceInDays(parseISO(effectiveDate), new Date());
+                        const prefix = hasMultipleDates ? 'Earliest: ' : 'Expires ';
                         if (days < 0) {
                           isExp = true;
                           expText = `Expired (${Math.abs(days)}d ago)`;
                         } else if (days <= 30) {
                           isExp = true;
-                          expText = `Expiring in ${days}d`;
+                          expText = `Exp in ${days}d`;
                         } else {
-                          expText = `Expires ${new Date(item.expirationDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+                          expText = `${prefix}${new Date(effectiveDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
                         }
                       } catch (e) {}
                     }
@@ -1391,15 +1435,30 @@ export default function AdminPortal({
                           </div>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          {lotList.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[180px]">
-                              {lotList.map((lot, idx) => (
-                                <span
+                          {parsedStructuredLots.length > 0 ? (
+                            <div className="flex flex-col gap-1 max-w-[240px]">
+                              {parsedStructuredLots.map((lot, idx) => (
+                                <div
                                   key={idx}
-                                  className="font-mono text-[10px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md"
+                                  className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-md shadow-2xs"
                                 >
-                                  {lot}
-                                </span>
+                                  <span>{lot.lotNumber}</span>
+                                  {lot.expirationDate && (
+                                    <span className="text-[10px] text-amber-950 font-sans font-extrabold bg-amber-200/80 px-1.5 py-0.2 rounded">
+                                      Exp: {lot.expirationDate}
+                                    </span>
+                                  )}
+                                  {(lot.bottles || 0) > 0 && (
+                                    <span className="text-[10px] text-slate-600 font-sans font-semibold">
+                                      • {lot.bottles} {item.stockUnit?.toLowerCase() || 'units'}
+                                    </span>
+                                  )}
+                                  {(lot.looseUnits || 0) > 0 && (
+                                    <span className="text-[10px] text-slate-600 font-sans font-semibold">
+                                      • {lot.looseUnits} {item.subUnit || 'pieces'}
+                                    </span>
+                                  )}
+                                </div>
                               ))}
                             </div>
                           ) : (
