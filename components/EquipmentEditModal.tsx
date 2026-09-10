@@ -223,7 +223,7 @@ export default function EquipmentEditModal({
         pillsPerBottle: Math.max(1, Number(item.pillsPerBottle) || 1),
         expirationDate: effectiveExp,
         directions: item.directions || '',
-        lotNumbers: parsedLots,
+        lotNumbers: item.lotNumbers,
       });
     } else {
       setDoesNotExpire(true);
@@ -511,6 +511,21 @@ export default function EquipmentEditModal({
       })
       .filter((l) => l.lotNumber.length > 0 || l.bottles > 0 || l.looseUnits > 0);
 
+    let sumContainers = 0;
+    let sumLoose = 0;
+    validLots.forEach((l) => {
+      sumContainers += Number(l.bottles) || 0;
+      sumLoose += Number(l.looseUnits) || 0;
+    });
+
+    const finalBottles = validLots.length > 0 && (sumContainers > 0 || sumLoose > 0)
+      ? sumContainers
+      : Math.max(0, Number(formData.bottlesAvailable) || 0);
+
+    const finalLoose = validLots.length > 0 && (sumContainers > 0 || sumLoose > 0)
+      ? sumLoose
+      : Math.max(0, Number(formData.looseUnitsAvailable) || 0);
+
     const submissionData: Partial<InventoryItem> = {
       ...formData,
       shelfLocation: finalCategory,
@@ -520,8 +535,8 @@ export default function EquipmentEditModal({
       itemType: 'Supply',
       chemicalName: null,
       pillsPerBottle: Math.max(1, Number(formData.pillsPerBottle) || 1),
-      bottlesAvailable: Math.max(0, Number(formData.bottlesAvailable) || 0),
-      looseUnitsAvailable: Math.max(0, Number(formData.looseUnitsAvailable) || 0),
+      bottlesAvailable: finalBottles,
+      looseUnitsAvailable: finalLoose,
       lotNumbers: validLots.length > 0 ? validLots : (formData.lotNumbers || []),
     };
 
