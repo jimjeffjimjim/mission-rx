@@ -326,10 +326,10 @@ export default function EquipmentEditModal({
 
   // Multi-Lot Handlers
   const handleAddLotRow = () => {
-    const hasRealExp = formData.expirationDate && !formData.expirationDate.startsWith('3000') && !formData.expirationDate.startsWith('2099');
-    const defaultExp = hasRealExp
-      ? formData.expirationDate
-      : (doesNotExpire ? '3000-01-01' : new Date().toISOString().split('T')[0]);
+    const lastRowExp = lotEntries[lotEntries.length - 1]?.expirationDate;
+    const defaultExp = (lastRowExp && !lastRowExp.startsWith('3000') && !lastRowExp.startsWith('2099'))
+      ? lastRowExp
+      : (doesNotExpire ? '3000-01-01' : '');
 
     setLotEntries((prev) => [
       ...prev,
@@ -368,7 +368,7 @@ export default function EquipmentEditModal({
       setLotEntries([{
         id: `lot-${Date.now()}`,
         lotNumber: '',
-        expirationDate: doesNotExpire ? '3000-01-01' : (formData.expirationDate || ''),
+        expirationDate: doesNotExpire ? '3000-01-01' : '',
         bottles: 0,
         looseUnits: 0,
       }]);
@@ -479,27 +479,20 @@ export default function EquipmentEditModal({
       .map((l) => l.expirationDate?.trim())
       .filter((exp) => exp && !exp.startsWith('3000') && !exp.startsWith('2099')) as string[];
 
-    const formExp = formData.expirationDate && !formData.expirationDate.startsWith('3000') && !formData.expirationDate.startsWith('2099')
-      ? formData.expirationDate.trim()
-      : '';
-
     // Determine earliest expiration date across all entries
     let earliestExp = '';
-    if (lotExps.length > 0) {
+    if (!doesNotExpire && lotExps.length > 0) {
       lotExps.sort();
       earliestExp = lotExps[0];
-    } else if (formExp) {
-      earliestExp = formExp;
     }
 
-    const hasRealExpiration = Boolean(earliestExp);
-    const finalExp = hasRealExpiration ? earliestExp : '3000-01-01';
+    const finalExp = (!doesNotExpire && earliestExp) ? earliestExp : '3000-01-01';
 
     const validLots = lotEntries
       .map((l) => {
         const lotExp = l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')
           ? l.expirationDate.trim()
-          : (hasRealExpiration ? finalExp : '3000-01-01');
+          : (doesNotExpire ? '3000-01-01' : (earliestExp || '3000-01-01'));
 
         return {
           id: l.id,
@@ -993,51 +986,30 @@ export default function EquipmentEditModal({
               </div>
             </div>
 
-            {/* Expiration / Calibration Option */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={doesNotExpire}
-                    onChange={(e) => {
-                      setDoesNotExpire(e.target.checked);
-                      if (e.target.checked) {
-                        handleChange('expirationDate', '3000-01-01');
-                      } else {
-                        const nextYear = new Date();
-                        nextYear.setFullYear(nextYear.getFullYear() + 2);
-                        handleChange('expirationDate', nextYear.toISOString().split('T')[0]);
-                      }
-                    }}
-                    className="w-4 h-4 text-teal-600 rounded-sm border-slate-300 focus:ring-teal-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-bold text-slate-800">
+            {/* Permanent / Non-Expiring Equipment Checkbox */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-center justify-between">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={doesNotExpire}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDoesNotExpire(checked);
+                    if (checked) {
+                      handleChange('expirationDate', '3000-01-01');
+                    }
+                  }}
+                  className="w-4 h-4 text-teal-600 rounded-sm border-slate-300 focus:ring-teal-500 cursor-pointer"
+                />
+                <div>
+                  <span className="text-xs font-black text-slate-800 block">
                     Does Not Expire / Permanent Clinical Device
                   </span>
-                </label>
-              </div>
-
-              {!doesNotExpire && (
-                <div className="pt-1">
-                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
-                    Expiration / Sterilization / Calibration Date *
-                  </label>
-                  <input
-                    type="date"
-                    required={!doesNotExpire}
-                    value={formData.expirationDate && !formData.expirationDate.startsWith('3000') ? formData.expirationDate : ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) {
-                        setDoesNotExpire(false);
-                      }
-                      handleChange('expirationDate', val);
-                    }}
-                    className="w-full min-h-[44px] px-3.5 bg-white border border-slate-300 focus:border-teal-600 rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
-                  />
+                  <span className="text-[11px] text-slate-500 font-medium block">
+                    Check if this is a durable tool, diagnostic equipment, or surgical instrument that does not expire.
+                  </span>
                 </div>
-              )}
+              </label>
             </div>
           </div>
 
