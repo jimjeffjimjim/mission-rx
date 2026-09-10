@@ -223,7 +223,16 @@ export const MEDICAL_SUPPLIES_CATALOG: MedicalSupplyEntry[] = [
   {
     gtinList: ['30382903057611', '030382903057611', '00382903057611', '382903057611'],
     refNumbers: ['305761', '305762', '305763', '305767', '305768'],
-    keywords: ['bd eclipse', 'eclipse needle', 'eclipse injection needle', 'bd eclipse injection needle'],
+    keywords: [
+      'bd eclipse',
+      'eclipse needle',
+      'eclipse injection needle',
+      'bd eclipse injection needle',
+      'bd injection needle',
+      'injection needle',
+      '25g x 1"',
+      '25g injection needle'
+    ],
     name: 'BD Eclipse Injection Needle',
     brand: 'BD (Becton Dickinson)',
     spec: '25G x 1" TW (0.5mm x 25mm)',

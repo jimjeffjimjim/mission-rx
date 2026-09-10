@@ -437,6 +437,85 @@ assertEquals(parsedHospiraOcr?.lotNumber, 'LM2143', 'Hospira OCR lot number LM21
 assertEquals(parsedHospiraOcr?.expirationDate, '2026-10-31', 'Hospira OCR expiration date 2026-10-31 (from 2026-OCT-31)');
 assertEquals(parsedHospiraOcr?.pillsPerBottle, 30, 'Hospira OCR 30 mL pack size');
 
+// ============================================================================
+// 12. Equipment Expiration Date Preservation & No-Expire Auto-Clearing
+// ============================================================================
+console.log('\n🩺 12. Equipment Expiration Date Preservation & Lot Sync');
+
+// Test scenario: User adds equipment with doesNotExpire = true by default, but enters a lot with 2029-09-30
+const lotRowWithDate = [
+  { id: 'lot-1', lotNumber: '4275769', expirationDate: '2029-09-30', bottles: 2, looseUnits: 0 }
+];
+
+const lotExpsTest = lotRowWithDate
+  .map((l) => l.expirationDate?.trim())
+  .filter((exp) => exp && !exp.startsWith('3000') && !exp.startsWith('2099')) as string[];
+
+let earliestExpTest = '';
+if (lotExpsTest.length > 0) {
+  lotExpsTest.sort();
+  earliestExpTest = lotExpsTest[0];
+}
+
+const finalExpTest = earliestExpTest ? earliestExpTest : '3000-01-01';
+assertEquals(finalExpTest, '2029-09-30', 'Equipment with lot expiration saves 2029-09-30, not 3000-01-01');
+
+// Test scenario: Re-opening equipment with existing lot expiration restores effectiveExp
+const loadedLots = [{ id: 'lot-1', lotNumber: '4275769', expirationDate: '2029-09-30', bottles: 2, looseUnits: 0 }];
+let hasLotExpTest = false;
+let restoredDate = '';
+loadedLots.forEach((l) => {
+  if (l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')) {
+    hasLotExpTest = true;
+    if (!restoredDate || l.expirationDate < restoredDate) {
+      restoredDate = l.expirationDate;
+    }
+  }
+});
+const isNoExpTest = !hasLotExpTest;
+assertEquals(isNoExpTest, false, 'doesNotExpire is accurately false when lot expiration exists');
+assertEquals(restoredDate, '2029-09-30', 'Restores real expiration date 2029-09-30 on modal open');
+
+// Test scenario 13: Multi-lot Equipment Independent Expiration Date Preservation (No Averaging/Overriding)
+console.log('\n🩺 13. Multi-Lot Independent Expirations & BD Needle Spec Match');
+
+// 1. Keyword lookup for exact string "BD Injection Needle 25G x 1\" TW (0.5mm x 25mm)"
+const bdNeedleLookup = lookupSupplyByRefOrGtin('BD Injection Needle 25G x 1" TW (0.5mm x 25mm)');
+assert(bdNeedleLookup !== null, 'Finds BD Injection needle entry by exact string');
+assertEquals(bdNeedleLookup?.name, 'BD Eclipse Injection Needle', 'Matched name BD Eclipse Injection Needle');
+assertEquals(bdNeedleLookup?.spec, '25G x 1" TW (0.5mm x 25mm)', 'Matched spec 25G x 1" TW (0.5mm x 25mm)');
+
+// 2. Multi-lot equipment: Lot 1 (2029-09-30) and Lot 2 (2026-10-31)
+const multiLotItem = {
+  id: 'equip-bd-needle-1',
+  genericName: 'BD Eclipse Injection Needle',
+  dosage: '25G x 1" TW (0.5mm x 25mm)',
+  expirationDate: '2026-10-31',
+  lotNumbers: JSON.stringify([
+    { id: 'lot-1', lotNumber: '4275769', expirationDate: '2029-09-30', bottles: 5, looseUnits: 0 },
+    { id: 'lot-2', lotNumber: '305761', expirationDate: '2026-10-31', bottles: 3, looseUnits: 0 },
+  ]),
+};
+
+// Simulate EquipmentEditModal deserialization logic
+let rawLots: any = multiLotItem.lotNumbers;
+if (typeof rawLots === 'string' && rawLots.trim().startsWith('[')) {
+  try {
+    rawLots = JSON.parse(rawLots);
+  } catch (e) {}
+}
+
+assert(Array.isArray(rawLots), 'Parsed lot numbers string into JSON array');
+assertEquals(rawLots.length, 2, 'Parsed exactly 2 lot entries');
+assertEquals(rawLots[0].expirationDate, '2029-09-30', 'Lot 1 retains its 2029-09-30 expiration date');
+assertEquals(rawLots[0].bottles, 5, 'Lot 1 retains 5 bottles');
+assertEquals(rawLots[1].expirationDate, '2026-10-31', 'Lot 2 retains its 2026-10-31 expiration date');
+assertEquals(rawLots[1].bottles, 3, 'Lot 2 retains 3 bottles');
+
+// Calculate earliest expiration across lots (FEFO)
+const validDates = rawLots.map((l: any) => l.expirationDate).filter(Boolean).sort();
+assertEquals(validDates[0], '2026-10-31', 'Earliest expiration is accurately computed as 2026-10-31 without averaging or flattening');
+
 console.log('\n============================================================');
 console.log('🎉 CHAOS TEST SUMMARY: ' + passed + '/' + (passed + failed) + ' Passed (' + failed + ' Failed)');
 console.log('============================================================\n');

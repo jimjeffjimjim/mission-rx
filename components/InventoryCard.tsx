@@ -55,18 +55,48 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     return getSpecialtyColor(item.shelfLocation);
   }, [item.shelfLocation]);
 
-  // Parse lot numbers array safely with explicit string[] typing
-  const lotList: string[] = React.useMemo(() => {
+  interface ParsedLotBadge {
+    lotNumber: string;
+    expirationDate?: string;
+    bottles?: number;
+    looseUnits?: number;
+  }
+
+  // Parse lot numbers array safely supporting string arrays and structured LotEntry objects
+  const parsedLotList: ParsedLotBadge[] = React.useMemo(() => {
     try {
-      if (typeof item.lotNumbers === 'string') {
-        if (item.lotNumbers.startsWith('[')) {
-          return JSON.parse(item.lotNumbers);
-        }
-        return item.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
+      let raw = item.lotNumbers;
+      if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+        try {
+          raw = JSON.parse(raw);
+        } catch (e) {}
       }
+
+      if (Array.isArray(raw)) {
+        return raw
+          .map((entry) => {
+            if (typeof entry === 'object' && entry && entry.lotNumber) {
+              return {
+                lotNumber: String(entry.lotNumber).trim(),
+                expirationDate: entry.expirationDate && !entry.expirationDate.startsWith('3000') && !entry.expirationDate.startsWith('2099')
+                  ? String(entry.expirationDate).slice(0, 10)
+                  : undefined,
+                bottles: Number(entry.bottles) || 0,
+                looseUnits: Number(entry.looseUnits) || 0,
+              };
+            }
+            return { lotNumber: String(entry).trim() };
+          })
+          .filter((l) => Boolean(l.lotNumber));
+      }
+
+      if (typeof raw === 'string' && raw.trim()) {
+        return raw.split(',').map((s) => ({ lotNumber: s.trim() })).filter((l) => Boolean(l.lotNumber));
+      }
+
       return [];
     } catch (e) {
-      return [String(item.lotNumbers)];
+      return [];
     }
   }, [item.lotNumbers]);
 
@@ -75,6 +105,8 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     if (item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') || item.expirationDate === 'N/A') {
       return { type: 'NON_EXPIRING', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold shadow-2xs', label: '🛡️ N/A - Non-Expiring' };
     }
+    const hasMultipleLotsWithExp = parsedLotList.filter(l => Boolean(l.expirationDate)).length > 1;
+    const prefix = hasMultipleLotsWithExp ? 'Earliest: ' : 'Exp: ';
     try {
       const expDate = parseISO(item.expirationDate);
       const daysRemaining = differenceInDays(expDate, new Date());
@@ -82,13 +114,13 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
         return { type: 'EXPIRED', color: 'bg-rose-600 text-white font-black border-rose-700 shadow-sm animate-pulse', label: '🚨 EXPIRED - Do Not Dispense' };
       }
       if (daysRemaining <= 30) {
-        return { type: 'WARNING', color: 'bg-amber-500 text-slate-950 border-amber-600 font-extrabold shadow-md shadow-amber-500/25', label: `⚠️ Exp in ${daysRemaining}d` };
+        return { type: 'WARNING', color: 'bg-amber-500 text-slate-950 border-amber-600 font-extrabold shadow-md shadow-amber-500/25', label: `⚠️ ${prefix}${daysRemaining}d` };
       }
-      return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `Exp: ${item.expirationDate}` };
+      return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `${prefix}${item.expirationDate}` };
     } catch (e) {
-      return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `Exp: ${item.expirationDate}` };
+      return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `${prefix}${item.expirationDate}` };
     }
-  }, [item.expirationDate]);
+  }, [item.expirationDate, parsedLotList]);
 
   // Low stock check
   const isLowStock = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
@@ -373,13 +405,23 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
                 <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5]" />
                 <span>Lots:</span>
               </span>
-              {lotList.length > 0 ? (
-                lotList.map((lot: string, idx: number) => (
+              {parsedLotList.length > 0 ? (
+                parsedLotList.map((lot, idx) => (
                   <span
                     key={idx}
-                    className="font-mono text-xs font-bold text-slate-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 shadow-2xs"
+                    className="inline-flex flex-wrap items-center gap-1.5 font-mono text-xs font-bold text-slate-800 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs"
                   >
-                    {lot}
+                    <span className="font-mono">{lot.lotNumber}</span>
+                    {lot.expirationDate && (
+                      <span className="text-[10px] font-sans font-extrabold text-amber-950 bg-amber-200/70 px-1.5 py-0.5 rounded-md">
+                        Exp: {lot.expirationDate}
+                      </span>
+                    )}
+                    {(lot.bottles || 0) > 0 && (
+                      <span className="text-[10px] font-sans font-semibold text-slate-600">
+                        • {lot.bottles} {containerLabel.toLowerCase()}
+                      </span>
+                    )}
                   </span>
                 ))
               ) : (

@@ -122,38 +122,61 @@ export default function EquipmentEditModal({
   useEffect(() => {
     if (item) {
       const parsedLots = parseLotNumbers(item.lotNumbers);
+      let rawLots: any = item.lotNumbers;
+      if (typeof rawLots === 'string' && rawLots.trim().startsWith('[')) {
+        try {
+          rawLots = JSON.parse(rawLots);
+        } catch (e) {}
+      }
+
       let initialLots: LotEntry[] = [];
 
-      if (Array.isArray(item.lotNumbers) && item.lotNumbers.length > 0 && typeof item.lotNumbers[0] === 'object') {
-        initialLots = item.lotNumbers.map((l: any, idx: number) => ({
+      if (Array.isArray(rawLots) && rawLots.length > 0 && typeof rawLots[0] === 'object') {
+        initialLots = rawLots.map((l: any, idx: number) => ({
           id: l.id || `lot-${Date.now()}-${idx}`,
           lotNumber: l.lotNumber || '',
-          expirationDate: l.expirationDate || item.expirationDate || '3000-01-01',
+          expirationDate: l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')
+            ? l.expirationDate
+            : (item.expirationDate || '3000-01-01'),
           bottles: Number(l.bottles) || 0,
           looseUnits: Number(l.looseUnits) || 0,
         }));
-      } else if (parsedLots.length > 0) {
-        initialLots = parsedLots.map((lot, idx) => ({
-          id: `lot-${Date.now()}-${idx}`,
-          lotNumber: lot,
-          expirationDate: item.expirationDate || '3000-01-01',
-          bottles: idx === 0 ? (item.bottlesAvailable || 0) : 0,
-          looseUnits: idx === 0 ? (item.looseUnitsAvailable || 0) : 0,
-        }));
       } else {
-        initialLots = [{
-          id: `lot-${Date.now()}`,
-          lotNumber: '',
-          expirationDate: item.expirationDate || '3000-01-01',
-          bottles: item.bottlesAvailable || 0,
-          looseUnits: item.looseUnitsAvailable || 0,
-        }];
+        if (parsedLots.length > 0) {
+          initialLots = parsedLots.map((lot, idx) => ({
+            id: `lot-${Date.now()}-${idx}`,
+            lotNumber: lot,
+            expirationDate: item.expirationDate || '3000-01-01',
+            bottles: idx === 0 ? (item.bottlesAvailable || 0) : 0,
+            looseUnits: idx === 0 ? (item.looseUnitsAvailable || 0) : 0,
+          }));
+        } else {
+          initialLots = [{
+            id: `lot-${Date.now()}`,
+            lotNumber: '',
+            expirationDate: item.expirationDate || '3000-01-01',
+            bottles: item.bottlesAvailable || 0,
+            looseUnits: item.looseUnitsAvailable || 0,
+          }];
+        }
       }
 
       setLotEntries(initialLots);
 
-      const isNoExp = !item.expirationDate || item.expirationDate.startsWith('3000') || item.expirationDate.startsWith('2099');
+      let hasLotExp = false;
+      let earliestLotDate = '';
+      initialLots.forEach((l) => {
+        if (l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')) {
+          hasLotExp = true;
+          if (!earliestLotDate || l.expirationDate < earliestLotDate) {
+            earliestLotDate = l.expirationDate;
+          }
+        }
+      });
+
+      const isNoExp = (!item.expirationDate || item.expirationDate.startsWith('3000') || item.expirationDate.startsWith('2099')) && !hasLotExp;
       setDoesNotExpire(isNoExp);
+      const effectiveExp = isNoExp ? '3000-01-01' : (earliestLotDate || item.expirationDate || '');
 
       // Check custom category
       const currentCat = item.shelfLocation || 'Supplies';
@@ -198,7 +221,7 @@ export default function EquipmentEditModal({
         bottlesAvailable: item.bottlesAvailable || 0,
         looseUnitsAvailable: item.looseUnitsAvailable || 0,
         pillsPerBottle: Math.max(1, Number(item.pillsPerBottle) || 1),
-        expirationDate: isNoExp ? '3000-01-01' : (item.expirationDate || ''),
+        expirationDate: effectiveExp,
         directions: item.directions || '',
         lotNumbers: parsedLots,
       });
@@ -263,21 +286,51 @@ export default function EquipmentEditModal({
     }));
 
     if (data.lotNumber || data.expirationDate) {
-      setLotEntries([
-        {
-          id: `lot-${Date.now()}`,
-          lotNumber: data.lotNumber || '',
-          expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
-          bottles: 1,
-          looseUnits: 0,
-        },
-      ]);
+      setLotEntries((prev) => {
+        const hasExistingData = prev.some((l) => l.lotNumber.trim() !== '' || (l.expirationDate && !l.expirationDate.startsWith('3000')));
+        if (!hasExistingData) {
+          return [
+            {
+              id: `lot-${Date.now()}`,
+              lotNumber: data.lotNumber || '',
+              expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
+              bottles: 1,
+              looseUnits: 0,
+            },
+          ];
+        }
+
+        // If lot already exists in the table, update it
+        const existingIdx = data.lotNumber ? prev.findIndex((l) => l.lotNumber.toLowerCase() === data.lotNumber!.toLowerCase()) : -1;
+        if (existingIdx !== -1) {
+          return prev.map((l, idx) => idx === existingIdx ? {
+            ...l,
+            expirationDate: data.expirationDate || l.expirationDate,
+          } : l);
+        }
+
+        // Otherwise append as a new batch row
+        return [
+          ...prev,
+          {
+            id: `lot-${Date.now()}`,
+            lotNumber: data.lotNumber || '',
+            expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
+            bottles: 1,
+            looseUnits: 0,
+          },
+        ];
+      });
     }
   };
 
   // Multi-Lot Handlers
   const handleAddLotRow = () => {
-    const defaultExp = doesNotExpire ? '3000-01-01' : (formData.expirationDate || new Date().toISOString().split('T')[0]);
+    const hasRealExp = formData.expirationDate && !formData.expirationDate.startsWith('3000') && !formData.expirationDate.startsWith('2099');
+    const defaultExp = hasRealExp
+      ? formData.expirationDate
+      : (doesNotExpire ? '3000-01-01' : new Date().toISOString().split('T')[0]);
+
     setLotEntries((prev) => [
       ...prev,
       {
@@ -291,9 +344,23 @@ export default function EquipmentEditModal({
   };
 
   const handleUpdateLotRow = (index: number, field: keyof LotEntry, value: any) => {
-    setLotEntries((prev) =>
-      prev.map((lot, idx) => (idx === index ? { ...lot, [field]: value } : lot))
-    );
+    setLotEntries((prev) => {
+      const nextLots = prev.map((lot, idx) => (idx === index ? { ...lot, [field]: value } : lot));
+
+      if (field === 'expirationDate') {
+        const validDates = nextLots
+          .map((l) => l.expirationDate?.trim())
+          .filter((d) => d && !d.startsWith('3000') && !d.startsWith('2099')) as string[];
+
+        if (validDates.length > 0) {
+          validDates.sort();
+          setDoesNotExpire(false);
+          setFormData((fPrev) => ({ ...fPrev, expirationDate: validDates[0] }));
+        }
+      }
+
+      return nextLots;
+    });
   };
 
   const handleRemoveLotRow = (index: number) => {
@@ -307,7 +374,19 @@ export default function EquipmentEditModal({
       }]);
       return;
     }
-    setLotEntries((prev) => prev.filter((_, idx) => idx !== index));
+
+    setLotEntries((prev) => {
+      const nextLots = prev.filter((_, idx) => idx !== index);
+      const validDates = nextLots
+        .map((l) => l.expirationDate?.trim())
+        .filter((d) => d && !d.startsWith('3000') && !d.startsWith('2099')) as string[];
+
+      if (validDates.length > 0) {
+        validDates.sort();
+        setFormData((fPrev) => ({ ...fPrev, expirationDate: validDates[0] }));
+      }
+      return nextLots;
+    });
   };
 
   const handleSyncLotsToStock = () => {
@@ -324,6 +403,10 @@ export default function EquipmentEditModal({
         }
       }
     });
+
+    if (earliestExp) {
+      setDoesNotExpire(false);
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -390,16 +473,42 @@ export default function EquipmentEditModal({
     const finalCategory = isCustomCategory ? (customCategoryText.trim() || 'Supplies') : (formData.shelfLocation || 'Supplies');
     const finalContainer = isCustomContainerUnit ? (customContainerText.trim() || 'Units') : (formData.stockUnit || 'Units');
     const finalSubUnit = isCustomSubUnit ? (customSubUnitText.trim() || 'pieces') : (formData.subUnit || 'pieces');
-    const finalExp = doesNotExpire ? '3000-01-01' : (formData.expirationDate || '3000-01-01');
+
+    // Collect all valid expiration dates from lot entries
+    const lotExps = lotEntries
+      .map((l) => l.expirationDate?.trim())
+      .filter((exp) => exp && !exp.startsWith('3000') && !exp.startsWith('2099')) as string[];
+
+    const formExp = formData.expirationDate && !formData.expirationDate.startsWith('3000') && !formData.expirationDate.startsWith('2099')
+      ? formData.expirationDate.trim()
+      : '';
+
+    // Determine earliest expiration date across all entries
+    let earliestExp = '';
+    if (lotExps.length > 0) {
+      lotExps.sort();
+      earliestExp = lotExps[0];
+    } else if (formExp) {
+      earliestExp = formExp;
+    }
+
+    const hasRealExpiration = Boolean(earliestExp);
+    const finalExp = hasRealExpiration ? earliestExp : '3000-01-01';
 
     const validLots = lotEntries
-      .map((l) => ({
-        id: l.id,
-        lotNumber: l.lotNumber.trim(),
-        expirationDate: l.expirationDate || finalExp,
-        bottles: Math.max(0, Number(l.bottles) || 0),
-        looseUnits: Math.max(0, Number(l.looseUnits) || 0),
-      }))
+      .map((l) => {
+        const lotExp = l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')
+          ? l.expirationDate.trim()
+          : (hasRealExpiration ? finalExp : '3000-01-01');
+
+        return {
+          id: l.id,
+          lotNumber: l.lotNumber.trim(),
+          expirationDate: lotExp,
+          bottles: Math.max(0, Number(l.bottles) || 0),
+          looseUnits: Math.max(0, Number(l.looseUnits) || 0),
+        };
+      })
       .filter((l) => l.lotNumber.length > 0 || l.bottles > 0 || l.looseUnits > 0);
 
     const submissionData: Partial<InventoryItem> = {
@@ -903,7 +1012,13 @@ export default function EquipmentEditModal({
                     type="date"
                     required={!doesNotExpire}
                     value={formData.expirationDate && !formData.expirationDate.startsWith('3000') ? formData.expirationDate : ''}
-                    onChange={(e) => handleChange('expirationDate', e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setDoesNotExpire(false);
+                      }
+                      handleChange('expirationDate', val);
+                    }}
                     className="w-full min-h-[44px] px-3.5 bg-white border border-slate-300 focus:border-teal-600 rounded-xl text-sm font-bold text-slate-900 transition-all focus:outline-hidden"
                   />
                 </div>
