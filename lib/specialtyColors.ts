@@ -315,6 +315,7 @@ export function getSpecialtyColor(category: string): SpecialtyColorScheme {
   if (norm.includes('derm')) return buildSchemeForColor('pink', 'Dermatology');
   if (norm.includes('mobility')) return buildSchemeForColor('indigo', 'Mobility Aid');
   if (norm.includes('device')) return buildSchemeForColor('purple', 'Medical Devices');
+  if (norm.includes('ortho') || norm.includes('splint')) return buildSchemeForColor('indigo', category || 'Orthopedics');
 
   return buildSchemeForColor('slate', category || 'General');
 }

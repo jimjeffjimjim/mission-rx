@@ -810,7 +810,8 @@ export default function Home() {
         const brandMatch = (item.brandName || '').toLowerCase().includes(q);
         const chemMatch = (item.chemicalName || '').toLowerCase().includes(q);
         const dosageMatch = item.dosage.toLowerCase().includes(q);
-        if (!genericMatch && !brandMatch && !chemMatch && !dosageMatch) return false;
+        const catMatch = (item.shelfLocation || '').toLowerCase().includes(q);
+        if (!genericMatch && !brandMatch && !chemMatch && !dosageMatch && !catMatch) return false;
       }
 
       if (selectedCategory !== 'ALL') {
@@ -819,6 +820,7 @@ export default function Home() {
         if (itemCat !== filterCat) {
           if (filterCat.includes('otc') && itemCat.includes('otc')) return true;
           if (filterCat.includes('psych') && itemCat.includes('psych')) return true;
+          if ((filterCat.includes('ortho') || filterCat.includes('splint')) && (itemCat.includes('ortho') || itemCat.includes('splint'))) return true;
           return false;
         }
       }
@@ -857,7 +859,11 @@ export default function Home() {
     ];
 
     filteredItems.forEach((item) => {
-      const loc = item.shelfLocation || 'General Medical';
+      let loc = item.shelfLocation || 'General Medical';
+      const normLoc = loc.toLowerCase().trim();
+      if (normLoc.includes('ortho') || normLoc.includes('splint')) {
+        loc = 'Orthopedics';
+      }
       if (!groups[loc]) groups[loc] = [];
       groups[loc].push(item);
     });

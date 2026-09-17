@@ -437,6 +437,7 @@ export default function AdminPortal({
       if (itemCat !== filterCat) {
         if (filterCat.includes('otc') && itemCat.includes('otc')) return true;
         if (filterCat.includes('psych') && itemCat.includes('psych')) return true;
+        if ((filterCat.includes('ortho') || filterCat.includes('splint')) && (itemCat.includes('ortho') || itemCat.includes('splint'))) return true;
         return false;
       }
     }
@@ -487,7 +488,7 @@ export default function AdminPortal({
 
   const equipmentItems = useMemo(() => {
     return displayItems.filter((i) => {
-      const isSupply = i.shelfLocation === 'Supplies' || i.itemType === 'Supply' || (i.stockUnit && ['Units', 'Kits', 'Sets', 'Boxes / Packs', 'Boxes', 'Pairs', 'Ampoules'].includes(i.stockUnit) && i.shelfLocation === 'Supplies');
+      const isSupply = i.shelfLocation === 'Supplies' || i.itemType === 'Supply' || (i.shelfLocation && (i.shelfLocation.toLowerCase().includes('splint') || ['Orthopedics & Splints', 'Diagnostic Devices', 'Surgical Instruments', 'Consumables & PPE', 'Wound Care', 'Respiratory & Airway', 'Emergency & Trauma', 'Dental Supplies'].includes(i.shelfLocation))) || (i.stockUnit && ['Units', 'Kits', 'Sets', 'Boxes / Packs', 'Boxes', 'Pairs', 'Ampoules'].includes(i.stockUnit) && i.shelfLocation === 'Supplies');
       if (!isSupply) return false;
 
       if (equipmentSearchQuery.trim()) {
