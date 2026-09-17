@@ -24,6 +24,10 @@ export interface InventoryItem {
   expirationDate: string; // YYYY-MM-DD
   lotNumbers: string | string[] | LotEntry[]; // JSON string array or array of strings or LotEntry objects
   directions?: string | null; // Directions / Provider Notes from Excel
+  packageSizes?: number[]; // Distinct package sizes if consolidated from multiple container sizes (e.g. [100, 250, 500, 600])
+  containerBreakdown?: string; // Formatted packaging summary (e.g. "6×100, 2×250, 1×500, 1×600")
+  isConsolidated?: boolean; // Indicates if this card aggregates multiple container entries
+  totalUnits?: number; // Pre-calculated total available units across all consolidated containers
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }

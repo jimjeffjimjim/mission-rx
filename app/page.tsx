@@ -17,7 +17,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations } from '@/lib/stockMath';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -890,77 +890,9 @@ export default function Home() {
       })
       .map((category) => {
         const rawCategoryItems = groups[category] || [];
-        
-        // Merge identical medications for doctors (matching genericName + dosage + subUnit)
-        const consolidatedMap = new Map<string, InventoryItem>();
-
-        rawCategoryItems.forEach((item) => {
-          const key = `${(item.genericName || '').trim().toLowerCase()}_${(item.dosage || '').trim().toLowerCase()}_${(item.subUnit || 'units').trim().toLowerCase()}`;
-          
-          if (!consolidatedMap.has(key)) {
-            let itemLots: any = item.lotNumbers;
-            try {
-              if (typeof itemLots === 'string' && itemLots.trim().startsWith('[')) {
-                itemLots = JSON.parse(itemLots);
-              }
-            } catch (e) {}
-            consolidatedMap.set(key, { ...item, lotNumbers: itemLots });
-          } else {
-            const existing = consolidatedMap.get(key)!;
-            const existingTotal = calculateTotalUnits(existing.bottlesAvailable || 0, existing.pillsPerBottle || 0, existing.looseUnitsAvailable || 0);
-            const itemTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
-            const combinedTotal = existingTotal + itemTotal;
-
-            const packSize = existing.pillsPerBottle || item.pillsPerBottle || 0;
-            const { bottles, loose } = convertTotalUnitsToStock(combinedTotal, packSize);
-
-            // Compute earliest expiration date between existing and incoming item (FEFO)
-            const eExp = existing.expirationDate && !existing.expirationDate.startsWith('3000') && !existing.expirationDate.startsWith('2099') ? existing.expirationDate : '';
-            const iExp = item.expirationDate && !item.expirationDate.startsWith('3000') && !item.expirationDate.startsWith('2099') ? item.expirationDate : '';
-            let mergedExp = existing.expirationDate;
-            if (eExp && iExp) {
-              mergedExp = eExp < iExp ? eExp : iExp;
-            } else if (iExp) {
-              mergedExp = iExp;
-            }
-
-            // Merge lot rows preserving structured objects if present
-            let existingLotsRaw: any = existing.lotNumbers;
-            if (typeof existingLotsRaw === 'string' && existingLotsRaw.startsWith('[')) {
-              try { existingLotsRaw = JSON.parse(existingLotsRaw); } catch (e) {}
-            }
-            let itemLotsRaw: any = item.lotNumbers;
-            if (typeof itemLotsRaw === 'string' && itemLotsRaw.startsWith('[')) {
-              try { itemLotsRaw = JSON.parse(itemLotsRaw); } catch (e) {}
-            }
-
-            let mergedLots: any[] = [];
-            const isStructured = (Array.isArray(existingLotsRaw) && existingLotsRaw.length > 0 && typeof existingLotsRaw[0] === 'object')
-              || (Array.isArray(itemLotsRaw) && itemLotsRaw.length > 0 && typeof itemLotsRaw[0] === 'object');
-
-            if (isStructured) {
-              const listA = Array.isArray(existingLotsRaw) ? existingLotsRaw : [];
-              const listB = Array.isArray(itemLotsRaw) ? itemLotsRaw : [];
-              mergedLots = [...listA, ...listB];
-            } else {
-              const existingLots = parseLotNumbers(existing.lotNumbers);
-              const itemLots = parseLotNumbers(item.lotNumbers);
-              mergedLots = Array.from(new Set([...existingLots, ...itemLots]));
-            }
-
-            consolidatedMap.set(key, {
-              ...existing,
-              expirationDate: mergedExp,
-              bottlesAvailable: bottles,
-              looseUnitsAvailable: loose,
-              lotNumbers: mergedLots,
-            });
-          }
-        });
-
         return {
           category,
-          items: Array.from(consolidatedMap.values()),
+          items: consolidateDoctorFormulations(rawCategoryItems),
         };
       });
   }, [filteredItems]);
@@ -1117,7 +1049,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <span>MissionRx &copy; 2026 Pharmaceutical Inventory System</span>
           <span className="text-slate-300">•</span>
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v2.20 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v3.1 Live</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-bold text-slate-600">
           <Link href="/instructions" className="text-teal-700 hover:text-teal-900 transition-colors flex items-center gap-1 font-extrabold bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">

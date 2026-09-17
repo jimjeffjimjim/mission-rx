@@ -30,7 +30,9 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
   const [editingBottles, setEditingBottles] = useState(false);
   const [bottlesInput, setBottlesInput] = useState(item.bottlesAvailable.toString());
   
-  const totalUnits = calculateTotalUnits(item.bottlesAvailable, item.pillsPerBottle, item.looseUnitsAvailable);
+  const totalUnits = item.totalUnits !== undefined
+    ? item.totalUnits
+    : calculateTotalUnits(item.bottlesAvailable, item.pillsPerBottle, item.looseUnitsAvailable);
   const [editingTotalUnits, setEditingTotalUnits] = useState(false);
   const [totalUnitsInput, setTotalUnitsInput] = useState(totalUnits.toString());
 
@@ -72,33 +74,45 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
         } catch (e) {}
       }
 
+      const todayIso = new Date().toISOString().split('T')[0];
+      let list: ParsedLotBadge[] = [];
+
       if (Array.isArray(raw)) {
-        return raw
+        list = raw
           .map((entry) => {
-            if (typeof entry === 'object' && entry && entry.lotNumber) {
+            if (typeof entry === 'object' && entry && (entry.lotNumber || entry.expirationDate)) {
+              const lotNum = String(entry.lotNumber || '').trim();
+              const exp = entry.expirationDate && !entry.expirationDate.startsWith('3000') && !entry.expirationDate.startsWith('2099') && entry.expirationDate !== 'N/A'
+                ? String(entry.expirationDate).slice(0, 10)
+                : undefined;
               return {
-                lotNumber: String(entry.lotNumber).trim(),
-                expirationDate: entry.expirationDate && !entry.expirationDate.startsWith('3000') && !entry.expirationDate.startsWith('2099')
-                  ? String(entry.expirationDate).slice(0, 10)
-                  : undefined,
+                lotNumber: lotNum && lotNum !== 'N/A' ? lotNum : (exp ? `Batch (${exp})` : 'Lot'),
+                expirationDate: exp,
                 bottles: Number(entry.bottles) || 0,
                 looseUnits: Number(entry.looseUnits) || 0,
               };
             }
-            return { lotNumber: String(entry).trim() };
+            const str = String(entry).trim();
+            return { lotNumber: str };
           })
-          .filter((l) => Boolean(l.lotNumber));
+          .filter((l) => Boolean(l.lotNumber && l.lotNumber !== 'N/A'));
+      } else if (typeof raw === 'string' && raw.trim() && raw.trim() !== 'N/A') {
+        list = raw.split(',').map((s) => ({ lotNumber: s.trim() })).filter((l) => Boolean(l.lotNumber && l.lotNumber !== 'N/A'));
       }
 
-      if (typeof raw === 'string' && raw.trim()) {
-        return raw.split(',').map((s) => ({ lotNumber: s.trim() })).filter((l) => Boolean(l.lotNumber));
+      // If doctor view, exclude expired lots
+      if (role !== 'ADMIN') {
+        list = list.filter((l) => {
+          if (l.expirationDate && l.expirationDate < todayIso) return false;
+          return true;
+        });
       }
 
-      return [];
+      return list;
     } catch (e) {
       return [];
     }
-  }, [item.lotNumbers]);
+  }, [item.lotNumbers, role]);
 
   // Expiration date evaluation
   const expStatus = React.useMemo(() => {
@@ -272,8 +286,8 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
         <div className="grid grid-cols-2 gap-3">
           {/* Primary Stock Container */}
           <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors rounded-2xl p-3 sm:p-3.5 border border-slate-200 flex flex-col justify-between shadow-2xs">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate" title={`Container size: ${item.pillsPerBottle || 0} ${subUnitLabel} per ${containerLabel.toLowerCase().replace(/s$/, '')}`}>
-              {containerLabel} {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel})` : ''}
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1 truncate" title={`Container size: ${item.packageSizes && item.packageSizes.length > 1 ? `Multi-Size: ${item.packageSizes.join(', ')}` : (item.pillsPerBottle || 0)} ${subUnitLabel} per ${containerLabel.toLowerCase().replace(/s$/, '')}`}>
+              {containerLabel} {item.packageSizes && item.packageSizes.length > 1 ? `(Multi-Size: ${item.packageSizes.join(', ')})` : item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel})` : ''}
             </span>
             
             {role === 'ADMIN' ? (
@@ -323,7 +337,7 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
                   {item.bottlesAvailable}
                 </span>
                 <span className="text-xs text-slate-500 font-extrabold lowercase truncate">
-                  {item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel} / ${containerLabel.toLowerCase().replace(/s$/, '')})` : 'sealed'}
+                  {item.containerBreakdown ? `sealed (${item.containerBreakdown})` : item.pillsPerBottle > 0 ? `(${item.pillsPerBottle} ${subUnitLabel} / ${containerLabel.toLowerCase().replace(/s$/, '')})` : 'sealed'}
                 </span>
               </div>
             )}
@@ -397,8 +411,8 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
           </div>
         </div>
 
-        {/* Clinical Section: Lot Numbers & Admin Edit Dialog */}
-        {role === 'ADMIN' && (
+        {/* Clinical Section: Lot Numbers & Expiration Badges */}
+        {(parsedLotList.length > 0 || role === 'ADMIN') && (
           <div className="mt-4 pt-3.5 border-t border-slate-200/80 flex flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-1.5 select-text">
               <span className="text-xs font-black text-slate-700 flex items-center gap-1 mr-1">
@@ -422,6 +436,11 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
                         • {lot.bottles} {containerLabel.toLowerCase()}
                       </span>
                     )}
+                    {(lot.looseUnits || 0) > 0 && !(lot.bottles && lot.bottles > 0) && (
+                      <span className="text-[10px] font-sans font-semibold text-slate-600">
+                        • {lot.looseUnits} {subUnitLabel.toLowerCase()}
+                      </span>
+                    )}
                   </span>
                 ))
               ) : (
@@ -429,13 +448,15 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
               )}
             </div>
 
-            <button
-              onClick={() => onEditItem(item)}
-              className="w-full mt-1 min-h-[48px] bg-slate-100 hover:bg-amber-50 hover:border-amber-400 text-slate-800 hover:text-amber-900 font-black text-xs sm:text-sm rounded-2xl border border-slate-300 flex items-center justify-center gap-2 transition-all touch-manipulation shadow-2xs active:scale-[0.98] animate-fadeIn cursor-pointer"
-            >
-              <Edit2 className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
-              <span>Edit Medication Details & Lot History</span>
-            </button>
+            {role === 'ADMIN' && (
+              <button
+                onClick={() => onEditItem(item)}
+                className="w-full mt-1 min-h-[48px] bg-slate-100 hover:bg-amber-50 hover:border-amber-400 text-slate-800 hover:text-amber-900 font-black text-xs sm:text-sm rounded-2xl border border-slate-300 flex items-center justify-center gap-2 transition-all touch-manipulation shadow-2xs active:scale-[0.98] animate-fadeIn cursor-pointer"
+              >
+                <Edit2 className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
+                <span>Edit Medication Details & Lot History</span>
+              </button>
+            )}
           </div>
         )}
       </div>
