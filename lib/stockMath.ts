@@ -83,3 +83,57 @@ export function parseLotNumbers(rawLots: any): string[] {
   }
   return [];
 }
+
+/**
+ * Evaluates whether a drug or supply formulation is expired.
+ * Non-expiring / permanent devices ('3000-01-01', '2099', 'N/A') never expire.
+ * If structured lot numbers exist, checks if any unexpired active lot remains.
+ */
+export function isFormulationExpired(
+  expirationDate?: string | null,
+  rawLots?: any,
+  bottlesAvailable: number = 0,
+  looseUnitsAvailable: number = 0
+): boolean {
+  if (!expirationDate || expirationDate.startsWith('3000') || expirationDate.startsWith('2099') || expirationDate === 'N/A') {
+    return false;
+  }
+
+  // Parse structured lots if present
+  let lots = rawLots;
+  if (typeof lots === 'string' && lots.trim().startsWith('[')) {
+    try {
+      lots = JSON.parse(lots);
+    } catch (e) {}
+  }
+
+  const now = new Date();
+  const todayIso = now.toISOString().split('T')[0];
+
+  if (Array.isArray(lots) && lots.length > 0 && typeof lots[0] === 'object') {
+    const validLots = lots.filter(
+      (l: any) => l && l.expirationDate && !l.expirationDate.startsWith('3000') && !l.expirationDate.startsWith('2099')
+    );
+
+    if (validLots.length > 0) {
+      // If there is ANY lot that is unexpired and has stock (or if formulation has stock and lot is unexpired)
+      const hasUnexpiredStock = validLots.some((l: any) => {
+        const lotExp = String(l.expirationDate).slice(0, 10);
+        const isNotExpired = lotExp >= todayIso;
+        const lotStock = (Number(l.bottles) || 0) + (Number(l.looseUnits) || 0);
+        return isNotExpired && (lotStock > 0 || (bottlesAvailable + looseUnitsAvailable) > 0);
+      });
+      if (hasUnexpiredStock) return false;
+
+      // If all lots are expired
+      const allExpired = validLots.every((l: any) => {
+        const lotExp = String(l.expirationDate).slice(0, 10);
+        return lotExp < todayIso;
+      });
+      if (allExpired) return true;
+    }
+  }
+
+  const expIso = String(expirationDate).slice(0, 10);
+  return expIso < todayIso;
+}

@@ -17,7 +17,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired } from '@/lib/stockMath';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -804,6 +804,17 @@ export default function Home() {
   // Filter & Search Evaluation for Doctor View
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      // 1. Exclude expired formulations from the doctor view
+      if (role !== 'ADMIN') {
+        const isExp = isFormulationExpired(
+          item.expirationDate,
+          item.lotNumbers,
+          item.bottlesAvailable,
+          item.looseUnitsAvailable
+        );
+        if (isExp) return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const genericMatch = item.genericName.toLowerCase().includes(q);
@@ -840,7 +851,7 @@ export default function Home() {
 
       return true;
     });
-  }, [items, searchQuery, selectedCategory, selectedStatus]);
+  }, [items, searchQuery, selectedCategory, selectedStatus, role]);
 
   // Group and consolidate inventory by categories for Doctor View
   const groupedInventory = useMemo(() => {
