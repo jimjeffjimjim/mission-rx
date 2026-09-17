@@ -179,9 +179,13 @@ export default function InstructionsPage() {
                     <span>Doctor / Staff View</span>
                     <span className="font-mono bg-teal-100 px-2 py-0.5 rounded font-black">1234</span>
                   </div>
+                  <div className="flex items-center justify-between text-indigo-800">
+                    <span>Viewer (Read-Only & Exports)</span>
+                    <span className="font-mono bg-indigo-100 px-2 py-0.5 rounded font-black">8888</span>
+                  </div>
                   <div className="flex items-center justify-between text-amber-800">
                     <span>Admin Control Portal</span>
-                    <span className="font-mono bg-amber-100 px-2 py-0.5 rounded font-black">8888</span>
+                    <span className="font-mono bg-amber-100 px-2 py-0.5 rounded font-black">7890</span>
                   </div>
                 </div>
               </div>
@@ -270,8 +274,8 @@ export default function InstructionsPage() {
                   <ShieldCheck className="w-6 h-6 stroke-[2.5]" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">⚙️ Admin & Inventory Manager Guide (PIN 8888)</h3>
-                  <p className="text-xs font-bold text-slate-500">Restocking, adding formulations, and managing stock baselines</p>
+                  <h3 className="text-lg font-black text-slate-900">⚙️ Admin & Inventory Manager Guide (PIN 7890)</h3>
+                  <p className="text-xs font-bold text-slate-500">Restocking, adding formulations, and managing stock baselines (Viewer: PIN 8888 for Read-Only & Exports)</p>
                 </div>
               </div>
 
@@ -320,6 +324,17 @@ export default function InstructionsPage() {
                   </h4>
                   <p>
                     In the Admin Portal, use <b>"Import Spreadsheet CSV"</b> to bulk-upload formulary files from Excel. Tap <b>"Download Backup"</b> to save an offline JSON disaster recovery file anytime. Automated weekly snapshots retain the 5 newest backups to protect cloud storage space.
+                  </p>
+                </div>
+
+                {/* 5. Viewer Role */}
+                <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-2">
+                  <h4 className="font-extrabold text-indigo-950 text-sm flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-700" />
+                    <span>5. Viewer & Auditor Mode (PIN 8888)</span>
+                  </h4>
+                  <p className="text-indigo-950">
+                    Use PIN <code className="font-mono font-bold text-indigo-900">8888</code> for auditors, clinic partners, and staff who need to browse the full admin inventory, examine equipment, check usage analytics, and export Excel/CSV reports without modifying anything. In Viewer mode, all edit, dispense, restock, and delete controls are safely disabled and hidden.
                   </p>
                 </div>
               </div>

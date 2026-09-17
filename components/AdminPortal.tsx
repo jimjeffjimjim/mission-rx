@@ -41,7 +41,9 @@ import {
   Boxes,
   PackageCheck,
   ClipboardList,
-  QrCode
+  QrCode,
+  Eye,
+  Shield
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
@@ -62,6 +64,7 @@ interface AdminPortalProps {
   onOpenDeveloperQrModal?: () => void;
   onRefreshData?: () => void;
   userRole?: string;
+  isReadOnly?: boolean;
   onAddTestAuditLog?: (log: DispenseLog) => void;
 }
 
@@ -79,8 +82,10 @@ export default function AdminPortal({
   onOpenDeveloperQrModal,
   onRefreshData,
   userRole = 'ADMIN',
+  isReadOnly = false,
   onAddTestAuditLog,
 }: AdminPortalProps) {
+  const isReadOnlyMode = Boolean(isReadOnly || userRole === 'VIEWER');
   const [activeTab, setActiveTab] = useState<'TABLE' | 'EQUIPMENT' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
@@ -543,6 +548,132 @@ export default function AdminPortal({
     });
   };
 
+  const handleExportFormularyExcel = () => {
+    try {
+      const rowsXml = displayItems.map((item) => {
+        const total = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+        const lots = parseLotNumbers(item.lotNumbers).join(', ') || 'N/A';
+        const exp = item.expirationDate || 'N/A';
+        return `<Row ss:Height="20">
+          <Cell ss:StyleID="Data"><Data ss:Type="String">${(item.shelfLocation || 'General').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+          <Cell ss:StyleID="DataBold"><Data ss:Type="String">${(item.genericName || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+          <Cell ss:StyleID="Data"><Data ss:Type="String">${(item.brandName || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+          <Cell ss:StyleID="Data"><Data ss:Type="String">${(item.dosage || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+          <Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${item.bottlesAvailable || 0}</Data></Cell>
+          <Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${item.looseUnitsAvailable || 0}</Data></Cell>
+          <Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${item.pillsPerBottle || 0}</Data></Cell>
+          <Cell ss:StyleID="DataBold"><Data ss:Type="Number">${total}</Data></Cell>
+          <Cell ss:StyleID="Data"><Data ss:Type="String">${(item.subUnit || 'units').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+          <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${exp}</Data></Cell>
+          <Cell ss:StyleID="Data"><Data ss:Type="String">${lots.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Data></Cell>
+        </Row>`;
+      }).join('\n');
+
+      const excelXml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Header">
+   <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="Data">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="DataBold">
+   <Font ss:Size="10" ss:Bold="1" ss:Color="#0F172A"/>
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="DataCenter">
+   <Font ss:Size="10" ss:Color="#0F172A"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Formulary Inventory">
+  <Table>
+   <Column ss:Width="120"/>
+   <Column ss:Width="200"/>
+   <Column ss:Width="150"/>
+   <Column ss:Width="140"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="90"/>
+   <Column ss:Width="100"/>
+   <Column ss:Width="80"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="160"/>
+   <Row ss:Height="26" ss:StyleID="Header">
+    <Cell><Data ss:Type="String">Category</Data></Cell>
+    <Cell><Data ss:Type="String">Generic Name</Data></Cell>
+    <Cell><Data ss:Type="String">Brand Name</Data></Cell>
+    <Cell><Data ss:Type="String">Dosage / Form</Data></Cell>
+    <Cell><Data ss:Type="String">Sealed Packs</Data></Cell>
+    <Cell><Data ss:Type="String">Loose Units</Data></Cell>
+    <Cell><Data ss:Type="String">Units/Pack</Data></Cell>
+    <Cell><Data ss:Type="String">Total Units</Data></Cell>
+    <Cell><Data ss:Type="String">Unit</Data></Cell>
+    <Cell><Data ss:Type="String">Expiration Date</Data></Cell>
+    <Cell><Data ss:Type="String">Lot Numbers</Data></Cell>
+   </Row>
+   ${rowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+      const blob = new Blob([excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `mission_rx_formulary_${new Date().toISOString().split('T')[0]}.xls`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error('Formulary Excel export error:', e);
+    }
+  };
+
+  const handleExportFormularyCSV = () => {
+    try {
+      const csvHeaders = ['Category', 'Generic Name', 'Brand Name', 'Dosage', 'Sealed Packs', 'Loose Units', 'Units Per Pack', 'Total Units', 'Unit Type', 'Expiration Date', 'Lot Numbers'];
+      const dataRows = displayItems.map((item) => {
+        const total = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+        const lots = parseLotNumbers(item.lotNumbers).join('; ');
+        return [
+          `"${(item.shelfLocation || '').replace(/"/g, '""')}"`,
+          `"${(item.genericName || '').replace(/"/g, '""')}"`,
+          `"${(item.brandName || '').replace(/"/g, '""')}"`,
+          `"${(item.dosage || '').replace(/"/g, '""')}"`,
+          item.bottlesAvailable || 0,
+          item.looseUnitsAvailable || 0,
+          item.pillsPerBottle || 0,
+          total,
+          `"${(item.subUnit || 'units').replace(/"/g, '""')}"`,
+          `"${(item.expirationDate || '').replace(/"/g, '""')}"`,
+          `"${lots.replace(/"/g, '""')}"`
+        ];
+      });
+      const csv = '\uFEFF' + [csvHeaders.join(','), ...dataRows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `mission_rx_formulary_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error('Formulary CSV export error:', e);
+    }
+  };
+
   const maxDispensed = displayTopDispensed.length > 0 ? displayTopDispensed[0].totalDispensed : 1;
 
   return (
@@ -564,154 +695,217 @@ export default function AdminPortal({
                 <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">Temporary</span>
               </span>
               <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
-                <span>Doctor PIN: <strong className="font-mono text-teal-400">1234</strong></span>
+                <span>Doctor: <strong className="font-mono text-teal-400">1234</strong></span>
                 <span>|</span>
-                <span>Admin PIN: <strong className="font-mono text-amber-400">8888</strong></span>
+                <span>Viewer: <strong className="font-mono text-indigo-400">8888</strong></span>
+                <span>|</span>
+                <span>Admin: <strong className="font-mono text-amber-400">7890</strong></span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleResetInventoryToStart}
-              disabled={isResettingInventory}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              title="Reset default item stock counts to initial levels (custom medications are preserved)"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
-              <span>Reset Stock Counts to Start</span>
-            </button>
+          {!isReadOnlyMode && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetInventoryToStart}
+                disabled={isResettingInventory}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                title="Reset default item stock counts to initial levels (custom medications are preserved)"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isResettingInventory ? 'animate-spin' : ''}`} />
+                <span>Reset Stock Counts to Start</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handleClearAuditLogs}
-              className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              title="Reset all audit log entries"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Reset Audit Logs</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleClearAuditLogs}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                title="Reset all audit log entries"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Reset Audit Logs</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Admin Portal Banner Header */}
-      <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 rounded-3xl p-5 sm:p-6 text-slate-950 shadow-lg relative overflow-hidden">
+      {/* Admin / Viewer Portal Banner Header */}
+      <div className={`rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden ${
+        isReadOnlyMode
+          ? 'bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 text-white border border-indigo-500/30'
+          : 'bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-slate-950'
+      }`}>
         <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-10 pointer-events-none">
-          <ShieldCheck className="w-64 h-64 text-slate-950" />
+          {isReadOnlyMode ? (
+            <Eye className="w-64 h-64 text-white" />
+          ) : (
+            <ShieldCheck className="w-64 h-64 text-slate-950" />
+          )}
         </div>
 
         <div className="relative z-10 space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-slate-950 text-amber-400 shadow-md shrink-0">
-                <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5]" />
+              <div className={`p-3 rounded-2xl shadow-md shrink-0 ${
+                isReadOnlyMode ? 'bg-indigo-950 text-indigo-300 border border-indigo-500/30' : 'bg-slate-950 text-amber-400'
+              }`}>
+                {isReadOnlyMode ? (
+                  <Eye className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5]" />
+                ) : (
+                  <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5]" />
+                )}
               </div>
               <div>
-                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950">
-                  Admin Control Center
-                </h2>
-                <p className="text-xs sm:text-sm font-bold text-slate-900/80">
-                  Central Pharmaceutical Inventory & Dispense Analytics Management
+                <div className="flex items-center gap-2">
+                  <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${isReadOnlyMode ? 'text-white' : 'text-slate-950'}`}>
+                    {isReadOnlyMode ? 'Viewer Portal & Formulary Archive' : 'Admin Control Center'}
+                  </h2>
+                  {isReadOnlyMode && (
+                    <span className="text-[11px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2.5 py-0.5 rounded-full">
+                      Read-Only
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm font-bold ${isReadOnlyMode ? 'text-indigo-200/90' : 'text-slate-900/80'}`}>
+                  {isReadOnlyMode
+                    ? 'Clinical Oversight, Data Verification & Full Formulary Export Hub (PIN 8888)'
+                    : 'Central Pharmaceutical Inventory & Dispense Analytics Management'}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Physical Inventory Stock Audit Sheet */}
-              {onOpenPhysicalAuditModal && (
-                <button
-                  type="button"
-                  onClick={() => onOpenPhysicalAuditModal()}
-                  className="min-h-[44px] px-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-500 cursor-pointer"
-                  title="Open high-speed physical stock intake and shelf audit sheet"
-                >
-                  <ClipboardList className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                  <span>Physical Audit Sheet</span>
-                </button>
+              {isReadOnlyMode ? (
+                <>
+                  {onOpenAuditLogs && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAuditLogs()}
+                      className="min-h-[44px] px-3.5 bg-indigo-900/80 hover:bg-indigo-900 text-indigo-100 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-indigo-400/40 cursor-pointer"
+                    >
+                      <Activity className="w-4 h-4 text-indigo-300 stroke-[2.5]" />
+                      <span>Audit Logs</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleExportFormularyExcel}
+                    className="min-h-[44px] px-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-emerald-400/30 cursor-pointer"
+                    title="Export complete formulary inventory to Excel (.xls)"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-100 stroke-[2.5]" />
+                    <span>Download Excel</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportFormularyCSV}
+                    className="min-h-[44px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-300 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-slate-700 cursor-pointer"
+                    title="Export complete formulary inventory to CSV (.csv)"
+                  >
+                    <Download className="w-4 h-4 text-amber-300 stroke-[2.5]" />
+                    <span>Export CSV</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  {onOpenPhysicalAuditModal && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPhysicalAuditModal()}
+                      className="min-h-[44px] px-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-500 cursor-pointer"
+                      title="Open high-speed physical stock intake and shelf audit sheet"
+                    >
+                      <ClipboardList className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                      <span>Physical Audit Sheet</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSpreadsheetModalOpen(true)}
+                    className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-teal-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-teal-400/30 cursor-pointer"
+                    title="Import from Excel/CSV spreadsheet"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-teal-400 stroke-[2.5]" />
+                    <span>Import Spreadsheet</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSpecialtyModalOpen(true)}
+                    className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-purple-300 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-purple-400/30 cursor-pointer"
+                    title="Edit specialties and badge colors"
+                  >
+                    <Palette className="w-4 h-4 text-purple-300 stroke-[2.5]" />
+                    <span>Specialties & Colors</span>
+                  </button>
+
+                  {onOpenAuditLogs && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAuditLogs()}
+                      className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-400/30 cursor-pointer"
+                    >
+                      <Activity className="w-4 h-4 text-amber-400 stroke-[2.5]" />
+                      <span>Audit Logs</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isTestingMode) {
+                        const pin = window.prompt("Enter Secret Admin Testing PIN:");
+                        if (pin === '9110') {
+                          setIsTestingMode(true);
+                          setIsLocalTestMode(true);
+                        } else if (pin !== null) {
+                          alert("Incorrect PIN. Access denied.");
+                        }
+                      } else {
+                        setIsTestingMode(false);
+                        setIsLocalTestMode(false);
+                        setTestItemsMap({});
+                        setTestSimulatedLogs([]);
+                        fetchAnalytics(timeframe);
+                        if (onRefreshData) onRefreshData();
+                      }
+                    }}
+                    className={`min-h-[44px] px-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border cursor-pointer ${
+                      isTestingMode
+                        ? 'bg-amber-400 border-amber-500 text-slate-950 shadow-amber-400/20'
+                        : 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
+                    }`}
+                    title={isTestingMode ? "Testing Sandbox Active - Click to Exit and Reset Local Changes" : "Click to enter Testing Sandbox Mode"}
+                  >
+                    <Wrench className="w-4 h-4 stroke-[2.5]" />
+                    <span>{isTestingMode ? 'Testing Mode ON' : 'Test Mode'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateEquipment}
+                    className="min-h-[44px] px-3.5 bg-teal-900 hover:bg-teal-950 text-teal-200 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer border border-teal-700/50"
+                    title="Add new medical equipment, diagnostic device, or surgical supply"
+                  >
+                    <Stethoscope className="w-4 h-4 stroke-[2.5]" />
+                    <span>Add Equipment</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenCreateModal()}
+                    className="min-h-[44px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>Add Medication</span>
+                  </button>
+                </>
               )}
-
-              <button
-                type="button"
-                onClick={() => setIsSpreadsheetModalOpen(true)}
-                className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-teal-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-teal-400/30 cursor-pointer"
-                title="Import from Excel/CSV spreadsheet"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-teal-400 stroke-[2.5]" />
-                <span>Import Spreadsheet</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsSpecialtyModalOpen(true)}
-                className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-purple-300 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-purple-400/30 cursor-pointer"
-                title="Edit specialties and badge colors"
-              >
-                <Palette className="w-4 h-4 text-purple-300 stroke-[2.5]" />
-                <span>Specialties & Colors</span>
-              </button>
-
-              {onOpenAuditLogs && (
-                <button
-                  type="button"
-                  onClick={() => onOpenAuditLogs()}
-                  className="min-h-[44px] px-3.5 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border border-amber-400/30 cursor-pointer"
-                >
-                  <Activity className="w-4 h-4 text-amber-400 stroke-[2.5]" />
-                  <span>Audit Logs</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isTestingMode) {
-                    const pin = window.prompt("Enter Secret Admin Testing PIN:");
-                    if (pin === '9110') {
-                      setIsTestingMode(true);
-                      setIsLocalTestMode(true);
-                    } else if (pin !== null) {
-                      alert("Incorrect PIN. Access denied.");
-                    }
-                  } else {
-                    setIsTestingMode(false);
-                    setIsLocalTestMode(false);
-                    setTestItemsMap({});
-                    setTestSimulatedLogs([]);
-                    fetchAnalytics(timeframe);
-                    if (onRefreshData) onRefreshData();
-                  }
-                }}
-                className={`min-h-[44px] px-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 border cursor-pointer ${
-                  isTestingMode
-                    ? 'bg-amber-400 border-amber-500 text-slate-950 shadow-amber-400/20'
-                    : 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800'
-                }`}
-                title={isTestingMode ? "Testing Sandbox Active - Click to Exit and Reset Local Changes" : "Click to enter Testing Sandbox Mode"}
-              >
-                <Wrench className="w-4 h-4 stroke-[2.5]" />
-                <span>{isTestingMode ? 'Testing Mode ON' : 'Test Mode'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenCreateEquipment}
-                className="min-h-[44px] px-3.5 bg-teal-900 hover:bg-teal-950 text-teal-200 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer border border-teal-700/50"
-                title="Add new medical equipment, diagnostic device, or surgical supply"
-              >
-                <Stethoscope className="w-4 h-4 stroke-[2.5]" />
-                <span>Add Equipment</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onOpenCreateModal()}
-                className="min-h-[44px] px-4 bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add Medication</span>
-              </button>
             </div>
           </div>
 
@@ -866,7 +1060,6 @@ export default function AdminPortal({
                 <AlertTriangle className={`w-4 h-4 stroke-[2.5] ${adminStatusFilter === 'LOW_STOCK' ? 'text-white animate-bounce' : 'text-rose-600'}`} />
                 <span>Low Stock Alerts ({lowStockCount})</span>
               </button>
-
               <button
                 type="button"
                 onClick={() => setAdminStatusFilter(adminStatusFilter === 'EXPIRING' ? 'ALL' : 'EXPIRING')}
@@ -878,6 +1071,26 @@ export default function AdminPortal({
               >
                 <Clock className={`w-4 h-4 stroke-[2.5] ${adminStatusFilter === 'EXPIRING' ? 'text-slate-950 animate-spin' : 'text-amber-600'}`} />
                 <span>Expiring Within 30d ({expiringCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportFormularyExcel}
+                className="flex items-center gap-1.5 min-h-[48px] px-3.5 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 cursor-pointer"
+                title="Download Excel Spreadsheet (.xls) of inventory"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
+                <span>Export Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportFormularyCSV}
+                className="flex items-center gap-1.5 min-h-[48px] px-3.5 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 cursor-pointer"
+                title="Export CSV of inventory"
+              >
+                <Download className="w-4 h-4 text-slate-600 stroke-[2.5]" />
+                <span>Export CSV</span>
               </button>
             </div>
           </div>
@@ -894,7 +1107,7 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4 text-center">Total Volume / Units</th>
                   <th className="py-3.5 px-4">Expiry Date</th>
                   <th className="py-3.5 px-4">Lot Numbers</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4 text-right">{isReadOnlyMode ? 'History' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-sm font-medium">
@@ -929,24 +1142,9 @@ export default function AdminPortal({
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5 relative">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (item.bottlesAvailable <= 0) return;
-                                if (onAdjustStock) {
-                                  onAdjustStock(item.id, -1, 0);
-                                } else {
-                                  onUpdateStock(item.id, item.bottlesAvailable - 1, item.looseUnitsAvailable);
-                                }
-                              }}
-                              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
-                              title="Quick Dispense 1 Container (-1)"
-                            >
-                              <Minus className="w-3.5 h-3.5 stroke-[3]" />
-                            </button>
-                            <div className="flex flex-col items-center justify-center min-w-[80px] px-1">
-                              <span className="font-mono font-black text-sm text-slate-900 select-text">
+                          {isReadOnlyMode ? (
+                            <div className="flex flex-col items-center justify-center min-w-[80px] px-1 select-text">
+                              <span className="font-mono font-black text-sm text-slate-900">
                                 {item.bottlesAvailable} {item.stockUnit || 'Bottles'}
                               </span>
                               {item.pillsPerBottle > 0 && (
@@ -955,89 +1153,117 @@ export default function AdminPortal({
                                 </span>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setBottleMenuItemId(bottleMenuItemId === item.id ? null : item.id)}
-                              className={`w-8 h-8 rounded-xl border font-black flex items-center justify-center active:scale-95 cursor-pointer transition-all ${
-                                bottleMenuItemId === item.id
-                                  ? 'bg-teal-600 text-white border-teal-700 shadow-md'
-                                  : 'bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 border-slate-300'
-                              }`}
-                              title="Dispense / Restock / Undispense Sealed Packs"
-                            >
-                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                            </button>
-
-                            {/* Sealed Packs Popover Menu */}
-                            {bottleMenuItemId === item.id && (
-                              <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-150">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBottleMenuItemId(null);
-                                    setDispenseItem(item);
-                                    setDispenseAmount('');
-                                    setRestockAmount('');
-                                    setUndispenseAmount('');
-                                    setDispenseModalMode('bottles');
-                                    setDispenseModalTab('dispense');
-                                    setDispenseModalOpen(true);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-left transition-colors group cursor-pointer"
-                                >
-                                  <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600 group-hover:bg-rose-200">
-                                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
-                                  </div>
-                                  <div>
-                                    <span className="text-xs font-black text-slate-900 block">Dispense Packs</span>
-                                    <span className="text-[10px] font-semibold text-slate-400">Subtract sealed containers</span>
-                                  </div>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBottleMenuItemId(null);
-                                    if (onAdjustStock) {
-                                      onAdjustStock(item.id, 1, 0);
-                                    } else {
-                                      onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable);
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group cursor-pointer"
-                                >
-                                  <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200">
-                                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                                  </div>
-                                  <div>
-                                    <span className="text-xs font-black text-slate-900 block">Restock +1</span>
-                                    <span className="text-[10px] font-semibold text-slate-400">Add 1 sealed container</span>
-                                  </div>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setBottleMenuItemId(null);
-                                    setDispenseItem(item);
-                                    setDispenseAmount('');
-                                    setRestockAmount('');
-                                    setUndispenseAmount('');
-                                    setDispenseModalMode('bottles');
-                                    setDispenseModalTab('undispense');
-                                    setDispenseModalOpen(true);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-amber-50 text-left transition-colors group cursor-pointer"
-                                >
-                                  <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 group-hover:bg-amber-200">
-                                    <ArrowUpRight className="w-3.5 h-3.5 stroke-[3]" />
-                                  </div>
-                                  <div>
-                                    <span className="text-xs font-black text-slate-900 block">Undispense Packs</span>
-                                    <span className="text-[10px] font-semibold text-slate-400">Return sealed containers</span>
-                                  </div>
-                                </button>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5 relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (item.bottlesAvailable <= 0) return;
+                                  if (onAdjustStock) {
+                                    onAdjustStock(item.id, -1, 0);
+                                  } else {
+                                    onUpdateStock(item.id, item.bottlesAvailable - 1, item.looseUnitsAvailable);
+                                  }
+                                }}
+                                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                                title="Quick Dispense 1 Container (-1)"
+                              >
+                                <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <div className="flex flex-col items-center justify-center min-w-[80px] px-1">
+                                <span className="font-mono font-black text-sm text-slate-900 select-text">
+                                  {item.bottlesAvailable} {item.stockUnit || 'Bottles'}
+                                </span>
+                                {item.pillsPerBottle > 0 && (
+                                  <span className="text-[10px] text-slate-500 font-bold tracking-tight">
+                                    ({item.pillsPerBottle} {item.subUnit || 'pills'}/{(item.stockUnit || 'bottle').toLowerCase().replace(/s$/, '')})
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() => setBottleMenuItemId(bottleMenuItemId === item.id ? null : item.id)}
+                                className={`w-8 h-8 rounded-xl border font-black flex items-center justify-center active:scale-95 cursor-pointer transition-all ${
+                                  bottleMenuItemId === item.id
+                                    ? 'bg-teal-600 text-white border-teal-700 shadow-md'
+                                    : 'bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 border-slate-300'
+                                }`}
+                                title="Dispense / Restock / Undispense Sealed Packs"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+
+                              {/* Sealed Packs Popover Menu */}
+                              {bottleMenuItemId === item.id && (
+                                <div className="absolute top-full mt-1 right-0 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-150">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setBottleMenuItemId(null);
+                                      setDispenseItem(item);
+                                      setDispenseAmount('');
+                                      setRestockAmount('');
+                                      setUndispenseAmount('');
+                                      setDispenseModalMode('bottles');
+                                      setDispenseModalTab('dispense');
+                                      setDispenseModalOpen(true);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-left transition-colors group cursor-pointer"
+                                  >
+                                    <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600 group-hover:bg-rose-200">
+                                      <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-black text-slate-900 block">Dispense Packs</span>
+                                      <span className="text-[10px] font-semibold text-slate-400">Subtract sealed containers</span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setBottleMenuItemId(null);
+                                      if (onAdjustStock) {
+                                        onAdjustStock(item.id, 1, 0);
+                                      } else {
+                                        onUpdateStock(item.id, item.bottlesAvailable + 1, item.looseUnitsAvailable);
+                                      }
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-emerald-50 text-left transition-colors group cursor-pointer"
+                                  >
+                                    <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200">
+                                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-black text-slate-900 block">Restock +1</span>
+                                      <span className="text-[10px] font-semibold text-slate-400">Add 1 sealed container</span>
+                                    </div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setBottleMenuItemId(null);
+                                      setDispenseItem(item);
+                                      setDispenseAmount('');
+                                      setRestockAmount('');
+                                      setUndispenseAmount('');
+                                      setDispenseModalMode('bottles');
+                                      setDispenseModalTab('undispense');
+                                      setDispenseModalOpen(true);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-amber-50 text-left transition-colors group cursor-pointer"
+                                  >
+                                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 group-hover:bg-amber-200">
+                                      <ArrowUpRight className="w-3.5 h-3.5 stroke-[3]" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-black text-slate-900 block">Undispense Packs</span>
+                                      <span className="text-[10px] font-semibold text-slate-400">Return sealed containers</span>
+                                    </div>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap text-center select-text">
@@ -1047,58 +1273,69 @@ export default function AdminPortal({
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
-                                if (currentTotal <= 0) return;
-                                if (onAdjustStock) {
-                                  onAdjustStock(item.id, 0, -1);
-                                } else {
-                                  const newTotal = currentTotal - 1;
-                                  const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
-                                  onUpdateStock(item.id, bottles, loose);
-                                }
-                              }}
-                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
-                              title="Directly Dispense 1 Unit (-1)"
-                            >
-                              <Minus className="w-3 h-3 stroke-[3]" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('units');
-                                setDispenseModalTab('dispense');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
-                              title="Click to open Dispensary controls (Dispense, Restock, Undispense)"
-                            >
-                              {calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0).toLocaleString()} {item.subUnit || 'units'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('units');
-                                setDispenseModalTab('restock');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
-                              title="Click to open Restock / Add Stock pop-up (+)"
-                            >
-                              <Plus className="w-3 h-3 stroke-[3]" />
-                            </button>
-                          </div>
+                          {isReadOnlyMode ? (
+                            <div className="flex items-center justify-center">
+                              <span
+                                className="font-mono font-black text-xs text-teal-900 bg-teal-50 border border-teal-300 px-2.5 py-1 rounded-xl shadow-2xs select-text"
+                                title="Total calculated inventory volume"
+                              >
+                                {calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0).toLocaleString()} {item.subUnit || 'units'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+                                  if (currentTotal <= 0) return;
+                                  if (onAdjustStock) {
+                                    onAdjustStock(item.id, 0, -1);
+                                  } else {
+                                    const newTotal = currentTotal - 1;
+                                    const { bottles, loose } = convertTotalUnitsToStock(newTotal, item.pillsPerBottle || 0);
+                                    onUpdateStock(item.id, bottles, loose);
+                                  }
+                                }}
+                                className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                                title="Directly Dispense 1 Unit (-1)"
+                              >
+                                <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('units');
+                                  setDispenseModalTab('dispense');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                                title="Click to open Dispensary controls (Dispense, Restock, Undispense)"
+                              >
+                                {calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0).toLocaleString()} {item.subUnit || 'units'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('units');
+                                  setDispenseModalTab('restock');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="w-7 h-7 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-700 font-black border border-slate-300 flex items-center justify-center active:scale-95 cursor-pointer"
+                                title="Click to open Restock / Add Stock pop-up (+)"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-700 select-text">
@@ -1138,25 +1375,29 @@ export default function AdminPortal({
                               </button>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => onEditItem(item)}
-                              className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
-                              title="Edit Record"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
+                            {!isReadOnlyMode && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onEditItem(item)}
+                                  className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
+                                  title="Edit Record"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Delete ${item.genericName}?`)) onDeleteItem(item.id);
-                              }}
-                              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
-                              title="Delete Item"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Delete ${item.genericName}?`)) onDeleteItem(item.id);
+                                  }}
+                                  className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1210,14 +1451,16 @@ export default function AdminPortal({
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenCreateEquipment}
-                className="min-h-[48px] px-4 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add Medical Equipment</span>
-              </button>
+              {!isReadOnlyMode && (
+                <button
+                  type="button"
+                  onClick={handleOpenCreateEquipment}
+                  className="min-h-[48px] px-4 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md flex items-center gap-1.5 transition-all touch-manipulation active:scale-95 shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Add Medical Equipment</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1232,7 +1475,7 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4">Total Available</th>
                   <th className="py-3.5 px-4">Serial / Lot #</th>
                   <th className="py-3.5 px-4">Maintenance / Expiry</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4 text-right">{isReadOnlyMode ? 'History' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
@@ -1249,15 +1492,17 @@ export default function AdminPortal({
                             Add clinical diagnostic devices, surgical instruments, and consumable hospital supplies to track physical clinic equipment.
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={handleOpenCreateEquipment}
-                            className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
-                          >
-                            + Add First Equipment Item
-                          </button>
-                        </div>
+                        {!isReadOnlyMode && (
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={handleOpenCreateEquipment}
+                              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                            >
+                              + Add First Equipment Item
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1317,79 +1562,87 @@ export default function AdminPortal({
                                 </div>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('bottles');
-                                setDispenseModalTab('restock');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="w-6 h-6 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
-                              title={`Restock ${item.stockUnit || 'Units'} (+)`}
-                            >
-                              <Plus className="w-3 h-3 stroke-[3]" />
-                            </button>
+                            {!isReadOnlyMode && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('bottles');
+                                  setDispenseModalTab('restock');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="w-6 h-6 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                                title={`Restock ${item.stockUnit || 'Units'} (+)`}
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('units');
-                                setDispenseModalTab('dispense');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="px-2 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-black flex items-center gap-1 transition-all shadow-2xs active:scale-95 cursor-pointer"
-                              title={`Dispense / Use ${item.subUnit || 'units'} (-)`}
-                            >
-                              <Minus className="w-3 h-3 stroke-[3]" />
-                              <span>Use</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('units');
-                                setDispenseModalTab('dispense');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
-                              title="Click to view full Dispensary & Restock controls"
-                            >
+                          {isReadOnlyMode ? (
+                            <span className="font-mono font-black text-xs text-teal-900 bg-teal-50 border border-teal-300 px-2.5 py-1 rounded-xl shadow-2xs select-text">
                               {totalUnits.toLocaleString()} {item.subUnit || 'units'}
-                            </button>
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('units');
+                                  setDispenseModalTab('dispense');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-black flex items-center gap-1 transition-all shadow-2xs active:scale-95 cursor-pointer"
+                                title={`Dispense / Use ${item.subUnit || 'units'} (-)`}
+                              >
+                                <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>Use</span>
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('units');
-                                setDispenseModalTab('restock');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
-                              title={`Restock ${item.subUnit || 'units'} (+)`}
-                            >
-                              <Plus className="w-3 h-3 stroke-[3]" />
-                              <span>Restock</span>
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('units');
+                                  setDispenseModalTab('dispense');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="font-mono font-black text-xs text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2.5 py-1 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                                title="Click to view full Dispensary & Restock controls"
+                              >
+                                {totalUnits.toLocaleString()} {item.subUnit || 'units'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDispenseItem(item);
+                                  setDispenseAmount('');
+                                  setRestockAmount('');
+                                  setUndispenseAmount('');
+                                  setDispenseModalMode('units');
+                                  setDispenseModalTab('restock');
+                                  setDispenseModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
+                                title={`Restock ${item.subUnit || 'units'} (+)`}
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>Restock</span>
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           {lotList.length > 0 ? (
@@ -1421,57 +1674,61 @@ export default function AdminPortal({
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Restock Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDispenseItem(item);
-                                setDispenseAmount('');
-                                setRestockAmount('');
-                                setUndispenseAmount('');
-                                setDispenseModalMode('bottles');
-                                setDispenseModalTab('restock');
-                                setDispenseModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
-                              title="Restock Equipment Shipment (+)"
-                            >
-                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                              <span>Restock</span>
-                            </button>
+                            {!isReadOnlyMode && (
+                              <>
+                                {/* Restock Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDispenseItem(item);
+                                    setDispenseAmount('');
+                                    setRestockAmount('');
+                                    setUndispenseAmount('');
+                                    setDispenseModalMode('bottles');
+                                    setDispenseModalTab('restock');
+                                    setDispenseModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                                  title="Restock Equipment Shipment (+)"
+                                >
+                                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                  <span>Restock</span>
+                                </button>
 
-                            {/* Quick +1 / -1 Stock Adjustments */}
-                            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (onAdjustStock) {
-                                    onAdjustStock(item.id, -1, 0);
-                                  } else {
-                                    onUpdateStock(item.id, Math.max(0, (item.bottlesAvailable || 0) - 1), item.looseUnitsAvailable || 0);
-                                  }
-                                }}
-                                disabled={item.bottlesAvailable <= 0}
-                                className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-30 cursor-pointer"
-                                title={`Subtract 1 ${item.stockUnit || 'Unit'}`}
-                              >
-                                <Minus className="w-3 h-3 stroke-[3]" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (onAdjustStock) {
-                                    onAdjustStock(item.id, 1, 0);
-                                  } else {
-                                    onUpdateStock(item.id, (item.bottlesAvailable || 0) + 1, item.looseUnitsAvailable || 0);
-                                  }
-                                }}
-                                className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors cursor-pointer"
-                                title={`Add 1 ${item.stockUnit || 'Unit'}`}
-                              >
-                                <Plus className="w-3 h-3 stroke-[3]" />
-                              </button>
-                            </div>
+                                {/* Quick +1 / -1 Stock Adjustments */}
+                                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onAdjustStock) {
+                                        onAdjustStock(item.id, -1, 0);
+                                      } else {
+                                        onUpdateStock(item.id, Math.max(0, (item.bottlesAvailable || 0) - 1), item.looseUnitsAvailable || 0);
+                                      }
+                                    }}
+                                    disabled={item.bottlesAvailable <= 0}
+                                    className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors disabled:opacity-30 cursor-pointer"
+                                    title={`Subtract 1 ${item.stockUnit || 'Unit'}`}
+                                  >
+                                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onAdjustStock) {
+                                        onAdjustStock(item.id, 1, 0);
+                                      } else {
+                                        onUpdateStock(item.id, (item.bottlesAvailable || 0) + 1, item.looseUnitsAvailable || 0);
+                                      }
+                                    }}
+                                    className="p-1 hover:bg-slate-200 text-slate-700 rounded-md transition-colors cursor-pointer"
+                                    title={`Add 1 ${item.stockUnit || 'Unit'}`}
+                                  >
+                                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
 
                             {/* View Audit Logs for Item */}
                             {onOpenAuditLogs && (
@@ -1485,35 +1742,39 @@ export default function AdminPortal({
                               </button>
                             )}
 
-                            {/* Edit Item */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onEditEquipmentItem) {
-                                  onEditEquipmentItem(item);
-                                } else {
-                                  onEditItem(item);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
-                              title="Edit Equipment Details"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </button>
+                            {!isReadOnlyMode && (
+                              <>
+                                {/* Edit Item */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onEditEquipmentItem) {
+                                      onEditEquipmentItem(item);
+                                    } else {
+                                      onEditItem(item);
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 transition-colors cursor-pointer"
+                                  title="Edit Equipment Details"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                </button>
 
-                            {/* Delete Item */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to permanently remove "${item.genericName}" from equipment inventory?`)) {
-                                  onDeleteItem(item.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
-                              title="Delete Equipment"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </button>
+                                {/* Delete Item */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to permanently remove "${item.genericName}" from equipment inventory?`)) {
+                                      onDeleteItem(item.id);
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
+                                  title="Delete Equipment"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2012,53 +2273,68 @@ export default function AdminPortal({
                 </p>
               </div>
 
-              <div className="w-full lg:w-auto bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-3 shrink-0 shadow-lg min-w-[300px]">
-                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                  Generate Manual Backup Snapshot
-                </h4>
-                <input
-                  type="text"
-                  value={backupTitle}
-                  onChange={(e) => setBackupTitle(e.target.value)}
-                  placeholder="Snapshot Title (Optional)..."
-                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
-                />
-                <input
-                  type="text"
-                  value={backupNotes}
-                  onChange={(e) => setBackupNotes(e.target.value)}
-                  placeholder="Clinical notes or reason (Optional)..."
-                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
-                />
-                <button
-                  type="button"
-                  onClick={handleCreateWeeklyBackup}
-                  disabled={creatingBackup}
-                  className="w-full min-h-[44px] px-4 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
-                >
-                  {creatingBackup ? (
-                    <RotateCcw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Database className="w-4 h-4 stroke-[2.5]" />
-                  )}
-                  <span>{creatingBackup ? 'Creating Snapshot...' : 'Create Backup Snapshot Now'}</span>
-                </button>
-
-                {isTestingMode && (
-                  <div className="pt-2 border-t border-slate-700/80">
-                    <label className="w-full min-h-[40px] px-4 rounded-xl bg-slate-900 hover:bg-slate-950 border border-amber-400/50 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-                      <Upload className="w-4 h-4 stroke-[2.5]" />
-                      <span>Restore from JSON File (Testing)</span>
-                      <input
-                        type="file"
-                        accept=".json,application/json"
-                        onChange={handleRestoreFromJSONFile}
-                        className="hidden"
-                      />
-                    </label>
+              {isReadOnlyMode ? (
+                <div className="w-full lg:w-auto bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-2 shrink-0 shadow-lg min-w-[300px]">
+                  <div className="flex items-center gap-2 text-indigo-400 font-black text-xs uppercase tracking-wider">
+                    <Shield className="w-4 h-4" />
+                    <span>Read-Only Viewer Mode</span>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-slate-300 font-medium leading-relaxed">
+                    Database snapshot creation and rollback restorations are restricted to Admin (PIN 7890).
+                  </p>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    You can safely view historical archives and download full JSON snapshots below.
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full lg:w-auto bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-3 shrink-0 shadow-lg min-w-[300px]">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                    Generate Manual Backup Snapshot
+                  </h4>
+                  <input
+                    type="text"
+                    value={backupTitle}
+                    onChange={(e) => setBackupTitle(e.target.value)}
+                    placeholder="Snapshot Title (Optional)..."
+                    className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
+                  />
+                  <input
+                    type="text"
+                    value={backupNotes}
+                    onChange={(e) => setBackupNotes(e.target.value)}
+                    placeholder="Clinical notes or reason (Optional)..."
+                    className="w-full h-10 px-3 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl font-bold text-xs text-white placeholder-slate-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateWeeklyBackup}
+                    disabled={creatingBackup}
+                    className="w-full min-h-[44px] px-4 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {creatingBackup ? (
+                      <RotateCcw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Database className="w-4 h-4 stroke-[2.5]" />
+                    )}
+                    <span>{creatingBackup ? 'Creating Snapshot...' : 'Create Backup Snapshot Now'}</span>
+                  </button>
+
+                  {isTestingMode && (
+                    <div className="pt-2 border-t border-slate-700/80">
+                      <label className="w-full min-h-[40px] px-4 rounded-xl bg-slate-900 hover:bg-slate-950 border border-amber-400/50 text-amber-300 font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+                        <Upload className="w-4 h-4 stroke-[2.5]" />
+                        <span>Restore from JSON File (Testing)</span>
+                        <input
+                          type="file"
+                          accept=".json,application/json"
+                          onChange={handleRestoreFromJSONFile}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2130,31 +2406,35 @@ export default function AdminPortal({
                         <span>Export JSON</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedBackupToRestore(backup);
-                          setIsRestoreWarningOpen(true);
-                        }}
-                        disabled={restoringBackupId === backup.id}
-                        className="min-h-[40px] px-4 bg-gradient-to-tr from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-amber-400 font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
-                      >
-                        {restoringBackupId === backup.id ? (
-                          <RotateCcw className="w-4 h-4 animate-spin text-amber-400" />
-                        ) : (
-                          <Upload className="w-4 h-4 text-amber-400 stroke-[2.5]" />
-                        )}
-                        <span>Restore Backup</span>
-                      </button>
+                      {!isReadOnlyMode && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBackupToRestore(backup);
+                              setIsRestoreWarningOpen(true);
+                            }}
+                            disabled={restoringBackupId === backup.id}
+                            className="min-h-[40px] px-4 bg-gradient-to-tr from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-amber-400 font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
+                          >
+                            {restoringBackupId === backup.id ? (
+                              <RotateCcw className="w-4 h-4 animate-spin text-amber-400" />
+                            ) : (
+                              <Upload className="w-4 h-4 text-amber-400 stroke-[2.5]" />
+                            )}
+                            <span>Restore Backup</span>
+                          </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteBackup(backup.id)}
-                        className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all border border-rose-200 cursor-pointer"
-                        title="Delete backup archive"
-                      >
-                        <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                      </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBackup(backup.id)}
+                            className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all border border-rose-200 cursor-pointer"
+                            title="Delete backup archive"
+                          >
+                            <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2165,7 +2445,7 @@ export default function AdminPortal({
       )}
 
       {/* Warning Confirmation Pop-up Dialog for Restoring from Backup */}
-      {isRestoreWarningOpen && selectedBackupToRestore && (
+      {isRestoreWarningOpen && selectedBackupToRestore && !isReadOnlyMode && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white border-2 border-rose-500 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
             <div className="flex items-start gap-4">
@@ -2177,54 +2457,68 @@ export default function AdminPortal({
                   Are you sure you want to restore this backup?
                 </h3>
                 <p className="text-xs font-semibold text-slate-600 leading-normal">
-                  You are about to restore clinical inventory and audit logs to <span className="font-bold text-slate-900">{selectedBackupToRestore.title}</span> ({new Date(selectedBackupToRestore.createdAt).toLocaleDateString()}).
+                  Restoring will overwrite your active inventory and regulatory logs with the snapshot taken on <b>{new Date(selectedBackupToRestore.createdAt).toLocaleString()}</b>.
                 </p>
-                <p className="text-xs font-bold text-rose-600 pt-1">
-                  ⚠️ This will overwrite your current medication stock levels and transaction records with this historical snapshot.
-                </p>
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-[11px] font-bold text-rose-800">
+                  ⚠️ This action cannot be undone unless you created a snapshot beforehand.
+                </div>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => { setIsRestoreWarningOpen(false); setSelectedBackupToRestore(null); }}
-                className="min-h-[44px] px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                onClick={() => {
+                  setIsRestoreWarningOpen(false);
+                  setSelectedBackupToRestore(null);
+                }}
+                disabled={Boolean(restoringBackupId)}
+                className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmRestoreBackup}
-                disabled={restoringBackupId !== null}
-                className="min-h-[44px] px-5 rounded-xl bg-gradient-to-tr from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black text-xs sm:text-sm shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                disabled={Boolean(restoringBackupId)}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>{restoringBackupId ? 'Restoring...' : 'Yes, Restore Backup'}</span>
+                {restoringBackupId ? (
+                  <RotateCcw className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <Upload className="w-4 h-4 text-white stroke-[2.5]" />
+                )}
+                <span>{restoringBackupId ? 'Restoring Database...' : 'Confirm Overwrite & Restore'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Specialty Manager Modal */}
-      <SpecialtyManagerModal
-        isOpen={isSpecialtyModalOpen}
-        onClose={() => setIsSpecialtyModalOpen(false)}
-        onSpecialtiesUpdated={onRefreshData}
-      />
+      {/* Specialty and Category Colors Management Modal */}
+      {isSpecialtyModalOpen && !isReadOnlyMode && (
+        <SpecialtyManagerModal
+          isOpen={isSpecialtyModalOpen}
+          onClose={() => setIsSpecialtyModalOpen(false)}
+          onSpecialtiesUpdated={() => {
+            if (onRefreshData) onRefreshData();
+          }}
+        />
+      )}
 
-      {/* Spreadsheet Importer Modal */}
-      <SpreadsheetImportModal
-        isOpen={isSpreadsheetModalOpen}
-        onClose={() => setIsSpreadsheetModalOpen(false)}
-        onImportComplete={() => {
-          if (onRefreshData) onRefreshData();
-        }}
-      />
+      {/* Bulk Spreadsheet Import Modal */}
+      {isSpreadsheetModalOpen && !isReadOnlyMode && (
+        <SpreadsheetImportModal
+          isOpen={isSpreadsheetModalOpen}
+          onClose={() => setIsSpreadsheetModalOpen(false)}
+          onImportComplete={() => {
+            if (onRefreshData) onRefreshData();
+          }}
+        />
+      )}
 
       {/* Dispense, Restock & Undispense Pop-Up Modal */}
-      {dispenseModalOpen && dispenseItem && (
+      {dispenseModalOpen && dispenseItem && !isReadOnlyMode && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white border-2 border-teal-600 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-slate-900 relative">
             <button

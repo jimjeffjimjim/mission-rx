@@ -48,7 +48,7 @@ export interface DispenseLog {
   lotNumbers?: string[];
 }
 
-export type AuthRole = 'LOCKED' | 'STAFF' | 'ADMIN';
+export type AuthRole = 'LOCKED' | 'STAFF' | 'ADMIN' | 'VIEWER';
 
 export type FilterCategory =
   | 'ALL'

@@ -22,7 +22,7 @@ import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, par
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
 export default function Home() {
-  // App launches with 4-Digit PIN Gate requiring 1234 for Doctors (Staff) or 8888 for Admin Control Portal
+  // App launches with 4-Digit PIN Gate requiring 1234 for Doctors (Staff), 8888 for Viewers, or 7890 for Admin Control Portal
   const [role, setRole] = useState<AuthRole>('LOCKED');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +165,8 @@ export default function Home() {
       setActorTag(newActor);
     } else if (newRole === 'ADMIN') {
       setActorTag('ADMIN');
+    } else if (newRole === 'VIEWER') {
+      setActorTag('VIEWER');
     } else {
       setActorTag('STAFF');
     }
@@ -910,8 +912,8 @@ export default function Home() {
         onOpenAuditLogs={() => setIsAuditModalOpen(true)}
       />
 
-      {/* DEDICATED ADMIN CONTROL PORTAL VIEW */}
-      <div className={role === 'ADMIN' ? 'max-w-[1600px] mx-auto px-4 sm:px-6 mt-6 block animate-in fade-in duration-150' : 'hidden'}>
+      {/* DEDICATED ADMIN & VIEWER CONTROL PORTAL VIEW */}
+      <div className={(role === 'ADMIN' || role === 'VIEWER') ? 'max-w-[1600px] mx-auto px-4 sm:px-6 mt-6 block animate-in fade-in duration-150' : 'hidden'}>
         <AdminPortal
           items={items}
           onUpdateStock={handleUpdateStock}
@@ -929,6 +931,7 @@ export default function Home() {
           }}
           onRefreshData={fetchInventory}
           userRole={actorTag}
+          isReadOnly={role === 'VIEWER'}
           onAddTestAuditLog={(log) => setTestAuditLogs((prev) => [log, ...prev])}
         />
       </div>
@@ -1076,6 +1079,7 @@ export default function Home() {
         onLogsCleared={fetchInventory}
         testLogs={testAuditLogs}
         initialSearchQuery={auditSearchQuery}
+        isReadOnly={role === 'VIEWER'}
       />
     </main>
   );

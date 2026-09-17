@@ -11,9 +11,17 @@ interface AuditLogModalProps {
   onLogsCleared?: () => void;
   testLogs?: DispenseLog[];
   initialSearchQuery?: string;
+  isReadOnly?: boolean;
 }
 
-export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs = [], initialSearchQuery = '' }: AuditLogModalProps) {
+export default function AuditLogModal({
+  isOpen,
+  onClose,
+  onLogsCleared,
+  testLogs = [],
+  initialSearchQuery = '',
+  isReadOnly = false,
+}: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
@@ -324,7 +332,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
-            {isTestingMode && (
+            {isTestingMode && !isReadOnly && (
               <button
                 type="button"
                 onClick={handleResetAuditLogs}
@@ -555,14 +563,16 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
                         )}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => startEditingLog(log)}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 shrink-0 cursor-pointer"
-                      title="Edit recorded dispensed quantity"
-                    >
-                      <Edit3 className="w-4 h-4 stroke-[2.5]" />
-                    </button>
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => startEditingLog(log)}
+                        className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 shrink-0 cursor-pointer"
+                        title="Edit recorded dispensed quantity"
+                      >
+                        <Edit3 className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -571,7 +581,7 @@ export default function AuditLogModal({ isOpen, onClose, onLogsCleared, testLogs
         </div>
 
         {/* Warning Confirmation Pop-up Dialog for Editing Dispensed Amount */}
-        {isWarningOpen && editingLog && (
+        {isWarningOpen && editingLog && !isReadOnly && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
               <div className="flex items-start gap-4">

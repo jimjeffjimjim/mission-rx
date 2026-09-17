@@ -60,7 +60,7 @@ export default function Header({
   const handleRoleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (currentRole === 'ADMIN') {
+    if (currentRole === 'ADMIN' || currentRole === 'VIEWER') {
       onSwitchRole('STAFF');
     } else {
       setShowAdminPrompt(true);
@@ -71,8 +71,12 @@ export default function Header({
 
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPinInput === '8888') {
+    if (adminPinInput === '7890') {
       onSwitchRole('ADMIN', 'ADMIN');
+      setShowAdminPrompt(false);
+      setAdminPinInput('');
+    } else if (adminPinInput === '8888') {
+      onSwitchRole('VIEWER', 'VIEWER');
       setShowAdminPrompt(false);
       setAdminPinInput('');
     } else if (adminPinInput === '7777') {
@@ -110,6 +114,11 @@ export default function Header({
                     <LayoutDashboard className="w-3 h-3 text-amber-700" />
                     Admin Portal
                   </span>
+                ) : currentRole === 'VIEWER' ? (
+                  <span className="text-[10px] sm:text-xs font-black uppercase bg-indigo-100 text-indigo-900 border border-indigo-300 px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1 shrink-0">
+                    <LayoutDashboard className="w-3 h-3 text-indigo-700" />
+                    Viewer (Read-Only)
+                  </span>
                 ) : (
                   <span className="text-[10px] sm:text-xs font-extrabold uppercase bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full shadow-2xs shrink-0">
                     Doctor View
@@ -119,6 +128,8 @@ export default function Header({
               <p className="text-xs text-slate-500 font-medium hidden md:block truncate">
                 {currentRole === 'ADMIN'
                   ? 'Backdoor Administration & Central System Management'
+                  : currentRole === 'VIEWER'
+                  ? 'Audit, Review & Export Formulary Inventory (Read-Only)'
                   : 'Real-Time Hospital Medication Tracking & Dispensary Search'}
               </p>
             </div>
@@ -145,6 +156,40 @@ export default function Header({
                 >
                   <LogOut className="w-4 h-4 text-slate-950 shrink-0 stroke-[2.5]" />
                   <span>Exit Admin</span>
+                </button>
+              </>
+            ) : currentRole === 'VIEWER' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onSwitchRole('STAFF')}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-300 cursor-pointer"
+                >
+                  <span>Doctor View</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminPrompt(true);
+                    setAdminPinInput('');
+                    setError(false);
+                  }}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300 cursor-pointer"
+                  title="Unlock full Admin controls with PIN 7890"
+                >
+                  <Shield className="w-4 h-4 text-amber-700 shrink-0 stroke-[2.5]" />
+                  <span>Unlock Admin</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLockApp}
+                  className="flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] px-3 sm:px-4 rounded-2xl text-xs sm:text-sm font-black transition-all touch-manipulation border active:scale-95 shadow-2xs bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-300 hover:border-rose-300 cursor-pointer"
+                  title="Lock application access"
+                >
+                  <LogOut className="w-4 h-4 text-slate-500 shrink-0 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Lock</span>
                 </button>
               </>
             ) : (
@@ -201,7 +246,7 @@ export default function Header({
               <div>
                 <h3 className="text-base font-black text-slate-900">Admin Control PIN</h3>
                 <p className="text-xs text-slate-500 font-medium">
-                  {isTestingMode ? 'Enter PIN 8888 to access Admin Portal' : 'Enter security authorization code'}
+                  {isTestingMode ? 'Enter PIN 7890 (Admin) or 8888 (Viewer)' : 'Enter security authorization code'}
                 </p>
               </div>
             </div>
@@ -219,7 +264,7 @@ export default function Header({
 
               {error && (
                 <p className="text-xs text-rose-600 font-bold text-center animate-bounce">
-                  {isTestingMode ? 'Access Denied. Only Admin PIN (8888) is authorized.' : 'Access Denied. Incorrect authorization code.'}
+                  {isTestingMode ? 'Access Denied. Try Admin (7890) or Viewer (8888).' : 'Access Denied. Incorrect authorization code.'}
                 </p>
               )}
 

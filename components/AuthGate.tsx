@@ -70,8 +70,11 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
     if (currentRole === 'LOCKED' && pin.length === 4) {
       if (pin === '1234') {
         setPin('');
-        onAuthenticate('STAFF', 'STAFF');
+        onAuthenticate('STAFF', 'DOCTOR');
       } else if (pin === '8888') {
+        setPin('');
+        onAuthenticate('VIEWER', 'VIEWER');
+      } else if (pin === '7890') {
         setPin('');
         onAuthenticate('ADMIN', 'ADMIN');
       } else if (pin === '7777') {
@@ -196,11 +199,13 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
           {/* [TESTING MODE FEATURE - PIN HINTS - DELETE OR HIDE BEFORE FINAL PRODUCTION DEPLOYMENT]  */}
           {/* ======================================================================================= */}
           {isTestingMode && (
-            <div className="mt-2 flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
               <KeyRound className="w-3.5 h-3.5 text-teal-600 shrink-0 stroke-[2.5]" />
-              <span>Doctor PIN: <strong className="font-mono text-teal-700 font-black">1234</strong></span>
+              <span>Doctor: <strong className="font-mono text-teal-700 font-black">1234</strong></span>
               <span className="text-slate-300">|</span>
-              <span>Admin PIN: <strong className="font-mono text-amber-700 font-black">8888</strong></span>
+              <span>Viewer: <strong className="font-mono text-indigo-700 font-black">8888</strong></span>
+              <span className="text-slate-300">|</span>
+              <span>Admin: <strong className="font-mono text-amber-700 font-black">7890</strong></span>
             </div>
           )}
           {/* ======================================================================================= */}
@@ -228,7 +233,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
         {error && (
           <div className="flex items-center justify-center gap-2 mb-4 text-xs font-bold text-rose-700 bg-rose-50 py-2.5 px-3 rounded-xl border border-rose-200 shadow-2xs">
             <AlertCircle className="w-4 h-4 shrink-0 stroke-[2.5]" />
-            <span>{isTestingMode ? 'Invalid PIN. Try Doctor (1234) or Admin (8888)' : 'Invalid Access PIN. Please try again.'}</span>
+            <span>{isTestingMode ? 'Invalid PIN. Try Doctor (1234), Viewer (8888), or Admin (7890)' : 'Invalid Access PIN. Please try again.'}</span>
           </div>
         )}
 
