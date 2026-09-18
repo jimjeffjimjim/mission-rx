@@ -20,7 +20,8 @@ import {
   Calendar,
   Layers,
   Camera,
-  Barcode
+  Barcode,
+  PackageX
 } from 'lucide-react';
 import { searchMedicalKnowledge, searchFdaKnowledge, MedicalDrugEntry, MEDICAL_DICTIONARY } from '@/lib/medicalKnowledge';
 import { getCustomSpecialties } from '@/lib/specialtyColors';
@@ -929,13 +930,35 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
 
           {/* Section 3: Physical Stock Count & Expiration */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-1">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
                 3. Physical Stock Counts & Container Volume
               </h3>
-              <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
-                Total Stock: {calculateTotalUnits(Number(formData.bottlesAvailable) || 0, Number(formData.pillsPerBottle) || 0, Number(formData.looseUnitsAvailable) || 0).toLocaleString()} {formData.subUnit || 'units'}
-              </span>
+              <div className="flex items-center gap-2">
+                {item && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const curUnits = calculateTotalUnits(Number(formData.bottlesAvailable) || 0, Number(formData.pillsPerBottle) || 0, Number(formData.looseUnitsAvailable) || 0);
+                      if (curUnits === 0) {
+                        alert('Pill count is already 0.');
+                        return;
+                      }
+                      if (window.confirm(`Dump expired stock for ${formData.genericName || 'this medication'}?\n\nThis will edit the count to 0 (discarded/wasted) without counting as dispensed to patients.`)) {
+                        setFormData((prev) => ({ ...prev, bottlesAvailable: 0, looseUnitsAvailable: 0 }));
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer transition-all"
+                    title="Pills expired & thrown away? Set stock count to 0 (does NOT count as dispensed)"
+                  >
+                    <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Dump Expired (Set to 0)</span>
+                  </button>
+                )}
+                <span className="text-xs font-black text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
+                  Total Stock: {calculateTotalUnits(Number(formData.bottlesAvailable) || 0, Number(formData.pillsPerBottle) || 0, Number(formData.looseUnitsAvailable) || 0).toLocaleString()} {formData.subUnit || 'units'}
+                </span>
+              </div>
             </div>
 
             {/* Total Units Input - Editing this auto-adjusts bottles and loose units */}

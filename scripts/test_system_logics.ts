@@ -93,7 +93,7 @@ function aggregateTopDispensed(logs: any[]) {
     } else if (isRestock) {
       usageMap[name].restocked += qty;
       // RESTOCK adds to inventory but does NOT reduce dispensed records
-    } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
+    } else if ((log.actionType === 'DISPENSE' || log.quantityChanged < 0) && log.actionType !== 'AUDIT' && log.actionType !== 'EDIT') {
       usageMap[name].dispensed += qty;
     }
   });
@@ -131,6 +131,13 @@ const amlodipineReverseLogs = [
 ];
 const amlodipineResult = aggregateTopDispensed(amlodipineReverseLogs);
 assertEquals(amlodipineResult.length, 0, 'Reverse chronological order: Undispense coming before Dispense in array nets to exactly 0 (not 1)');
+
+// Scenario 3.1d: Dumped Expired Medication does NOT count as dispensed
+const expiredDumpLogs = [
+  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: 0, actionType: 'AUDIT', details: '[EXPIRED WASTE DISPOSAL]: Expired medication dumped out and thrown away. Reset from 500 to 0.' },
+];
+const expiredDumpResult = aggregateTopDispensed(expiredDumpLogs);
+assertEquals(expiredDumpResult.length, 0, 'Dumping expired pills (actionType AUDIT with 0 quantity) does NOT count as dispensed');
 
 // Scenario 3.2: Dispense 5, Undispense 2 -> Net 3
 const partialUndispenseLogs = [

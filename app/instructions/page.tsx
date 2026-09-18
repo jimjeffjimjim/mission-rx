@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   History,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
 
 export default function InstructionsPage() {
@@ -335,6 +336,17 @@ export default function InstructionsPage() {
                   </h4>
                   <p className="text-indigo-950">
                     Use PIN <code className="font-mono font-bold text-indigo-900">8888</code> for auditors, clinic partners, and staff who need to browse the full admin inventory, examine equipment, check usage analytics, and export Excel/CSV reports without modifying anything. In Viewer mode, all edit, dispense, restock, and delete controls are safely disabled and hidden.
+                  </p>
+                </div>
+
+                {/* 6. Disposing & Dumping Expired Stock */}
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
+                  <h4 className="font-extrabold text-rose-950 text-sm flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-rose-700" />
+                    <span>6. Disposing & Dumping Expired Stock (Dump Button)</span>
+                  </h4>
+                  <p className="text-rose-950">
+                    When medications reach their expiration date and are thrown away, click the <b>"Dump (0)"</b> button in the Admin table or in the Edit modal. This instantly zeroes out the pill count while keeping the medication entry safely preserved in your catalog for future restocking. <b>This does NOT count as dispensed to patients</b> in usage analytics.
                   </p>
                 </div>
               </div>

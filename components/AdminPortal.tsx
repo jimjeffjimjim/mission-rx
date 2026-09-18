@@ -43,7 +43,8 @@ import {
   ClipboardList,
   QrCode,
   Eye,
-  Shield
+  Shield,
+  PackageX
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
@@ -546,6 +547,67 @@ export default function AdminPortal({
       lotNumbers: [],
       directions: 'Medical device / clinical supply for patient care.',
     });
+  };
+
+  const handleDumpExpired = (item: InventoryItem) => {
+    const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+    if (currentTotal <= 0) {
+      alert(`The pill count for ${item.genericName} is already 0.`);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Dump out expired stock for ${item.genericName}?\n\n` +
+      `Current stock: ${item.bottlesAvailable || 0} ${item.stockUnit || 'bottles'} + ${item.looseUnitsAvailable || 0} loose (${currentTotal} ${item.subUnit || 'units'}).\n\n` +
+      `This will edit the pill count to 0 because they expired and were thrown away.\n` +
+      `This will NOT count as dispensed to patients.`
+    );
+
+    if (!confirmed) return;
+
+    if (isLocalTestMode) {
+      setTestItemsMap((prev) => ({
+        ...prev,
+        [item.id]: { bottles: 0, loose: 0 },
+      }));
+    }
+
+    // 1. Zero out stock directly (does NOT invoke patient dispense math)
+    onUpdateStock(item.id, 0, 0);
+
+    // 2. Record transparent AUDIT event with quantityChanged: 0 so it never counts as patient dispenses in analytics
+    const auditPayload: DispenseLog = {
+      id: 'log-dump-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+      itemId: item.id,
+      itemGenericName: item.genericName,
+      quantityChanged: 0,
+      actionType: 'AUDIT',
+      userRole: userRole || 'ADMIN',
+      details: `[EXPIRED WASTE DISPOSAL]: Expired medication dumped out and thrown away. Reset stock from ${currentTotal} ${item.subUnit || 'units'} (${item.bottlesAvailable || 0} ${item.stockUnit || 'bottles'}, ${item.looseUnitsAvailable || 0} loose) to 0. Medication entry preserved in catalog. (Not counted as dispensed to patients).`,
+      createdAt: new Date().toISOString(),
+      isTestMode: isLocalTestMode,
+      dispensedBottles: 0,
+      dispensedPillsPerBottle: item.pillsPerBottle || 0,
+      lotNumbers: parseLotNumbers(item.lotNumbers),
+    };
+
+    if (isLocalTestMode && onAddTestAuditLog) {
+      onAddTestAuditLog(auditPayload);
+    } else {
+      try {
+        const rawQueue = localStorage.getItem('mission_rx_audit_queue');
+        const queue = rawQueue ? JSON.parse(rawQueue) : [];
+        queue.push(auditPayload);
+        localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
+        window.dispatchEvent(new Event('storage'));
+      } catch (e) {
+        fetch('/api/logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(auditPayload),
+        }).catch(() => {});
+      }
+    }
   };
 
   const handleExportFormularyExcel = () => {
@@ -1121,6 +1183,17 @@ export default function AdminPortal({
                   filtered.map((item) => {
                     const style = getSpecialtyColor(item.shelfLocation);
                     const lotList = parseLotNumbers(item.lotNumbers);
+                    const totalUnits = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
+
+                    // Check expiration status
+                    let isExp = false;
+                    let expDays = 9999;
+                    if (item.expirationDate && !item.expirationDate.startsWith('3000') && !item.expirationDate.startsWith('2099') && item.expirationDate !== 'N/A') {
+                      try {
+                        expDays = differenceInDays(parseISO(item.expirationDate), new Date());
+                        if (expDays < 0) isExp = true;
+                      } catch (e) {}
+                    }
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1260,6 +1333,22 @@ export default function AdminPortal({
                                       <span className="text-[10px] font-semibold text-slate-400">Return sealed containers</span>
                                     </div>
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setBottleMenuItemId(null);
+                                      handleDumpExpired(item);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-left transition-colors group cursor-pointer border-t border-slate-100"
+                                  >
+                                    <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 group-hover:bg-rose-200">
+                                      <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-black text-rose-900 block">Dump Expired (Set to 0)</span>
+                                      <span className="text-[10px] font-semibold text-slate-400">Pills thrown away (not dispensed)</span>
+                                    </div>
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1343,6 +1432,24 @@ export default function AdminPortal({
                             <span className="font-extrabold text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full">
                               🛡️ N/A (Non-Expiring)
                             </span>
+                          ) : isExp ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-[11px] text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span>Expired ({Math.abs(expDays)}d ago)</span>
+                              </span>
+                              {!isReadOnlyMode && totalUnits > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDumpExpired(item)}
+                                  className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer transition-all shrink-0"
+                                  title="Pills expired and dumped out? Click to set count to 0 (does NOT count as dispensed)"
+                                >
+                                  <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  <span>Dump (0)</span>
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             item.expirationDate
                           )}
@@ -1377,6 +1484,26 @@ export default function AdminPortal({
 
                             {!isReadOnlyMode && (
                               <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDumpExpired(item)}
+                                  disabled={totalUnits === 0}
+                                  className={`p-2 rounded-xl border font-bold text-xs transition-all active:scale-95 ${
+                                    totalUnits === 0
+                                      ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                                      : isExp
+                                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border-rose-300 shadow-2xs cursor-pointer'
+                                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 cursor-pointer'
+                                  }`}
+                                  title={
+                                    totalUnits === 0
+                                      ? 'Stock is already 0'
+                                      : 'Dump Expired Stock: Set pill count to 0 (does NOT count as dispensed)'
+                                  }
+                                >
+                                  <PackageX className="w-4 h-4" />
+                                </button>
+
                                 <button
                                   type="button"
                                   onClick={() => onEditItem(item)}
@@ -2974,6 +3101,29 @@ export default function AdminPortal({
                   </p>
                 </div>
               )}
+
+              {/* Expired Stock Disposal Quick Action */}
+              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50/70 p-3 rounded-2xl border border-rose-200">
+                <div>
+                  <span className="text-xs font-black text-rose-950 block">Expired Stock Disposal</span>
+                  <span className="text-[11px] font-semibold text-rose-700">Pills expired and thrown away? Set count to 0 without recording a patient dispense.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const itemToDump = dispenseItem;
+                    setDispenseModalOpen(false);
+                    setDispenseItem(null);
+                    handleDumpExpired(itemToDump);
+                  }}
+                  disabled={calculateTotalUnits(dispenseItem.bottlesAvailable || 0, dispenseItem.pillsPerBottle || 0, dispenseItem.looseUnitsAvailable || 0) === 0}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs whitespace-nowrap active:scale-95 transition-all cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shrink-0"
+                  title="Dump expired pills and set stock count to 0"
+                >
+                  <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Dump Out (Set to 0)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -191,7 +191,7 @@ export async function GET(request: Request) {
         usageMap[name].undispensed += qty;
       } else if (isRestock) {
         usageMap[name].restocked += qty;
-      } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
+      } else if ((log.actionType === 'DISPENSE' || log.quantityChanged < 0) && log.actionType !== 'AUDIT' && log.actionType !== 'EDIT') {
         usageMap[name].dispensed += qty;
       }
     });
