@@ -48,7 +48,7 @@ import {
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
-import { searchSemanticFormulary } from '@/lib/semanticSearch';
+import { searchSemanticFormulary, matchesClinicalQuery } from '@/lib/semanticSearch';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
@@ -466,21 +466,11 @@ export default function AdminPortal({
   const filtered = useMemo(() => {
     const list = displayItems.filter((item) => {
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = item.genericName.toLowerCase().includes(q);
-        const matchBrand = (item.brandName || '').toLowerCase().includes(q);
-        const matchChem = (item.chemicalName || '').toLowerCase().includes(q);
-        const matchDosage = item.dosage.toLowerCase().includes(q);
-        const lots = parseLotNumbers(item.lotNumbers).join(' ').toLowerCase();
-        const matchLots = lots.includes(q);
-        const matchSemantic =
-          semanticMatchedNames.has(item.genericName.toLowerCase().trim()) ||
-          (item.brandName && semanticMatchedNames.has(item.brandName.toLowerCase().trim())) ||
-          semanticMatchedNames.has(item.id);
-        if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots && !matchSemantic) return false;
+        const { isMatch } = matchesClinicalQuery(item, searchQuery, semanticMatchedNames);
+        if (!isMatch) return false;
       }
 
-      if (selectedCategory !== 'ALL') {
+      if (!searchQuery.trim() && selectedCategory !== 'ALL') {
         const itemCat = (item.shelfLocation || '').toLowerCase().trim();
         const filterCat = selectedCategory.toLowerCase().trim();
         if (itemCat !== filterCat) {
@@ -509,16 +499,10 @@ export default function AdminPortal({
     });
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
       return list.sort((a, b) => {
-        const aExact = a.genericName.toLowerCase().trim() === q ? 10 : (a.brandName || '').toLowerCase().trim() === q ? 8 : 0;
-        const bExact = b.genericName.toLowerCase().trim() === q ? 10 : (b.brandName || '').toLowerCase().trim() === q ? 8 : 0;
-        if (aExact !== bExact) return bExact - aExact;
-
-        const aSem = semanticScoresMap.get(a.genericName.toLowerCase().trim()) || semanticScoresMap.get(a.id) || 0;
-        const bSem = semanticScoresMap.get(b.genericName.toLowerCase().trim()) || semanticScoresMap.get(b.id) || 0;
-        if (Math.abs(aSem - bSem) > 0.04) return bSem - aSem;
-
+        const scoreA = matchesClinicalQuery(a, searchQuery, semanticMatchedNames).score;
+        const scoreB = matchesClinicalQuery(b, searchQuery, semanticMatchedNames).score;
+        if (scoreA !== scoreB) return scoreB - scoreA;
         return a.genericName.localeCompare(b.genericName);
       });
     }

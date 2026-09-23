@@ -18,7 +18,7 @@ import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations } from '@/lib/stockMath';
-import { searchSemanticFormulary } from '@/lib/semanticSearch';
+import { searchSemanticFormulary, matchesClinicalQuery, searchReferenceCatalog } from '@/lib/semanticSearch';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -838,20 +838,12 @@ export default function Home() {
       }
 
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const genericMatch = item.genericName.toLowerCase().includes(q);
-        const brandMatch = (item.brandName || '').toLowerCase().includes(q);
-        const chemMatch = (item.chemicalName || '').toLowerCase().includes(q);
-        const dosageMatch = item.dosage.toLowerCase().includes(q);
-        const catMatch = (item.shelfLocation || '').toLowerCase().includes(q);
-        const semanticMatch =
-          semanticMatchedNames.has(item.genericName.toLowerCase().trim()) ||
-          (item.brandName && semanticMatchedNames.has(item.brandName.toLowerCase().trim())) ||
-          semanticMatchedNames.has(item.id);
-        if (!genericMatch && !brandMatch && !chemMatch && !dosageMatch && !catMatch && !semanticMatch) return false;
+        const { isMatch } = matchesClinicalQuery(item, searchQuery, semanticMatchedNames);
+        if (!isMatch) return false;
       }
 
-      if (selectedCategory !== 'ALL') {
+      // If user is searching, do not restrict across specialties so they find matching formulations anywhere
+      if (!searchQuery.trim() && selectedCategory !== 'ALL') {
         const itemCat = (item.shelfLocation || '').toLowerCase().trim();
         const filterCat = selectedCategory.toLowerCase().trim();
         if (itemCat !== filterCat) {
@@ -879,22 +871,22 @@ export default function Home() {
     });
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
       return filtered.sort((a, b) => {
-        const aExact = a.genericName.toLowerCase().trim() === q ? 10 : (a.brandName || '').toLowerCase().trim() === q ? 8 : 0;
-        const bExact = b.genericName.toLowerCase().trim() === q ? 10 : (b.brandName || '').toLowerCase().trim() === q ? 8 : 0;
-        if (aExact !== bExact) return bExact - aExact;
-
-        const aSem = semanticScoresMap.get(a.genericName.toLowerCase().trim()) || semanticScoresMap.get(a.id) || 0;
-        const bSem = semanticScoresMap.get(b.genericName.toLowerCase().trim()) || semanticScoresMap.get(b.id) || 0;
-        if (Math.abs(aSem - bSem) > 0.04) return bSem - aSem;
-
+        const scoreA = matchesClinicalQuery(a, searchQuery, semanticMatchedNames).score;
+        const scoreB = matchesClinicalQuery(b, searchQuery, semanticMatchedNames).score;
+        if (scoreA !== scoreB) return scoreB - scoreA;
         return a.genericName.localeCompare(b.genericName);
       });
     }
 
     return filtered;
-  }, [items, searchQuery, selectedCategory, selectedStatus, role, semanticMatchedNames, semanticScoresMap]);
+  }, [items, searchQuery, selectedCategory, selectedStatus, role, semanticMatchedNames]);
+
+  // Search the 70+ Clinical Formulary Reference catalog for medications that may have 0 clinic stock
+  const referenceCatalogMatches = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return searchReferenceCatalog(searchQuery);
+  }, [searchQuery]);
 
   // Group and consolidate inventory by categories for Doctor View
   const groupedInventory = useMemo(() => {
@@ -998,24 +990,65 @@ export default function Home() {
               <span className="font-extrabold text-sm tracking-wider uppercase">Loading hospital formulary...</span>
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="py-20 bg-white border border-slate-200/90 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-3.5 shadow-xs">
-              <div className="p-3.5 rounded-2xl bg-slate-100 text-slate-500">
-                <Layers className="w-8 h-8 stroke-[2.5]" />
+            <div className="space-y-6">
+              <div className="py-12 bg-white border border-slate-200/90 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-3.5 shadow-xs">
+                <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200">
+                  <Layers className="w-8 h-8 stroke-[2.5]" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">
+                  {searchQuery ? `0 Physical Containers Found for "${searchQuery}"` : 'No formulations match your search'}
+                </h3>
+                <p className="text-xs font-medium text-slate-500 max-w-md">
+                  {searchQuery 
+                    ? 'No active containers or loose units are currently logged on clinic shelves for this query.'
+                    : 'Try clarifying your keyword query, switching active specialty tabs, or deselecting critical alert toggles above.'}
+                </p>
+                {searchQuery && referenceCatalogMatches.length > 0 && (
+                  <p className="text-xs font-bold text-teal-800 bg-teal-50 px-3.5 py-1.5 rounded-full border border-teal-200">
+                    Found {referenceCatalogMatches.length} matching formulation{referenceCatalogMatches.length === 1 ? '' : 's'} in the Medical Knowledge Formulary:
+                  </p>
+                )}
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('ALL');
+                    setSelectedStatus('ALL');
+                  }}
+                  className="mt-2 min-h-[44px] px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-all touch-manipulation active:scale-95 cursor-pointer"
+                >
+                  Reset Filter Tabs
+                </button>
               </div>
-              <h3 className="text-xl font-black text-slate-900">No formulations match your search</h3>
-              <p className="text-xs font-medium text-slate-500 max-w-md">
-                Try clarifying your keyword query, switching active specialty tabs, or deselecting critical alert toggles above.
-              </p>
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('ALL');
-                  setSelectedStatus('ALL');
-                }}
-                className="mt-2 min-h-[48px] px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-all touch-manipulation active:scale-95"
-              >
-                Reset Filter Tabs
-              </button>
+
+              {searchQuery && referenceCatalogMatches.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                    Medical Reference Formulations (0 In Physical Clinic Inventory)
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {referenceCatalogMatches.map((ref, idx) => (
+                      <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                              {ref.category}
+                            </span>
+                            <h5 className="font-black text-slate-900 text-sm mt-1">{ref.genericName}</h5>
+                            <p className="text-xs font-bold text-slate-500">{ref.brandName}</p>
+                          </div>
+                          <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full shrink-0">
+                            0 in stock
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-600 font-medium">
+                          <p><strong className="text-slate-700">Dosage:</strong> {ref.defaultDosage}</p>
+                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{ref.typicalDirections}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* Doctor View Grouped Specialty Cards */
