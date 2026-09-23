@@ -11,7 +11,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Styling**: Tailwind CSS v4 + Lucide React icons
 - **Database**: SQLite via Prisma ORM (`prisma/schema.prisma`)
 - **Auth**: Supabase Auth
-- **Deployment**: Netlify
+- **Deployment**: Vercel
 
 ## Directory Responsibilities
 
