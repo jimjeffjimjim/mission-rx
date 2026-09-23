@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
+import { searchSemanticFormulary } from '@/lib/semanticSearch';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
@@ -89,6 +90,7 @@ export default function AdminPortal({
   const isReadOnlyMode = Boolean(isReadOnly || userRole === 'VIEWER');
   const [activeTab, setActiveTab] = useState<'TABLE' | 'EQUIPMENT' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isReindexing, setIsReindexing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
   const [equipmentSearchQuery, setEquipmentSearchQuery] = useState('');
   const [equipmentSubFilter, setEquipmentSubFilter] = useState<'ALL' | 'DIAGNOSTIC' | 'SURGICAL' | 'CONSUMABLES'>('ALL');
@@ -339,6 +341,23 @@ export default function AdminPortal({
     }
   };
 
+  const handleReindexVectors = async () => {
+    setIsReindexing(true);
+    try {
+      const res = await fetch('/api/search/reindex', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('Formulary Vector Index Re-synced using BAAI/bge-large-en-v1.5.');
+      } else {
+        alert('Re-index response: ' + (data.message || data.error || 'Done'));
+      }
+    } catch (e: any) {
+      alert('Could not trigger re-index: ' + e.message);
+    } finally {
+      setIsReindexing(false);
+    }
+  };
+
   // Fetch Usage Analytics Data
   const fetchAnalytics = async (tf: 'today' | 'week' | 'month' | 'all') => {
     setLoadingAnalytics(true);
@@ -424,46 +443,88 @@ export default function AdminPortal({
 
   const totalBottles = displayItems.reduce((acc, item) => acc + item.bottlesAvailable, 0);
 
+  // Precompute semantic matches for Admin inventory table (BAAI/bge-large-en-v1.5)
+  const semanticResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return searchSemanticFormulary(searchQuery, 0.32, 25, displayItems);
+  }, [searchQuery, displayItems]);
+
+  const { semanticMatchedNames, semanticScoresMap } = useMemo(() => {
+    const names = new Set<string>();
+    const scores = new Map<string, number>();
+    for (const match of semanticResults) {
+      names.add(match.genericName.toLowerCase().trim());
+      if (match.brandName) names.add(match.brandName.toLowerCase().trim());
+      names.add(match.id);
+      scores.set(match.genericName.toLowerCase().trim(), match.score);
+      scores.set(match.id, match.score);
+    }
+    return { semanticMatchedNames: names, semanticScoresMap: scores };
+  }, [semanticResults]);
+
   // Filter Table Items
-  const filtered = displayItems.filter((item) => {
+  const filtered = useMemo(() => {
+    const list = displayItems.filter((item) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = item.genericName.toLowerCase().includes(q);
+        const matchBrand = (item.brandName || '').toLowerCase().includes(q);
+        const matchChem = (item.chemicalName || '').toLowerCase().includes(q);
+        const matchDosage = item.dosage.toLowerCase().includes(q);
+        const lots = parseLotNumbers(item.lotNumbers).join(' ').toLowerCase();
+        const matchLots = lots.includes(q);
+        const matchSemantic =
+          semanticMatchedNames.has(item.genericName.toLowerCase().trim()) ||
+          (item.brandName && semanticMatchedNames.has(item.brandName.toLowerCase().trim())) ||
+          semanticMatchedNames.has(item.id);
+        if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots && !matchSemantic) return false;
+      }
+
+      if (selectedCategory !== 'ALL') {
+        const itemCat = (item.shelfLocation || '').toLowerCase().trim();
+        const filterCat = selectedCategory.toLowerCase().trim();
+        if (itemCat !== filterCat) {
+          if (filterCat.includes('otc') && itemCat.includes('otc')) return true;
+          if (filterCat.includes('psych') && itemCat.includes('psych')) return true;
+          if ((filterCat.includes('ortho') || filterCat.includes('splint')) && (itemCat.includes('ortho') || itemCat.includes('splint'))) return true;
+          return false;
+        }
+      }
+
+      if (adminStatusFilter === 'LOW_STOCK') {
+        const isLow = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
+        if (!isLow) return false;
+      }
+      if (adminStatusFilter === 'EXPIRING') {
+        try {
+          const expDate = parseISO(item.expirationDate);
+          const days = differenceInDays(expDate, new Date());
+          if (isNaN(days) || days > 30) return false;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = item.genericName.toLowerCase().includes(q);
-      const matchBrand = (item.brandName || '').toLowerCase().includes(q);
-      const matchChem = (item.chemicalName || '').toLowerCase().includes(q);
-      const matchDosage = item.dosage.toLowerCase().includes(q);
-      const lots = parseLotNumbers(item.lotNumbers).join(' ').toLowerCase();
-      const matchLots = lots.includes(q);
-      if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots) return false;
+      const q = searchQuery.toLowerCase().trim();
+      return list.sort((a, b) => {
+        const aExact = a.genericName.toLowerCase().trim() === q ? 10 : (a.brandName || '').toLowerCase().trim() === q ? 8 : 0;
+        const bExact = b.genericName.toLowerCase().trim() === q ? 10 : (b.brandName || '').toLowerCase().trim() === q ? 8 : 0;
+        if (aExact !== bExact) return bExact - aExact;
+
+        const aSem = semanticScoresMap.get(a.genericName.toLowerCase().trim()) || semanticScoresMap.get(a.id) || 0;
+        const bSem = semanticScoresMap.get(b.genericName.toLowerCase().trim()) || semanticScoresMap.get(b.id) || 0;
+        if (Math.abs(aSem - bSem) > 0.04) return bSem - aSem;
+
+        return a.genericName.localeCompare(b.genericName);
+      });
     }
 
-    if (selectedCategory !== 'ALL') {
-      const itemCat = (item.shelfLocation || '').toLowerCase().trim();
-      const filterCat = selectedCategory.toLowerCase().trim();
-      if (itemCat !== filterCat) {
-        if (filterCat.includes('otc') && itemCat.includes('otc')) return true;
-        if (filterCat.includes('psych') && itemCat.includes('psych')) return true;
-        if ((filterCat.includes('ortho') || filterCat.includes('splint')) && (itemCat.includes('ortho') || itemCat.includes('splint'))) return true;
-        return false;
-      }
-    }
-
-    if (adminStatusFilter === 'LOW_STOCK') {
-      const isLow = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
-      if (!isLow) return false;
-    }
-    if (adminStatusFilter === 'EXPIRING') {
-      try {
-        const expDate = parseISO(item.expirationDate);
-        const days = differenceInDays(expDate, new Date());
-        if (isNaN(days) || days > 30) return false;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    return true;
-  });
+    return list;
+  }, [displayItems, searchQuery, selectedCategory, adminStatusFilter, semanticMatchedNames, semanticScoresMap]);
 
   // Combine real top dispensed with simulated test dispenses during Sandbox mode
   const displayTopDispensed = useMemo(() => {
@@ -1104,12 +1165,22 @@ export default function AdminPortal({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search formulations to edit, update counts, or modify lot numbers..."
+                placeholder="Search inventory by medication, symptom, brand, lot, strength (e.g. ear infection, rash, lot#)..."
                 className="w-full pl-10 pr-4 min-h-[48px] bg-slate-50 border border-slate-300 focus:border-amber-600 focus:bg-white rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 transition-all focus:outline-hidden select-text"
               />
             </div>
 
             <div className="flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={handleReindexVectors}
+                disabled={isReindexing}
+                className="flex items-center gap-1.5 min-h-[48px] px-3.5 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-300 cursor-pointer disabled:opacity-50"
+                title="Re-compute 1,024-dim BGE vector embeddings for all formulary items and new drugs"
+              >
+                <RefreshCw className={`w-4 h-4 text-teal-600 stroke-[2.5] ${isReindexing ? 'animate-spin' : ''}`} />
+                <span>{isReindexing ? 'Indexing...' : 'Re-index Vectors'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setAdminStatusFilter(adminStatusFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}

@@ -18,6 +18,7 @@ import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations } from '@/lib/stockMath';
+import { searchSemanticFormulary } from '@/lib/semanticSearch';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 
@@ -803,9 +804,28 @@ export default function Home() {
     setIsEditModalOpen(true);
   };
 
+  // Precompute semantic matches when searchQuery changes (BAAI/bge-large-en-v1.5)
+  const semanticResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return searchSemanticFormulary(searchQuery, 0.32, 25, items);
+  }, [searchQuery, items]);
+
+  const { semanticMatchedNames, semanticScoresMap } = useMemo(() => {
+    const names = new Set<string>();
+    const scores = new Map<string, number>();
+    for (const match of semanticResults) {
+      names.add(match.genericName.toLowerCase().trim());
+      if (match.brandName) names.add(match.brandName.toLowerCase().trim());
+      names.add(match.id);
+      scores.set(match.genericName.toLowerCase().trim(), match.score);
+      scores.set(match.id, match.score);
+    }
+    return { semanticMatchedNames: names, semanticScoresMap: scores };
+  }, [semanticResults]);
+
   // Filter & Search Evaluation for Doctor View
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const filtered = items.filter((item) => {
       // 1. Exclude expired formulations from the doctor view
       if (role !== 'ADMIN') {
         const isExp = isFormulationExpired(
@@ -818,13 +838,17 @@ export default function Home() {
       }
 
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
         const genericMatch = item.genericName.toLowerCase().includes(q);
         const brandMatch = (item.brandName || '').toLowerCase().includes(q);
         const chemMatch = (item.chemicalName || '').toLowerCase().includes(q);
         const dosageMatch = item.dosage.toLowerCase().includes(q);
         const catMatch = (item.shelfLocation || '').toLowerCase().includes(q);
-        if (!genericMatch && !brandMatch && !chemMatch && !dosageMatch && !catMatch) return false;
+        const semanticMatch =
+          semanticMatchedNames.has(item.genericName.toLowerCase().trim()) ||
+          (item.brandName && semanticMatchedNames.has(item.brandName.toLowerCase().trim())) ||
+          semanticMatchedNames.has(item.id);
+        if (!genericMatch && !brandMatch && !chemMatch && !dosageMatch && !catMatch && !semanticMatch) return false;
       }
 
       if (selectedCategory !== 'ALL') {
@@ -853,7 +877,24 @@ export default function Home() {
 
       return true;
     });
-  }, [items, searchQuery, selectedCategory, selectedStatus, role]);
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return filtered.sort((a, b) => {
+        const aExact = a.genericName.toLowerCase().trim() === q ? 10 : (a.brandName || '').toLowerCase().trim() === q ? 8 : 0;
+        const bExact = b.genericName.toLowerCase().trim() === q ? 10 : (b.brandName || '').toLowerCase().trim() === q ? 8 : 0;
+        if (aExact !== bExact) return bExact - aExact;
+
+        const aSem = semanticScoresMap.get(a.genericName.toLowerCase().trim()) || semanticScoresMap.get(a.id) || 0;
+        const bSem = semanticScoresMap.get(b.genericName.toLowerCase().trim()) || semanticScoresMap.get(b.id) || 0;
+        if (Math.abs(aSem - bSem) > 0.04) return bSem - aSem;
+
+        return a.genericName.localeCompare(b.genericName);
+      });
+    }
+
+    return filtered;
+  }, [items, searchQuery, selectedCategory, selectedStatus, role, semanticMatchedNames, semanticScoresMap]);
 
   // Group and consolidate inventory by categories for Doctor View
   const groupedInventory = useMemo(() => {

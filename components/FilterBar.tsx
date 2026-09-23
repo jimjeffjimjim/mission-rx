@@ -47,7 +47,7 @@ export default function FilterBar({
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search Drug Name, Brand, Chemical Ingredient, or Strength..."
+              placeholder="Search symptoms, indications, drug names, or strengths (e.g. ear infection, rash, fever)..."
               className="w-full pl-11 pr-11 min-h-[48px] bg-white hover:bg-slate-50 focus:bg-white border border-slate-300 focus:border-teal-600 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 shadow-2xs transition-all focus:outline-hidden select-text"
             />
             {searchQuery && (
