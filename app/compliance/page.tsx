@@ -67,7 +67,7 @@ export default function CompliancePage() {
           <div className="relative z-10 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-black uppercase tracking-wider">
               <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Official Compliance Document • Version 3.2.0</span>
+              <span>Official Compliance Document • Version 3.3.0</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
               MissionRx Clinical Inventory System Documentation

@@ -2834,7 +2834,7 @@ export default function AdminPortal({
                                   body: JSON.stringify({
                                     itemId: dispenseItem.id,
                                     itemGenericName: fullName,
-                                    quantityChanged: pillAmount,
+                                    quantityChanged: -pillAmount,
                                     actionType: 'DISPENSE',
                                     userRole: userRole || 'ADMIN',
                                     details: `Dispensed ${isBottle ? `${bottleAmount} ${dispenseItem.stockUnit || 'bottle'}(s) (${pillAmount} ${dispenseItem.subUnit || 'pills'})` : `${pillAmount} ${dispenseItem.subUnit || 'units'}`} directly via Backdoor Inventory table.`,

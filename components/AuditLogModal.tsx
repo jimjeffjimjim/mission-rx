@@ -426,11 +426,13 @@ export default function AuditLogModal({
           ) : (
             filteredLogs.map((log, index) => {
               const qtyNum = Number(log.quantityChanged) || 0;
-              const isDispense = log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE');
+              const isDispense = (log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE')) && log.actionType !== 'EDIT' && log.actionType !== 'AUDIT';
               const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
               const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-              const isPositive = (isRestock || isUndispense) && !isDispense;
-              const isNegative = isDispense;
+              const isCreate = log.actionType === 'CREATE';
+              const isEditOrAudit = log.actionType === 'EDIT' || log.actionType === 'AUDIT' || log.actionType === 'DELETE';
+              const isPositive = (isRestock || isUndispense || (isCreate && qtyNum > 0)) && !isDispense;
+              const isNegative = isDispense && qtyNum !== 0;
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
               if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
@@ -548,12 +550,16 @@ export default function AuditLogModal({
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider sm:hidden">Qty Change</span>
                       <span
                         className={`font-mono font-black text-sm sm:text-base ${
-                          isNegative ? 'text-rose-600' : isUndispense ? 'text-amber-700' : isRestock ? 'text-emerald-600' : 'text-slate-700'
+                          isNegative ? 'text-rose-600' : isUndispense ? 'text-amber-700' : isRestock ? 'text-emerald-600' : isCreate && qtyNum > 0 ? 'text-teal-700' : 'text-slate-600'
                         }`}
                       >
-                        {log.dispensedUnit === 'bottle' ? (
+                        {isEditOrAudit || qtyNum === 0 ? (
+                          <span className="text-slate-500 font-bold text-xs">
+                            {qtyNum === 0 ? 'No change' : qtyNum > 0 ? `+${qtyNum}` : `${qtyNum}`}
+                          </span>
+                        ) : log.dispensedUnit === 'bottle' ? (
                           <span>
-                            {isPositive ? '+' : '-'}{log.dispensedBottles || 1} bottle{(log.dispensedBottles || 1) !== 1 ? 's' : ''}
+                            {isPositive ? '+' : isNegative ? '-' : ''}{log.dispensedBottles || 1} bottle{(log.dispensedBottles || 1) !== 1 ? 's' : ''}
                             <span className="text-[10px] font-bold text-slate-400 block sm:text-right">
                               ({Math.abs(qtyNum)} pills)
                             </span>
