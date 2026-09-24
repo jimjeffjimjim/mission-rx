@@ -116,7 +116,13 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
 
   // Expiration date evaluation
   const expStatus = React.useMemo(() => {
-    if (item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') || item.expirationDate === 'N/A') {
+    if (!item.expirationDate || item.expirationDate.trim() === '' || item.expirationDate === 'N/A' || item.expirationDate === 'NONE') {
+      if (totalUnits === 0) {
+        return { type: 'CLEARED', color: 'bg-slate-100 text-slate-500 border-slate-300 font-bold', label: '0 Stock — No Expiration' };
+      }
+      return { type: 'NON_EXPIRING', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold shadow-2xs', label: '🛡️ N/A - Non-Expiring' };
+    }
+    if (item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099')) {
       return { type: 'NON_EXPIRING', color: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold shadow-2xs', label: '🛡️ N/A - Non-Expiring' };
     }
     const hasMultipleLotsWithExp = parsedLotList.filter(l => Boolean(l.expirationDate)).length > 1;
@@ -125,6 +131,9 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
       const expDate = parseISO(item.expirationDate);
       const daysRemaining = differenceInDays(expDate, new Date());
       if (isNaN(daysRemaining) || daysRemaining <= 0) {
+        if (totalUnits === 0) {
+          return { type: 'CLEARED', color: 'bg-slate-100 text-slate-500 border-slate-300 font-bold', label: '0 Stock — Discarded' };
+        }
         return { type: 'EXPIRED', color: 'bg-rose-600 text-white font-black border-rose-700 shadow-sm animate-pulse', label: '🚨 EXPIRED - Do Not Dispense' };
       }
       if (role === 'ADMIN' && daysRemaining <= 30) {
@@ -134,10 +143,10 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
     } catch (e) {
       return { type: 'GOOD', color: 'bg-slate-100 text-slate-700 border-slate-300 font-bold', label: `${prefix}${item.expirationDate}` };
     }
-  }, [item.expirationDate, parsedLotList, role]);
+  }, [item.expirationDate, parsedLotList, role, totalUnits]);
 
   // Low stock check
-  const isLowStock = item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20);
+  const isLowStock = totalUnits > 0 && (item.bottlesAvailable < 2 || (item.bottlesAvailable === 0 && item.looseUnitsAvailable < 20));
 
   // Stock mutation helpers
   const incrementBottles = () => {
@@ -238,11 +247,17 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
             <h3 className="text-base sm:text-xl font-black tracking-tight text-slate-900 leading-snug select-text">
               {item.genericName}
             </h3>
-            {role === 'ADMIN' && isLowStock && (
-              <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-300 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs shrink-0 animate-pulse">
-                <AlertTriangle className="w-3 h-3 stroke-[3]" />
-                <span>Low Stock</span>
-              </span>
+            {role === 'ADMIN' && (
+              totalUnits === 0 ? (
+                <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 border border-slate-300 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs shrink-0">
+                  <span>0 in Stock</span>
+                </span>
+              ) : isLowStock ? (
+                <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-300 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-2xs shrink-0 animate-pulse">
+                  <AlertTriangle className="w-3 h-3 stroke-[3]" />
+                  <span>Low Stock</span>
+                </span>
+              ) : null
             )}
           </div>
 

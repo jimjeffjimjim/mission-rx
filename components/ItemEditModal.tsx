@@ -1188,15 +1188,16 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Permanently delete medication card for ${formData.genericName}?`)) {
+                  if (confirm(`Throw away all stock for ${formData.genericName}? This will clear lot numbers, expiration date, and set pills/units to 0 while keeping the card in inventory.`)) {
                     onDelete(item.id!);
                     onClose();
                   }
                 }}
-                className="min-h-[48px] px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs sm:text-sm rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95"
+                className="min-h-[48px] px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs sm:text-sm rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Discard stock: clears lots, expiration date, and sets pills to 0 while keeping the medication card"
               >
                 <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Delete</span>
+                <span>Discard Stock (0)</span>
               </button>
             ) : (
               <div />

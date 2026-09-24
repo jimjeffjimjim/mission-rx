@@ -141,24 +141,65 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const isPermanent = searchParams.get('permanent') === 'true';
 
+    if (isPermanent) {
+      if (supabase) {
+        try {
+          await supabase.from('inventory_items').delete().eq('id', id);
+        } catch (e) {
+          console.warn('Supabase delete warning:', e);
+        }
+      }
+
+      try {
+        await prisma.inventoryItem.delete({
+          where: { id },
+        });
+      } catch (e) {
+        // Expected on serverless
+      }
+
+      return NextResponse.json({ success: true, permanent: true });
+    }
+
+    // Default clinic throw away / discard behavior: clear lots, expiration date, and pills, keeping row at 0
     if (supabase) {
       try {
-        await supabase.from('inventory_items').delete().eq('id', id);
+        await supabase
+          .from('inventory_items')
+          .update({
+            bottles_available: 0,
+            loose_units_available: 0,
+            initial_bottles_available: 0,
+            initial_loose_units_available: 0,
+            lot_numbers: '[]',
+            expiration_date: '',
+          })
+          .eq('id', id);
       } catch (e) {
-        console.warn('Supabase delete warning:', e);
+        console.warn('Supabase discard stock warning:', e);
       }
     }
 
     try {
-      await prisma.inventoryItem.delete({
+      await prisma.inventoryItem.update({
         where: { id },
+        data: {
+          bottlesAvailable: 0,
+          looseUnitsAvailable: 0,
+          initialBottlesAvailable: 0,
+          initialLooseUnitsAvailable: 0,
+          lotNumbers: '[]',
+          expirationDate: '',
+        },
       });
     } catch (e) {
       // Expected on serverless
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, cleared: true });
   } catch (error) {
     return NextResponse.json({ success: true });
   }

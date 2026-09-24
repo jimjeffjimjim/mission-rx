@@ -596,62 +596,18 @@ export default function AdminPortal({
 
   const handleDumpExpired = (item: InventoryItem) => {
     const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
-    if (currentTotal <= 0) {
-      alert(`The pill count for ${item.genericName} is already 0.`);
-      return;
-    }
-
     const confirmed = window.confirm(
-      `Dump out expired stock for ${item.genericName}?\n\n` +
+      `Throw away expired stock for ${item.genericName}?\n\n` +
       `Current stock: ${item.bottlesAvailable || 0} ${item.stockUnit || 'bottles'} + ${item.looseUnitsAvailable || 0} loose (${currentTotal} ${item.subUnit || 'units'}).\n\n` +
-      `This will edit the pill count to 0 because they expired and were thrown away.\n` +
-      `This will NOT count as dispensed to patients.`
+      `This will clear lot numbers, clear expiration date, and set pills to 0.\n` +
+      `The medication card will be preserved in the catalog at 0 stock.\n` +
+      `This does NOT count as dispensed to patients.`
     );
 
     if (!confirmed) return;
 
-    if (isLocalTestMode) {
-      setTestItemsMap((prev) => ({
-        ...prev,
-        [item.id]: { bottles: 0, loose: 0 },
-      }));
-    }
-
-    // 1. Zero out stock directly (does NOT invoke patient dispense math)
-    onUpdateStock(item.id, 0, 0);
-
-    // 2. Record transparent AUDIT event with quantityChanged: 0 so it never counts as patient dispenses in analytics
-    const auditPayload: DispenseLog = {
-      id: 'log-dump-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-      itemId: item.id,
-      itemGenericName: item.genericName,
-      quantityChanged: 0,
-      actionType: 'AUDIT',
-      userRole: userRole || 'ADMIN',
-      details: `[EXPIRED WASTE DISPOSAL]: Expired medication dumped out and thrown away. Reset stock from ${currentTotal} ${item.subUnit || 'units'} (${item.bottlesAvailable || 0} ${item.stockUnit || 'bottles'}, ${item.looseUnitsAvailable || 0} loose) to 0. Medication entry preserved in catalog. (Not counted as dispensed to patients).`,
-      createdAt: new Date().toISOString(),
-      isTestMode: isLocalTestMode,
-      dispensedBottles: 0,
-      dispensedPillsPerBottle: item.pillsPerBottle || 0,
-      lotNumbers: parseLotNumbers(item.lotNumbers),
-    };
-
-    if (isLocalTestMode && onAddTestAuditLog) {
-      onAddTestAuditLog(auditPayload);
-    } else {
-      try {
-        const rawQueue = localStorage.getItem('mission_rx_audit_queue');
-        const queue = rawQueue ? JSON.parse(rawQueue) : [];
-        queue.push(auditPayload);
-        localStorage.setItem('mission_rx_audit_queue', JSON.stringify(queue));
-        window.dispatchEvent(new Event('storage'));
-      } catch (e) {
-        fetch('/api/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(auditPayload),
-        }).catch(() => {});
-      }
+    if (onDeleteItem) {
+      onDeleteItem(item.id);
     }
   };
 
@@ -1483,9 +1439,17 @@ export default function AdminPortal({
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-700 select-text">
-                          {item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') || item.expirationDate === 'N/A' ? (
+                          {!item.expirationDate || item.expirationDate.trim() === '' || item.expirationDate === 'N/A' || item.expirationDate === 'NONE' ? (
+                            <span className="text-[11px] text-slate-400 font-semibold italic">
+                              — (No Expiration)
+                            </span>
+                          ) : item.expirationDate?.startsWith('3000') || item.expirationDate?.startsWith('2099') ? (
                             <span className="font-extrabold text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full">
                               🛡️ N/A (Non-Expiring)
+                            </span>
+                          ) : totalUnits === 0 ? (
+                            <span className="text-[11px] text-slate-500 font-medium bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                              0 Stock (Discarded)
                             </span>
                           ) : isExp ? (
                             <div className="flex items-center gap-2">
@@ -1498,7 +1462,7 @@ export default function AdminPortal({
                                   type="button"
                                   onClick={() => handleDumpExpired(item)}
                                   className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer transition-all shrink-0"
-                                  title="Pills expired and dumped out? Click to set count to 0 (does NOT count as dispensed)"
+                                  title="Pills expired and dumped out? Click to clear lots, expiration, and set count to 0 (card preserved)"
                                 >
                                   <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
                                   <span>Dump (0)</span>
@@ -1569,16 +1533,18 @@ export default function AdminPortal({
                                 </button>
 
                                 <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (confirm(`Delete ${item.genericName}?`)) onDeleteItem(item.id);
-                                  }}
-                                  className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
-                                  title="Delete Item"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Throw away all stock for ${item.genericName}? This will clear lot numbers, expiration date, and set pills to 0 while keeping the card in inventory.`)) {
+                                        onDeleteItem(item.id);
+                                      }
+                                    }}
+                                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
+                                    title="Discard stock: clears lots, expiration & sets pills to 0 while keeping card"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
                             )}
                           </div>
                         </td>
@@ -1946,12 +1912,12 @@ export default function AdminPortal({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (confirm(`Are you sure you want to permanently remove "${item.genericName}" from equipment inventory?`)) {
+                                    if (confirm(`Throw away all stock for "${item.genericName}"? This will clear lot numbers, expiration date, and set units to 0 while keeping the card in inventory.`)) {
                                       onDeleteItem(item.id);
                                     }
                                   }}
                                   className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
-                                  title="Delete Equipment"
+                                  title="Discard stock: clears lots, expiration and sets units to 0 while keeping card"
                                 >
                                   <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                                 </button>

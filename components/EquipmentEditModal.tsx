@@ -1126,15 +1126,16 @@ export default function EquipmentEditModal({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Permanently delete "${item.genericName}" from equipment inventory?`)) {
+                  if (confirm(`Throw away all stock for "${item.genericName}"? This will clear lot numbers, expiration date, and set units to 0 while keeping the equipment card in inventory.`)) {
                     onDelete(item.id!);
                     onClose();
                   }
                 }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-rose-300 text-rose-700 bg-rose-50 hover:bg-rose-100 font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                title="Discard stock: clears lots, expiration date, and sets units to 0 while keeping the equipment card"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>Delete Equipment</span>
+                <span>Discard Stock (0)</span>
               </button>
             ) : <div />}
 

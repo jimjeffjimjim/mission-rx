@@ -710,7 +710,7 @@ export default function Home() {
   };
 
   const handleDeleteItem = async (id: string) => {
-    // If in Testing Sandbox mode, delete from in-memory array ONLY without database calls
+    // If in Testing Sandbox mode, clear stock and lots in-memory without database calls
     if (isTestingMode) {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
@@ -723,40 +723,74 @@ export default function Home() {
           itemId: id,
           itemGenericName: canonicalName,
           quantityChanged: 0,
-          actionType: 'DELETE',
+          actionType: 'AUDIT',
           userRole: `${actorTag} (TEST)`,
-          details: `[TESTING MODE - NOT REAL]: Removed ${canonicalName} in test sandbox`,
+          details: `[TESTING MODE - NOT REAL]: Discarded all stock for ${canonicalName} (card retained at 0 stock, lots and expiration cleared)`,
           isTestMode: true,
           createdAt: new Date().toISOString(),
         },
         ...prev,
       ]);
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                bottlesAvailable: 0,
+                looseUnitsAvailable: 0,
+                initialBottlesAvailable: 0,
+                initialLooseUnitsAvailable: 0,
+                lotNumbers: [],
+                expirationDate: '',
+              }
+            : i
+        )
+      );
       return;
     }
 
     const target = items.find((i) => i.id === id);
+    if (!target) return;
+
+    const canonicalName = getStandardItemName(target.genericName, target.dosage);
+    const prevTotal = calculateTotalUnits(target.bottlesAvailable, target.pillsPerBottle, target.looseUnitsAvailable);
+
+    // Keep the card showing 0 of everything, clear lots and expiration
+    const clearedItem: InventoryItem = {
+      ...target,
+      bottlesAvailable: 0,
+      looseUnitsAvailable: 0,
+      initialBottlesAvailable: 0,
+      initialLooseUnitsAvailable: 0,
+      lotNumbers: [],
+      expirationDate: '',
+    };
+
     setItems((prev) => {
-      const updated = prev.filter((i) => i.id !== id);
+      const updated = prev.map((i) => (i.id === id ? clearedItem : i));
       saveLocalCache(updated);
       return updated;
     });
 
-    if (target) {
-      const canonicalName = getStandardItemName(target.genericName, target.dosage);
-      recordAuditLog({
-        itemId: id,
-        itemGenericName: canonicalName,
-        quantityChanged: -target.bottlesAvailable,
-        actionType: 'DELETE',
-        details: `Permanently retired drug formulation from active dispensary catalog.`,
-      });
-    }
+    recordAuditLog({
+      itemId: id,
+      itemGenericName: canonicalName,
+      quantityChanged: 0,
+      actionType: 'AUDIT',
+      details: `[WASTE / DISCARD]: All remaining stock discarded (${prevTotal} ${target.subUnit || 'units'}, ${target.bottlesAvailable} ${target.stockUnit || 'bottles'}). Cleared lot numbers and expiration date. Formulary card retained in inventory showing 0 stock.`,
+    });
 
     try {
-      await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      await fetch(`/api/inventory/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...clearedItem,
+          isFullEdit: true,
+        }),
+      });
     } catch (e) {
-      console.error('Error deleting item', e);
+      console.error('Error updating item to 0 stock', e);
     }
   };
 
