@@ -1,7 +1,7 @@
 /**
  * Utility functions for converting Total Stock Units to Sealed Containers and Loose Units.
  */
-import { InventoryItem, LotEntry } from '@/types/inventory';
+import { InventoryItem, LotEntry, DispenseLog } from '@/types/inventory';
 
 export interface StockBreakdown {
   bottles: number;
@@ -401,4 +401,121 @@ export function consolidateDoctorFormulations(rawCategoryItems: InventoryItem[])
 
   return consolidatedList;
 }
+
+export interface DispensaryReportEntry extends DispenseLog {
+  effectiveQty: number;
+  isRemoved?: boolean;
+}
+
+/**
+ * Filters and nets dispense logs specifically for the Dispensary Audit Log Report:
+ * 1. Strictly includes only RESTOCK and DISPENSE logs.
+ * 2. Strictly excludes administrative / maintenance logs (EDIT, AUDIT, CREATE, DELETE).
+ * 3. When an item is UNDISPENSED, it reverses / cancels out the corresponding preceding DISPENSE
+ *    record for that medication respectively (netting out), so neither the accidental dispense
+ *    nor its undispense reversal clutters this report.
+ * 4. Returns records sorted reverse-chronologically (newest first).
+ */
+export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryReportEntry[] {
+  if (!rawLogs || !Array.isArray(rawLogs) || rawLogs.length === 0) {
+    return [];
+  }
+
+  // 1. Sort chronologically (oldest to newest) to process transactions in real-time sequence
+  const chronologicalLogs = [...rawLogs].sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  const outputLogs: DispensaryReportEntry[] = [];
+
+  for (const log of chronologicalLogs) {
+    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE)
+    if (
+      log.actionType === 'AUDIT' ||
+      log.actionType === 'EDIT' ||
+      log.actionType === 'CREATE' ||
+      log.actionType === 'DELETE'
+    ) {
+      continue;
+    }
+
+    const detailsLower = (log.details || '').toLowerCase();
+    const isUndispense =
+      log.actionType === 'UNDISPENSE' ||
+      (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+    const isRestock =
+      !isUndispense &&
+      (log.actionType === 'RESTOCK' || detailsLower.includes('restocked'));
+    const isDispense =
+      !isUndispense &&
+      !isRestock &&
+      (log.actionType === 'DISPENSE' || log.quantityChanged !== 0);
+
+    if (isRestock) {
+      const qty = Math.abs(Number(log.quantityChanged) || 0);
+      if (qty > 0) {
+        outputLogs.push({
+          ...log,
+          actionType: 'RESTOCK',
+          effectiveQty: qty,
+        });
+      }
+    } else if (isDispense) {
+      const qty = Math.abs(Number(log.quantityChanged) || 0);
+      if (qty > 0) {
+        outputLogs.push({
+          ...log,
+          actionType: 'DISPENSE',
+          effectiveQty: qty,
+        });
+      }
+    } else if (isUndispense) {
+      let undispenseQty = Math.abs(Number(log.quantityChanged) || 0);
+      const logMedName = (log.itemGenericName || '').toLowerCase().trim();
+
+      // Search backward for matching uncancelled dispense of this medication
+      for (let i = outputLogs.length - 1; i >= 0; i--) {
+        const prev = outputLogs[i];
+        if (prev.actionType !== 'DISPENSE' || prev.isRemoved || prev.effectiveQty <= 0) {
+          continue;
+        }
+
+        const prevMedName = (prev.itemGenericName || '').toLowerCase().trim();
+        const isMatch = Boolean(
+          (log.itemId && prev.itemId && log.itemId === prev.itemId) ||
+          (logMedName && prevMedName && (logMedName === prevMedName || logMedName.startsWith(prevMedName) || prevMedName.startsWith(logMedName)))
+        );
+
+        if (isMatch) {
+          if (undispenseQty >= prev.effectiveQty) {
+            undispenseQty -= prev.effectiveQty;
+            prev.effectiveQty = 0;
+            prev.isRemoved = true;
+          } else {
+            prev.effectiveQty -= undispenseQty;
+            if (prev.dispensedBottles && prev.dispensedPillsPerBottle) {
+              prev.dispensedBottles = Math.max(0, Math.floor(prev.effectiveQty / prev.dispensedPillsPerBottle));
+            }
+            undispenseQty = 0;
+          }
+
+          if (undispenseQty <= 0) break;
+        }
+      }
+      // Note: The UNDISPENSE transaction itself is NOT appended to outputLogs (it cancels out the dispense)
+    }
+  }
+
+  // Filter out removed / zeroed dispenses and return reverse-chronological order (newest first)
+  return outputLogs
+    .filter((entry) => !entry.isRemoved && entry.effectiveQty > 0)
+    .sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+}
+
 

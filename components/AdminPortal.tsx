@@ -47,8 +47,8 @@ import {
   PackageX
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
-import { searchSemanticFormulary, matchesClinicalQuery } from '@/lib/semanticSearch';
+import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers, filterAndNetDispensaryLogs, DispensaryReportEntry } from '@/lib/stockMath';
+import { searchSemanticFormulary, matchesClinicalQuery } from '@/lib/smartSearch';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
 
@@ -90,7 +90,6 @@ export default function AdminPortal({
   const isReadOnlyMode = Boolean(isReadOnly || userRole === 'VIEWER');
   const [activeTab, setActiveTab] = useState<'TABLE' | 'EQUIPMENT' | 'USAGE' | 'BACKUPS'>('TABLE');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isReindexing, setIsReindexing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('ALL');
   const [equipmentSearchQuery, setEquipmentSearchQuery] = useState('');
   const [equipmentSubFilter, setEquipmentSubFilter] = useState<'ALL' | 'DIAGNOSTIC' | 'SURGICAL' | 'CONSUMABLES'>('ALL');
@@ -306,6 +305,14 @@ export default function AdminPortal({
   const [topDispensed, setTopDispensed] = useState<{ genericName: string; totalDispensed: number; category: string }[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
+  // Filtered & netted logs specifically for Dispensary Audit Log Report:
+  // Shows ONLY Dispense and Restock logs. When an item is undispensed, it cancels out
+  // the corresponding dispensed transaction respectively. Other logs (EDIT, AUDIT, DELETE, etc.)
+  // are strictly excluded (they remain available in the normal Audit Log modal).
+  const dispensaryReportLogs = useMemo(() => {
+    return filterAndNetDispensaryLogs(analyticsLogs);
+  }, [analyticsLogs]);
+
   const [editingDispenseItem, setEditingDispenseItem] = useState<{ genericName: string; totalDispensed: number; category: string } | null>(null);
   const [newDispenseAmt, setNewDispenseAmt] = useState<number | string>('');
   const [isDispenseWarningOpen, setIsDispenseWarningOpen] = useState(false);
@@ -338,23 +345,6 @@ export default function AdminPortal({
       console.error('Failed updating dispensed amount:', e);
     } finally {
       setSavingDispenseEdit(false);
-    }
-  };
-
-  const handleReindexVectors = async () => {
-    setIsReindexing(true);
-    try {
-      const res = await fetch('/api/search/reindex', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert('Formulary Vector Index Re-synced using BAAI/bge-large-en-v1.5.');
-      } else {
-        alert('Re-index response: ' + (data.message || data.error || 'Done'));
-      }
-    } catch (e: any) {
-      alert('Could not trigger re-index: ' + e.message);
-    } finally {
-      setIsReindexing(false);
     }
   };
 
@@ -538,19 +528,13 @@ export default function AdminPortal({
   }, [topDispensed, isTestingMode, testSimulatedLogs]);
 
   const equipmentItems = useMemo(() => {
-    return displayItems.filter((i) => {
+    const list = displayItems.filter((i) => {
       const isSupply = i.shelfLocation === 'Supplies' || i.itemType === 'Supply' || (i.shelfLocation && (i.shelfLocation.toLowerCase().includes('splint') || ['Orthopedics & Splints', 'Diagnostic Devices', 'Surgical Instruments', 'Consumables & PPE', 'Wound Care', 'Respiratory & Airway', 'Emergency & Trauma', 'Dental Supplies'].includes(i.shelfLocation))) || (i.stockUnit && ['Units', 'Kits', 'Sets', 'Boxes / Packs', 'Boxes', 'Pairs', 'Ampoules'].includes(i.stockUnit) && i.shelfLocation === 'Supplies');
       if (!isSupply) return false;
 
       if (equipmentSearchQuery.trim()) {
-        const q = equipmentSearchQuery.toLowerCase();
-        const matchName = i.genericName.toLowerCase().includes(q);
-        const matchBrand = (i.brandName || '').toLowerCase().includes(q);
-        const matchChem = (i.chemicalName || '').toLowerCase().includes(q);
-        const matchDosage = i.dosage.toLowerCase().includes(q);
-        const lots = parseLotNumbers(i.lotNumbers).join(' ').toLowerCase();
-        const matchLots = lots.includes(q);
-        if (!matchName && !matchBrand && !matchChem && !matchDosage && !matchLots) return false;
+        const { isMatch } = matchesClinicalQuery(i, equipmentSearchQuery);
+        if (!isMatch) return false;
       }
 
       if (equipmentSubFilter === 'DIAGNOSTIC') {
@@ -568,6 +552,17 @@ export default function AdminPortal({
 
       return true;
     });
+
+    if (equipmentSearchQuery.trim()) {
+      return list.sort((a, b) => {
+        const scoreA = matchesClinicalQuery(a, equipmentSearchQuery).score;
+        const scoreB = matchesClinicalQuery(b, equipmentSearchQuery).score;
+        if (scoreA !== scoreB) return scoreB - scoreA;
+        return a.genericName.localeCompare(b.genericName);
+      });
+    }
+
+    return list;
   }, [displayItems, equipmentSearchQuery, equipmentSubFilter]);
 
   const equipmentTotalCount = displayItems.filter((i) => i.shelfLocation === 'Supplies' || i.itemType === 'Supply').length;
@@ -1111,16 +1106,6 @@ export default function AdminPortal({
             </div>
 
             <div className="flex items-center gap-2 shrink-0 overflow-x-auto no-scrollbar">
-              <button
-                type="button"
-                onClick={handleReindexVectors}
-                disabled={isReindexing}
-                className="flex items-center gap-1.5 min-h-[48px] px-3.5 rounded-2xl text-xs font-black transition-all border shrink-0 touch-manipulation shadow-2xs active:scale-95 bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-300 cursor-pointer disabled:opacity-50"
-                title="Re-compute 1,024-dim BGE vector embeddings for all formulary items and new drugs"
-              >
-                <RefreshCw className={`w-4 h-4 text-teal-600 stroke-[2.5] ${isReindexing ? 'animate-spin' : ''}`} />
-                <span>{isReindexing ? 'Indexing...' : 'Re-index Vectors'}</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setAdminStatusFilter(adminStatusFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')}
@@ -2106,15 +2091,13 @@ export default function AdminPortal({
                             .replace(/'/g, '&apos;');
                         };
 
-                        const relevantLogs = analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0);
+                        const relevantLogs = dispensaryReportLogs;
                         const rowsXml = relevantLogs.map(log => {
                           const lotArr = parseLotNumbers(log.lotNumbers);
                           const lotStr = lotArr.length > 0 ? lotArr.join(', ') : 'N/A';
                           const signedQty = log.actionType === 'DISPENSE' 
-                            ? `-${Math.abs(Number(log.quantityChanged) || 0)}` 
-                            : log.actionType === 'UNDISPENSE' 
-                            ? `+${Math.abs(Number(log.quantityChanged) || 0)} (Undispensed)` 
-                            : `+${Math.abs(Number(log.quantityChanged) || 0)} (Restocked)`;
+                            ? `-${log.effectiveQty}` 
+                            : `+${log.effectiveQty} (Restocked)`;
                           const timeStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
 
                           return `
@@ -2202,8 +2185,7 @@ export default function AdminPortal({
                     onClick={() => {
                       try {
                         const csvHeaders = ['Date', 'Action', 'Medication Name', 'Lot Number', 'Quantity Changed', 'Staff Role', 'Log Details'];
-                        const dataRows = analyticsLogs
-                          .filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'UNDISPENSE' || log.actionType === 'RESTOCK' || log.quantityChanged !== 0)
+                        const dataRows = dispensaryReportLogs
                           .map((log) => {
                             const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
                             const logName = (log.itemGenericName || '').toLowerCase();
@@ -2215,10 +2197,9 @@ export default function AdminPortal({
 
                             const lotStr = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
 
-                            const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-                            const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-                            const actionLabel = isUndispense ? 'UNDISPENSE' : isRestock ? 'RESTOCK' : 'DISPENSE';
-                            const signedQty = (isUndispense || isRestock) ? `+${Math.abs(log.quantityChanged)}` : `-${Math.abs(log.quantityChanged)}`;
+                            const isRestock = log.actionType === 'RESTOCK';
+                            const actionLabel = isRestock ? 'RESTOCK' : 'DISPENSE';
+                            const signedQty = isRestock ? `+${log.effectiveQty}` : `-${log.effectiveQty}`;
 
                             return [
                               `"${dateStr}"`,
@@ -2259,9 +2240,9 @@ export default function AdminPortal({
                   <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
                   <span className="text-xs font-bold uppercase">Retrieving dispense logs...</span>
                 </div>
-              ) : analyticsLogs.filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0).length === 0 ? (
+              ) : dispensaryReportLogs.length === 0 ? (
                 <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
-                  No dispense activities logged for this timeframe.
+                  No dispense or restock activities logged for this timeframe.
                 </div>
               ) : (
                 <div className="flex-1 overflow-x-auto border border-slate-200 rounded-2xl">
@@ -2277,10 +2258,8 @@ export default function AdminPortal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-800">
-                      {analyticsLogs
-                        .filter((log) => log.actionType === 'DISPENSE' || log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE' || log.quantityChanged !== 0)
-                        .map((log) => {
-                          const quantity = Math.abs(log.quantityChanged);
+                      {dispensaryReportLogs.map((log) => {
+                          const quantity = log.effectiveQty;
                           const dateObj = log.createdAt ? new Date(log.createdAt) : new Date();
                           const formattedDate = dateObj.toLocaleDateString('en-US', {
                             month: 'short',
@@ -2291,12 +2270,9 @@ export default function AdminPortal({
                             hour12: true
                           });
 
-                          const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-                          const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-                          const actionLabel = isUndispense ? 'UNDISPENSE' : isRestock ? 'RESTOCK' : 'DISPENSE';
-                          const actionBadgeStyle = isUndispense
-                            ? 'bg-amber-50 text-amber-800 border-amber-300'
-                            : isRestock
+                          const isRestock = log.actionType === 'RESTOCK';
+                          const actionLabel = isRestock ? 'RESTOCK' : 'DISPENSE';
+                          const actionBadgeStyle = isRestock
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                             : 'bg-rose-50 text-rose-700 border-rose-300';
 
@@ -2337,16 +2313,7 @@ export default function AdminPortal({
                                 </div>
                               </td>
                               <td className="py-2.5 px-3 text-center font-mono font-black text-sm">
-                                {isUndispense ? (
-                                  log.dispensedUnit === 'bottle' ? (
-                                    <span className="flex flex-col items-center text-amber-700">
-                                      <span>+{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
-                                      <span className="text-[9px] font-bold text-amber-600/80">({quantity} {corrItem?.subUnit || 'pills'})</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-amber-700">+{quantity}</span>
-                                  )
-                                ) : isRestock ? (
+                                {isRestock ? (
                                   log.dispensedUnit === 'bottle' ? (
                                     <span className="flex flex-col items-center text-emerald-600">
                                       <span>+{log.dispensedBottles || 1} {corrItem?.stockUnit || 'bottle'}</span>
@@ -2372,6 +2339,7 @@ export default function AdminPortal({
                                   onClick={() => {
                                     const modalData = {
                                       ...log,
+                                      quantityChanged: isRestock ? quantity : -quantity,
                                       isRestock,
                                       lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,
                                       brandName: corrItem?.brandName || 'N/A',

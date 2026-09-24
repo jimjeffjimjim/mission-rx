@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchSemanticFormulary } from '@/lib/semanticSearch';
+import { searchSemanticFormulary } from '@/lib/smartSearch';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,44 +14,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: [], source: 'empty' });
     }
 
-    // 1. Try local Python live inference server if active (0.001s response, arbitrary novel text)
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600);
-
-      const localResponse = await fetch(
-        `http://127.0.0.1:5002/search?q=${encodeURIComponent(query)}&limit=${limit}`,
-        {
-          signal: controller.signal,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (localResponse.ok) {
-        const liveData = await localResponse.json();
-        return NextResponse.json({
-          source: 'bge-live-server',
-          query,
-          results: liveData.results || [],
-        });
-      }
-    } catch (e) {
-      // Local server not running or timed out; smoothly fall back to precomputed edge index
-    }
-
-    // 2. High-speed edge / precomputed index (Vercel & Offline compliant)
-    const matches = searchSemanticFormulary(query, 0.32, limit);
+    // High-speed, zero-dependency smart search (order-independent, typo-tolerant, brand-aliased)
+    const matches = searchSemanticFormulary(query, 0.30, limit);
 
     return NextResponse.json({
-      source: 'bge-edge-index',
+      source: 'smart-search',
       query,
       results: matches,
     });
   } catch (error) {
-    console.error('Semantic search error:', error);
+    console.error('Smart search error:', error);
     return NextResponse.json(
-      { error: 'Failed to execute semantic search', results: [] },
+      { error: 'Failed to execute smart search', results: [] },
       { status: 500 }
     );
   }

@@ -18,7 +18,7 @@ import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations } from '@/lib/stockMath';
-import { searchSemanticFormulary, matchesClinicalQuery, searchReferenceCatalog } from '@/lib/semanticSearch';
+import { searchSemanticFormulary, matchesClinicalQuery, searchReferenceCatalog } from '@/lib/smartSearch';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
 

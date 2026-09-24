@@ -1,4 +1,4 @@
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName } from '../lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs } from '../lib/stockMath';
 
 // Test Runner Framework
 let totalTests = 0;
@@ -229,6 +229,71 @@ const plainDetails = 'Routine clinic stock update';
 const parsedPlain = parseLogDetails(plainDetails);
 assertEquals(parsedPlain.details, 'Routine clinic stock update', 'Preserve plain details without metadata');
 assertEquals(parsedPlain.dispensedUnit, null, 'dispensedUnit is null when no metadata present');
+
+// -------------------------------------------------------------
+// 6. Dispensary Audit Log Report (Netting & Filtering Logic)
+// -------------------------------------------------------------
+console.log('\n📊 6. Dispensary Audit Log Report (Netting & Filtering):');
+
+// Scenario 6.1: Dispense 3 Clotrimazole creams, then Undispense 3 Clotrimazole creams -> Both removed
+const dispReportTest1 = filterAndNetDispensaryLogs([
+  { id: '1', itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: -3, actionType: 'DISPENSE', createdAt: '2026-09-01T10:00:00Z' },
+  { id: '2', itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'UNDISPENSE', createdAt: '2026-09-01T10:05:00Z' },
+] as any);
+assertEquals(dispReportTest1.length, 0, 'Dispense 3 and Undispense 3 completely nets out and removes dispense from report');
+
+// Scenario 6.2: Restock is preserved and never canceled by undispense
+const dispReportTest2 = filterAndNetDispensaryLogs([
+  { id: '1', itemGenericName: 'Metformin (500mg)', quantityChanged: -50, actionType: 'DISPENSE', createdAt: '2026-09-01T10:00:00Z' },
+  { id: '2', itemGenericName: 'Metformin (500mg)', quantityChanged: 100, actionType: 'RESTOCK', createdAt: '2026-09-01T10:30:00Z' },
+] as any);
+assertEquals(dispReportTest2.length, 2, 'Restock and Dispense are both preserved in dispensary report');
+assertEquals(dispReportTest2[0].actionType, 'RESTOCK', 'Newest log (Restock) appears first in reverse chronological order');
+assertEquals(dispReportTest2[0].effectiveQty, 100, 'Restock effective quantity is 100');
+assertEquals(dispReportTest2[1].actionType, 'DISPENSE', 'Dispense appears second');
+assertEquals(dispReportTest2[1].effectiveQty, 50, 'Dispense effective quantity is 50');
+
+// Scenario 6.3: Partial Undispense reduces dispense quantity
+const dispReportTest3 = filterAndNetDispensaryLogs([
+  { id: '1', itemGenericName: 'Amoxicillin (500mg)', quantityChanged: -10, actionType: 'DISPENSE', createdAt: '2026-09-01T10:00:00Z' },
+  { id: '2', itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 4, actionType: 'UNDISPENSE', createdAt: '2026-09-01T10:15:00Z' },
+] as any);
+assertEquals(dispReportTest3.length, 1, 'Partial undispense leaves 1 dispense record');
+assertEquals(dispReportTest3[0].effectiveQty, 6, 'Partial undispense reduced dispense effectiveQty from 10 to 6');
+
+// Scenario 6.4: Reverse-chronological array input (newest first from DB)
+const dispReportTest4 = filterAndNetDispensaryLogs([
+  { id: '2', itemGenericName: 'Amlodipine (5mg)', quantityChanged: 1, actionType: 'UNDISPENSE', createdAt: '2026-09-01T11:05:00Z' },
+  { id: '1', itemGenericName: 'Amlodipine (5mg)', quantityChanged: -1, actionType: 'DISPENSE', createdAt: '2026-09-01T11:00:00Z' },
+] as any);
+assertEquals(dispReportTest4.length, 0, 'Reverse chronological input correctly nets out and cancels the dispense');
+
+// Scenario 6.5: Administrative logs (EDIT, AUDIT, CREATE, DELETE) are strictly excluded
+const dispReportTest5 = filterAndNetDispensaryLogs([
+  { id: '1', itemGenericName: 'Ibuprofen (200mg)', quantityChanged: -500, actionType: 'AUDIT', details: '[EXPIRED WASTE DISPOSAL] Thrown away', createdAt: '2026-09-01T12:00:00Z' },
+  { id: '2', itemGenericName: 'Ibuprofen (200mg)', quantityChanged: 10, actionType: 'EDIT', details: 'Manual edit', createdAt: '2026-09-01T12:05:00Z' },
+  { id: '3', itemGenericName: 'Ibuprofen (200mg)', quantityChanged: 0, actionType: 'CREATE', details: 'Initial creation', createdAt: '2026-09-01T12:10:00Z' },
+  { id: '4', itemGenericName: 'Ibuprofen (200mg)', quantityChanged: 0, actionType: 'DELETE', details: 'Deleted item', createdAt: '2026-09-01T12:15:00Z' },
+  { id: '5', itemGenericName: 'Ibuprofen (200mg)', quantityChanged: -20, actionType: 'DISPENSE', createdAt: '2026-09-01T12:20:00Z' },
+] as any);
+assertEquals(dispReportTest5.length, 1, 'Only DISPENSE is included; EDIT, AUDIT, CREATE, DELETE are excluded');
+assertEquals(dispReportTest5[0].actionType, 'DISPENSE', 'Included log is DISPENSE');
+assertEquals(dispReportTest5[0].effectiveQty, 20, 'Dispense effective quantity is 20');
+
+// Scenario 6.6: Multi-medication sequence with subsequent dispenses
+const dispReportTest6 = filterAndNetDispensaryLogs([
+  { id: '1', itemId: 'med-1', itemGenericName: 'Amoxicillin (500mg)', quantityChanged: -30, actionType: 'DISPENSE', createdAt: '2026-09-01T09:00:00Z' },
+  { id: '2', itemId: 'med-2', itemGenericName: 'Ciprofloxacin (500mg)', quantityChanged: -14, actionType: 'DISPENSE', createdAt: '2026-09-01T09:10:00Z' },
+  { id: '3', itemId: 'med-1', itemGenericName: 'Amoxicillin (500mg)', quantityChanged: 30, actionType: 'UNDISPENSE', createdAt: '2026-09-01T09:20:00Z' },
+  { id: '4', itemId: 'med-1', itemGenericName: 'Amoxicillin (500mg)', quantityChanged: -15, actionType: 'DISPENSE', createdAt: '2026-09-01T09:30:00Z' },
+  { id: '5', itemId: 'med-3', itemGenericName: 'Paracetamol (500mg)', quantityChanged: 100, actionType: 'RESTOCK', createdAt: '2026-09-01T09:40:00Z' },
+] as any);
+assertEquals(dispReportTest6.length, 3, 'Amoxicillin accidental 30-dispense removed; later 15-dispense, Cipro 14-dispense, and Paracetamol restock remain');
+assertEquals(dispReportTest6.map(r => `${r.itemGenericName}: ${r.actionType} ${r.effectiveQty}`), [
+  'Paracetamol (500mg): RESTOCK 100',
+  'Amoxicillin (500mg): DISPENSE 15',
+  'Ciprofloxacin (500mg): DISPENSE 14'
+], 'Exact matching and reverse-chronological ordering confirmed');
 
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests}/${totalTests} Passed (${failedTests} Failed)`);
