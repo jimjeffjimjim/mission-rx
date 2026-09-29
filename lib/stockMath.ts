@@ -431,31 +431,39 @@ export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryRe
   const outputLogs: DispensaryReportEntry[] = [];
 
   for (const log of chronologicalLogs) {
-    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE, DISCARD)
-    if (
-      log.actionType === 'AUDIT' ||
-      log.actionType === 'EDIT' ||
-      log.actionType === 'CREATE' ||
-      log.actionType === 'DELETE' ||
-      log.actionType === 'DISCARD'
-    ) {
+    const act = (log.actionType || '').toUpperCase();
+    const detailsLower = (log.details || '').toLowerCase();
+
+    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE, DISCARD, EXPIRED WASTE)
+    const isDiscard =
+      act.includes('DISCARD') ||
+      act.includes('EXPIRED') ||
+      detailsLower.includes('waste') ||
+      detailsLower.includes('discard') ||
+      detailsLower.includes('expired');
+
+    const isAdministrative =
+      act === 'AUDIT' ||
+      act === 'EDIT' ||
+      act === 'CREATE' ||
+      act === 'DELETE';
+
+    if (isDiscard || isAdministrative) {
       continue;
     }
 
-    const detailsLower = (log.details || '').toLowerCase();
-    if (detailsLower.includes('[waste') || detailsLower.includes('[discard') || detailsLower.includes('[expired')) {
-      continue;
-    }
     const isUndispense =
-      log.actionType === 'UNDISPENSE' ||
+      act === 'UNDISPENSE' ||
       (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
     const isRestock =
       !isUndispense &&
-      (log.actionType === 'RESTOCK' || detailsLower.includes('restocked'));
+      (act === 'RESTOCK' || detailsLower.includes('restocked'));
     const isDispense =
       !isUndispense &&
       !isRestock &&
-      (log.actionType === 'DISPENSE' || log.quantityChanged !== 0);
+      !isDiscard &&
+      !isAdministrative &&
+      (act === 'DISPENSE' || act === 'DISPENSE_BOTTLE' || (Number(log.quantityChanged) < 0));
 
     if (isRestock) {
       const qty = Math.abs(Number(log.quantityChanged) || 0);
@@ -595,6 +603,82 @@ export function filterDiscardLogs(rawLogs: DispenseLog[]): DiscardReportEntry[] 
     const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return timeB - timeA;
   });
+}
+
+export interface TopDispensedItem {
+  genericName: string;
+  totalDispensed: number;
+  category: string;
+}
+
+/**
+ * Aggregates net patient dispensing usage across logs:
+ * - Strictly counts DISPENSE and DISPENSE_BOTTLE records.
+ * - Accurately subtracts UNDISPENSE cancellations.
+ * - STRICTLY EXCLUDES discards, expired waste dumps, restocks, audits, edits, creations, deletions.
+ * - Returns items sorted descending by total units dispensed to patients.
+ */
+export function aggregateTopDispensed(logs: DispenseLog[] | any[]): TopDispensedItem[] {
+  if (!logs || !Array.isArray(logs) || logs.length === 0) {
+    return [];
+  }
+
+  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; category: string } } = {};
+
+  logs.forEach((log: any) => {
+    const name = log.itemGenericName || 'General Inventory Item';
+    if (!usageMap[name]) {
+      usageMap[name] = { dispensed: 0, undispensed: 0, category: log.category || 'General Medical' };
+    }
+
+    const qty = Math.abs(Number(log.quantityChanged) || 0);
+    const act = (log.actionType || '').toUpperCase();
+    const detailsLower = (log.details || '').toLowerCase();
+
+    // STRICT DISCARD CHECK: Discarded or expired medications are NEVER counted as patient dispenses!
+    const isDiscard =
+      act.includes('DISCARD') ||
+      act.includes('EXPIRED') ||
+      detailsLower.includes('waste') ||
+      detailsLower.includes('discard') ||
+      detailsLower.includes('expired');
+
+    const isAdministrative =
+      act === 'AUDIT' ||
+      act === 'EDIT' ||
+      act === 'CREATE' ||
+      act === 'DELETE';
+
+    if (isDiscard || isAdministrative) {
+      return;
+    }
+
+    const isUndispense =
+      act === 'UNDISPENSE' ||
+      (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+
+    const isRestock =
+      act === 'RESTOCK' ||
+      detailsLower.includes('restocked');
+
+    if (isUndispense) {
+      usageMap[name].undispensed += qty;
+    } else if (isRestock) {
+      // Restocking adds inventory but does not count as dispensing
+      return;
+    } else if (act === 'DISPENSE' || act === 'DISPENSE_BOTTLE' || (Number(log.quantityChanged) < 0 && !isDiscard && !isAdministrative)) {
+      usageMap[name].dispensed += qty;
+    }
+  });
+
+  return Object.keys(usageMap)
+    .map((name) => ({
+      genericName: name,
+      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
+      category: usageMap[name].category,
+    }))
+    .filter((item) => item.totalDispensed > 0)
+    .sort((a, b) => b.totalDispensed - a.totalDispensed);
 }
 
 export interface DiscardResult {

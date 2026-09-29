@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
-import { getStandardItemName, parseLotNumbers } from '@/lib/stockMath';
+import { getStandardItemName, parseLotNumbers, aggregateTopDispensed } from '@/lib/stockMath';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -91,11 +91,13 @@ export async function GET(request: Request) {
             const canonicalName = matched?.canonicalName || rawName;
 
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
-            const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
-            const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
-            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE'));
+            const actUpper = (l.action_type || '').toUpperCase();
+            const isDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD') || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
+            const isUndispense = !isDiscard && (actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked')));
+            const isRestock = !isDiscard && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
+            const resolvedActionType = isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE')));
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
 
             return {
               id: l.id,
@@ -149,11 +151,13 @@ export async function GET(request: Request) {
         const canonicalName = matched?.canonicalName || getStandardItemName(rawName, rawDosage);
 
         const detailsLower = (parsedMeta.details || log.details || '').toLowerCase();
-        const isUndispense = log.actionType === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
-        const isRestock = log.actionType === 'RESTOCK' || detailsLower.includes('restocked');
-        const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (log.actionType || 'DISPENSE'));
+        const actUpper = (log.actionType || '').toUpperCase();
+        const isDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD') || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
+        const isUndispense = !isDiscard && (actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked')));
+        const isRestock = !isDiscard && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
+        const resolvedActionType = isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (log.actionType || 'DISPENSE')));
         const rawQty = Number(log.quantityChanged) || 0;
-        const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+        const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
 
         return {
           id: log.id,
@@ -173,38 +177,9 @@ export async function GET(request: Request) {
       });
     }
 
-    // Aggregate Top Dispensed Items:
-    // Net Patient Usage = Math.max(0, sum(dispenses) - sum(undispenses))
-    // Note: RESTOCK adds inventory to stock, but does NOT undo patient dispensing history!
-    const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
-
-    formattedLogs.forEach((log: any) => {
-      const name = log.itemGenericName || 'General Inventory Item';
-      if (!usageMap[name]) {
-        usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
-      }
-      const qty = Math.abs(log.quantityChanged);
-      const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-      const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-      
-      if (isUndispense) {
-        usageMap[name].undispensed += qty;
-      } else if (isRestock) {
-        usageMap[name].restocked += qty;
-      } else if ((log.actionType === 'DISPENSE' || log.quantityChanged < 0) && log.actionType !== 'AUDIT' && log.actionType !== 'EDIT') {
-        usageMap[name].dispensed += qty;
-      }
-    });
-
-    const topDispensedItems = Object.keys(usageMap)
-      .map((name) => ({
-        genericName: name,
-        totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
-        category: usageMap[name].category,
-      }))
-      .filter((item) => item.totalDispensed > 0)
-      .sort((a, b) => b.totalDispensed - a.totalDispensed)
-      .slice(0, 10);
+    // Aggregate Top Dispensed Items using single source of truth:
+    // Strictly counts patient dispenses minus undispenses, completely excluding discards, waste, and restocks
+    const topDispensedItems = aggregateTopDispensed(formattedLogs).slice(0, 10);
 
     return NextResponse.json({
       logs: formattedLogs,

@@ -1,4 +1,4 @@
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs, applyStockDiscard, filterDiscardLogs } from '../lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs, applyStockDiscard, filterDiscardLogs, aggregateTopDispensed } from '../lib/stockMath';
 import { InventoryItem } from '../types/inventory';
 
 // Test Runner Framework
@@ -77,38 +77,6 @@ assertEquals(getStandardItemName('', ''), 'Medication Formulation', 'Handle empt
 // -------------------------------------------------------------
 console.log('\n📊 3. Analytics Net Dispense Calculations:');
 
-function aggregateTopDispensed(logs: any[]) {
-  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
-
-  logs.forEach((log: any) => {
-    const name = log.itemGenericName || 'General Inventory Item';
-    if (!usageMap[name]) {
-      usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
-    }
-    const qty = Math.abs(log.quantityChanged);
-    const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-    const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-
-    if (isUndispense) {
-      usageMap[name].undispensed += qty;
-    } else if (isRestock) {
-      usageMap[name].restocked += qty;
-      // RESTOCK adds to inventory but does NOT reduce dispensed records
-    } else if ((log.actionType === 'DISPENSE' || log.quantityChanged < 0) && log.actionType !== 'AUDIT' && log.actionType !== 'EDIT') {
-      usageMap[name].dispensed += qty;
-    }
-  });
-
-  return Object.keys(usageMap)
-    .map((name) => ({
-      genericName: name,
-      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
-      category: usageMap[name].category,
-    }))
-    .filter((item) => item.totalDispensed > 0)
-    .sort((a, b) => b.totalDispensed - a.totalDispensed);
-}
-
 // Scenario 3.1: Dispense 3 Clotrimazole creams, then Undispense 3 Clotrimazole creams (reverses dispense)
 const clotrimazoleLogs = [
   { itemGenericName: 'Clotrimazole Cream (1oz, cream)', quantityChanged: 3, actionType: 'DISPENSE', details: 'Dispensed 3 units' },
@@ -139,6 +107,17 @@ const expiredDumpLogs = [
 ];
 const expiredDumpResult = aggregateTopDispensed(expiredDumpLogs);
 assertEquals(expiredDumpResult.length, 0, 'Dumping expired pills (actionType AUDIT with 0 quantity) does NOT count as dispensed');
+
+// Scenario 3.1e: Real Discarded Stock with negative quantityChanged MUST NOT count as dispensed
+const userReportedDiscardLogs = [
+  { itemGenericName: 'Quetiapine Fumarate (300 mg Tablet)', quantityChanged: -2400, actionType: 'DISCARD', details: '[EXPIRED / WASTE]: Discarded 24 bottle(s) (-2400 tablets) of Lot E244744.' },
+  { itemGenericName: 'Pitavastatin Calcium (1 mg Oral Tablet)', quantityChanged: -2160, actionType: 'DISCARD', details: '[EXPIRED / WASTE]: Discarded 24 bottle(s) (-2160 tablets).' },
+  { itemGenericName: 'Lurasidone HCl (20 mg Oral Tablet)', quantityChanged: -720, actionType: 'DISCARD', details: '[EXPIRED / WASTE]: Discarded 24 bottle(s) (-720 tablets) of Lot A241211.' },
+  { itemGenericName: 'Ibuprofen (200 mg Tablet)', quantityChanged: -100, actionType: 'DISCARD', details: '[EXPIRED / WASTE]: Discarded 1 bottle(s) (-100 tablets) of Lot 4ME2261.' },
+  { itemGenericName: 'Clobetasol Propionate (0.05% Cream)', quantityChanged: -19, actionType: 'DISCARD', details: '[EXPIRED / WASTE]: Discarded 19 tube(s) (-19 tubes) of Lot 153224031A.' },
+];
+const userDiscardResult = aggregateTopDispensed(userReportedDiscardLogs);
+assertEquals(userDiscardResult.length, 0, 'Real discarded/waste medications (-2400, -2160, -720, -100, -19) NEVER count as dispensed');
 
 // Scenario 3.2: Dispense 5, Undispense 2 -> Net 3
 const partialUndispenseLogs = [

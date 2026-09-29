@@ -3,7 +3,7 @@
  * Simulates extreme edge cases, invalid user inputs, multi-lot tracking, and timezone boundaries.
  */
 
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers } from '../lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, aggregateTopDispensed } from '../lib/stockMath';
 import { LotEntry } from '../types/inventory';
 import { parseGs1Barcode, normalizeNdc, lookupSupplyByRefOrGtin, parseLabelText } from '../lib/ndcLookup';
 
@@ -181,38 +181,6 @@ assert(shiftLogTime >= chicagoShiftStart, 'Evening shift transaction is included
 // 7. Order-Independent Top Dispensed Aggregation
 // -----------------------------------------------------------------
 console.log('\n📊 7. Order-Independent Top Dispensed Aggregation');
-
-function aggregateTopDispensed(logs: any[]) {
-  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; restocked: number; category: string } } = {};
-
-  logs.forEach((log: any) => {
-    const name = log.itemGenericName || 'General Inventory Item';
-    if (!usageMap[name]) {
-      usageMap[name] = { dispensed: 0, undispensed: 0, restocked: 0, category: log.category || 'General Medical' };
-    }
-    const qty = Math.abs(log.quantityChanged);
-    const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-    const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-
-    if (isUndispense) {
-      usageMap[name].undispensed += qty;
-    } else if (isRestock) {
-      usageMap[name].restocked += qty;
-      // RESTOCK does not deduct from dispensed count
-    } else if (log.actionType === 'DISPENSE' || log.quantityChanged < 0) {
-      usageMap[name].dispensed += qty;
-    }
-  });
-
-  return Object.keys(usageMap)
-    .map((name) => ({
-      genericName: name,
-      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
-      category: usageMap[name].category,
-    }))
-    .filter((item) => item.totalDispensed > 0)
-    .sort((a, b) => b.totalDispensed - a.totalDispensed);
-}
 
 // Chaotic log stream with scrambled timestamps and reverse actions
 const chaoticLogs = [
