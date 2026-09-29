@@ -431,17 +431,21 @@ export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryRe
   const outputLogs: DispensaryReportEntry[] = [];
 
   for (const log of chronologicalLogs) {
-    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE)
+    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE, DISCARD)
     if (
       log.actionType === 'AUDIT' ||
       log.actionType === 'EDIT' ||
       log.actionType === 'CREATE' ||
-      log.actionType === 'DELETE'
+      log.actionType === 'DELETE' ||
+      log.actionType === 'DISCARD'
     ) {
       continue;
     }
 
     const detailsLower = (log.details || '').toLowerCase();
+    if (detailsLower.includes('[waste') || detailsLower.includes('[discard') || detailsLower.includes('[expired')) {
+      continue;
+    }
     const isUndispense =
       log.actionType === 'UNDISPENSE' ||
       (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
@@ -516,6 +520,214 @@ export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryRe
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return timeB - timeA;
     });
+}
+
+export interface DiscardReportEntry extends DispenseLog {
+  effectivePillsDiscarded: number;
+  effectiveBottlesDiscarded: number;
+  discardLotNumber?: string;
+  discardExpirationDate?: string;
+}
+
+/**
+ * Extracts and normalizes all medication and supply discard / expired waste records.
+ * Returns records sorted reverse-chronologically (newest first).
+ */
+export function filterDiscardLogs(rawLogs: DispenseLog[]): DiscardReportEntry[] {
+  if (!rawLogs || !Array.isArray(rawLogs) || rawLogs.length === 0) {
+    return [];
+  }
+
+  const output: DiscardReportEntry[] = [];
+
+  for (const log of rawLogs) {
+    const detailsLower = (log.details || '').toLowerCase();
+    const isExplicitDiscard = log.actionType === 'DISCARD';
+    const isWasteOrExpired =
+      detailsLower.includes('waste') ||
+      detailsLower.includes('discard') ||
+      detailsLower.includes('expired');
+
+    if (!isExplicitDiscard && !isWasteOrExpired) {
+      continue;
+    }
+
+    // Skip normal dispenses or restocks that might coincidentally mention words
+    if (log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE') {
+      continue;
+    }
+
+    const rawQty = Math.abs(Number(log.quantityChanged) || 0);
+    let bottles = log.dispensedBottles || 0;
+    let pills = rawQty;
+
+    // If quantity was logged as 0 in older logs, extract from details string
+    if (pills === 0 && log.details) {
+      const match = log.details.match(/discarded\s*\(([0-9,]+)\s*(?:tablets|pills|units|tubes|pieces)/i);
+      if (match) {
+        pills = parseInt(match[1].replace(/,/g, ''), 10) || 0;
+      }
+      const bMatch = log.details.match(/([0-9,]+)\s*(?:bottles|tubes|boxes|packs)/i);
+      if (bMatch) {
+        bottles = parseInt(bMatch[1].replace(/,/g, ''), 10) || bottles;
+      }
+    }
+
+    // Extract lot from log or details
+    const lots = parseLotNumbers(log.lotNumbers);
+    let lotStr = lots.length > 0 ? lots[0] : '';
+    if (!lotStr && log.details) {
+      const lMatch = log.details.match(/lot\s*([a-z0-9_-]+)/i);
+      if (lMatch) lotStr = lMatch[1];
+    }
+
+    output.push({
+      ...log,
+      actionType: 'DISCARD',
+      effectivePillsDiscarded: pills,
+      effectiveBottlesDiscarded: bottles,
+      discardLotNumber: lotStr || undefined,
+    });
+  }
+
+  return output.sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeB - timeA;
+  });
+}
+
+export interface DiscardResult {
+  updatedItem: InventoryItem;
+  totalPillsDiscarded: number;
+  bottlesDiscarded: number;
+  looseDiscarded: number;
+  discardedLotNumber?: string;
+  discardedLotExpiration?: string;
+  isFullyEmptied: boolean;
+}
+
+/**
+ * Executes a partial or full stock discard on an inventory item:
+ * - If discardAll is true, zeroes out bottles, loose units, lots, and expiration.
+ * - If lotNumber is specified, deducts only that lot's bottles and units, removes/updates the lot,
+ *   and updates the expiration date to the earliest remaining active lot.
+ */
+export function applyStockDiscard(
+  item: InventoryItem,
+  options: {
+    lotNumber?: string;
+    bottlesToDiscard?: number;
+    looseUnitsToDiscard?: number;
+    discardAll?: boolean;
+  }
+): DiscardResult {
+  const pSize = Math.max(1, item.pillsPerBottle || 1);
+  const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, pSize, item.looseUnitsAvailable || 0);
+
+  if (options.discardAll || currentTotal === 0) {
+    const totalPills = currentTotal;
+    const btls = item.bottlesAvailable || 0;
+    const loose = item.looseUnitsAvailable || 0;
+    const lots = parseLotNumbers(item.lotNumbers);
+
+    return {
+      updatedItem: {
+        ...item,
+        bottlesAvailable: 0,
+        looseUnitsAvailable: 0,
+        initialBottlesAvailable: 0,
+        initialLooseUnitsAvailable: 0,
+        lotNumbers: [],
+        expirationDate: '',
+      },
+      totalPillsDiscarded: totalPills,
+      bottlesDiscarded: btls,
+      looseDiscarded: loose,
+      discardedLotNumber: lots.length > 0 ? lots.join(', ') : undefined,
+      discardedLotExpiration: item.expirationDate || undefined,
+      isFullyEmptied: true,
+    };
+  }
+
+  // Lot-specific or partial discard
+  const currentLots = extractStructuredLots(item);
+  let bToDeduct = Math.max(0, options.bottlesToDiscard || 0);
+  let lToDeduct = Math.max(0, options.looseUnitsToDiscard || 0);
+  const targetLotNum = (options.lotNumber || '').trim();
+
+  // If lotNumber is specified, find that lot
+  let discardedLotExp: string | undefined = undefined;
+  if (targetLotNum) {
+    const matchingLot = currentLots.find(
+      (l) => l.lotNumber.toLowerCase().trim() === targetLotNum.toLowerCase()
+    );
+    if (matchingLot) {
+      discardedLotExp = matchingLot.expirationDate;
+      // If bottlesToDiscard was not specified, default to discarding this entire lot's stock
+      if (bToDeduct === 0 && lToDeduct === 0) {
+        bToDeduct = matchingLot.bottles || 0;
+        lToDeduct = matchingLot.looseUnits || 0;
+      }
+    }
+  }
+
+  const pillsToDiscard = calculateTotalUnits(bToDeduct, pSize, lToDeduct);
+  const newTotalUnits = Math.max(0, currentTotal - pillsToDiscard);
+  const { bottles: newBottles, loose: newLoose } = convertTotalUnitsToStock(newTotalUnits, pSize);
+
+  // Update structured lots
+  const updatedLots: LotEntry[] = [];
+  let remainingBottles = bToDeduct;
+  let remainingLoose = lToDeduct;
+
+  currentLots.forEach((lot) => {
+    const isTarget = targetLotNum
+      ? lot.lotNumber.toLowerCase().trim() === targetLotNum.toLowerCase()
+      : true;
+
+    if (isTarget && (remainingBottles > 0 || remainingLoose > 0)) {
+      const bSub = Math.min(lot.bottles || 0, remainingBottles);
+      const lSub = Math.min(lot.looseUnits || 0, remainingLoose);
+      const remB = Math.max(0, (lot.bottles || 0) - bSub);
+      const remL = Math.max(0, (lot.looseUnits || 0) - lSub);
+      remainingBottles -= bSub;
+      remainingLoose -= lSub;
+
+      if (remB > 0 || remL > 0) {
+        updatedLots.push({ ...lot, bottles: remB, looseUnits: remL });
+      }
+      // If the lot reached 0 stock, do NOT push it (it is removed)
+    } else {
+      updatedLots.push(lot);
+    }
+  });
+
+  // Calculate new earliest expiration date from the remaining lots
+  let newExp = '';
+  if (newTotalUnits > 0) {
+    if (updatedLots.length > 0) {
+      newExp = getEarliestActiveExpiration(updatedLots, item.expirationDate);
+    } else {
+      newExp = item.expirationDate;
+    }
+  }
+
+  return {
+    updatedItem: {
+      ...item,
+      bottlesAvailable: newBottles,
+      looseUnitsAvailable: newLoose,
+      expirationDate: newExp,
+      lotNumbers: updatedLots.length > 0 ? updatedLots : (newTotalUnits === 0 ? [] : item.lotNumbers),
+    },
+    totalPillsDiscarded: pillsToDiscard,
+    bottlesDiscarded: bToDeduct,
+    looseDiscarded: lToDeduct,
+    discardedLotNumber: targetLotNum || undefined,
+    discardedLotExpiration: discardedLotExp,
+    isFullyEmptied: newTotalUnits === 0,
+  };
 }
 
 

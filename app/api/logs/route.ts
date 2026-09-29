@@ -54,9 +54,10 @@ export async function GET() {
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
             const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
             const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
-            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE'));
+            const isDiscard = l.action_type === 'DISCARD' || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
+            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (isDiscard ? 'DISCARD' : (l.action_type || 'DISPENSE')));
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
 
             return {
               id: l.id,

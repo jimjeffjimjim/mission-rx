@@ -1,4 +1,5 @@
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs } from '../lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs, applyStockDiscard, filterDiscardLogs } from '../lib/stockMath';
+import { InventoryItem } from '../types/inventory';
 
 // Test Runner Framework
 let totalTests = 0;
@@ -294,6 +295,112 @@ assertEquals(dispReportTest6.map(r => `${r.itemGenericName}: ${r.actionType} ${r
   'Amoxicillin (500mg): DISPENSE 15',
   'Ciprofloxacin (500mg): DISPENSE 14'
 ], 'Exact matching and reverse-chronological ordering confirmed');
+
+// -------------------------------------------------------------
+// 7. Stock Discard & Multi-Lot Expiration Tracking
+// -------------------------------------------------------------
+console.log('\n🗑️ 7. Stock Discard & Lot-Specific Expiration Tests:');
+
+// Scenario 7.1: Multi-lot Drug (Advil) with 2 lots:
+// Lot 4ME2261 (1 bottle, 100 pills, expired 2026-08-01)
+// Lot 5AE2669 (5 bottles, 500 pills, valid until 2026-10-31)
+const multiLotItem: InventoryItem = {
+  id: 'advil-123',
+  genericName: 'Ibuprofen',
+  brandName: 'Advil',
+  dosage: '200 mg Tablet',
+  itemType: 'MEDICATION',
+  shelfLocation: 'General Medical',
+  bottlesAvailable: 6,
+  looseUnitsAvailable: 0,
+  pillsPerBottle: 100,
+  expirationDate: '2026-08-01',
+  lotNumbers: [
+    { lotNumber: '4ME2261', expirationDate: '2026-08-01', bottles: 1, looseUnits: 0 },
+    { lotNumber: '5AE2669', expirationDate: '2026-10-31', bottles: 5, looseUnits: 0 }
+  ] as any,
+};
+
+const discardOneLotResult = applyStockDiscard(multiLotItem, {
+  lotNumber: '4ME2261',
+  bottlesToDiscard: 1,
+});
+
+assertEquals(discardOneLotResult.totalPillsDiscarded, 100, 'Discarding lot 4ME2261 discards exactly 100 pills');
+assertEquals(discardOneLotResult.bottlesDiscarded, 1, 'Discarding lot 4ME2261 discards exactly 1 bottle');
+assertEquals(discardOneLotResult.updatedItem.bottlesAvailable, 5, 'Remaining bottles is 5 (lot 5AE2669 preserved)');
+assertEquals(discardOneLotResult.updatedItem.expirationDate, '2026-10-31', 'Expiration date rolled forward to earliest active remaining lot (2026-10-31)');
+assertEquals(discardOneLotResult.isFullyEmptied, false, 'Item is not fully emptied');
+
+// Scenario 7.2: Discard ALL stock (total waste)
+const discardAllResult = applyStockDiscard(multiLotItem, {
+  discardAll: true,
+});
+assertEquals(discardAllResult.totalPillsDiscarded, 600, 'Discard all discards all 600 pills');
+assertEquals(discardAllResult.updatedItem.bottlesAvailable, 0, 'Bottles zeroed out');
+assertEquals(discardAllResult.updatedItem.looseUnitsAvailable, 0, 'Loose units zeroed out');
+assertEquals(discardAllResult.updatedItem.expirationDate, '', 'Expiration date cleared');
+assertEquals(discardAllResult.updatedItem.lotNumbers, [], 'Lot numbers array emptied');
+assertEquals(discardAllResult.isFullyEmptied, true, 'isFullyEmptied flag is true');
+assertEquals(discardAllResult.updatedItem.genericName, 'Ibuprofen', 'Formulary card identity is preserved at 0 stock');
+
+// -------------------------------------------------------------
+// 8. Waste & Discard Reporting Normalization
+// -------------------------------------------------------------
+console.log('\n📋 8. Waste & Discard Log Normalization Tests:');
+
+const rawDiscardTestLogs = [
+  // 1. Pitavastatin discard
+  {
+    id: 'log-1',
+    itemGenericName: 'Pitavastatin Calcium (2 mg Tablet)',
+    actionType: 'DISCARD',
+    quantityChanged: -2160,
+    dispensedBottles: 24,
+    lotNumbers: ['22B0567'],
+    createdAt: '2026-09-29T15:00:00Z',
+    details: '[EXPIRED / WASTE]: Discarded 24 bottles of Lot 22B0567'
+  },
+  // 2. Normal Patient Dispense (MUST BE EXCLUDED)
+  {
+    id: 'log-2',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -30,
+    createdAt: '2026-09-29T15:10:00Z',
+    details: 'Dispensed 30 units to patient'
+  },
+  // 3. Normal Restock (MUST BE EXCLUDED)
+  {
+    id: 'log-3',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'RESTOCK',
+    quantityChanged: 100,
+    createdAt: '2026-09-29T15:20:00Z',
+    details: 'Restocked 100 units'
+  },
+  // 4. Advil 1 bottle discard
+  {
+    id: 'log-4',
+    itemGenericName: 'Advil (200 mg Tablet)',
+    actionType: 'DISCARD',
+    quantityChanged: -100,
+    dispensedBottles: 1,
+    lotNumbers: ['4ME2261'],
+    createdAt: '2026-09-29T15:30:00Z',
+    details: '[EXPIRED / WASTE]: Discarded 1 bottle of Lot 4ME2261'
+  }
+];
+
+const normalizedDiscards = filterDiscardLogs(rawDiscardTestLogs as any);
+assertEquals(normalizedDiscards.length, 2, 'Only 2 discard records extracted (patient dispense and restock strictly excluded)');
+assertEquals(normalizedDiscards[0].itemGenericName, 'Advil (200 mg Tablet)', 'Newest discard appears first');
+assertEquals(normalizedDiscards[0].effectivePillsDiscarded, 100, 'Advil effective pills discarded is 100');
+assertEquals(normalizedDiscards[0].effectiveBottlesDiscarded, 1, 'Advil effective bottles discarded is 1');
+assertEquals(normalizedDiscards[0].discardLotNumber, '4ME2261', 'Advil discarded lot number extracted');
+assertEquals(normalizedDiscards[1].itemGenericName, 'Pitavastatin Calcium (2 mg Tablet)', 'Pitavastatin appears second');
+assertEquals(normalizedDiscards[1].effectivePillsDiscarded, 2160, 'Pitavastatin effective pills discarded is 2160');
+assertEquals(normalizedDiscards[1].effectiveBottlesDiscarded, 24, 'Pitavastatin effective bottles discarded is 24');
 
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests}/${totalTests} Passed (${failedTests} Failed)`);

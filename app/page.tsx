@@ -13,11 +13,12 @@ import PhysicalAuditModal from '@/components/PhysicalAuditModal';
 import DeveloperQrModal from '@/components/DeveloperQrModal';
 import AdminPortal from '@/components/AdminPortal';
 import AuditLogModal from '@/components/AuditLogModal';
+import DiscardStockModal from '@/components/DiscardStockModal';
 import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations, applyStockDiscard, DiscardResult } from '@/lib/stockMath';
 import { searchSemanticFormulary, matchesClinicalQuery, searchReferenceCatalog } from '@/lib/smartSearch';
 
 const LOCAL_CACHE_KEY = 'mission_rx_inventory_cache';
@@ -38,6 +39,8 @@ export default function Home() {
   const [isPhysicalAuditOpen, setIsPhysicalAuditOpen] = useState(false);
   const [isDeveloperQrOpen, setIsDeveloperQrOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+  const [discardItem, setDiscardItem] = useState<InventoryItem | null>(null);
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
   const [activeItem, setActiveItem] = useState<InventoryItem | null>(null);
 
@@ -294,7 +297,7 @@ export default function Home() {
     itemId: string;
     itemGenericName: string;
     quantityChanged: number;
-    actionType: 'DISPENSE' | 'RESTOCK' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
+    actionType: 'DISPENSE' | 'UNDISPENSE' | 'RESTOCK' | 'DISCARD' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
     details: string;
     dispensedUnit?: 'bottle' | 'unit';
     dispensedBottles?: number;
@@ -709,88 +712,126 @@ export default function Home() {
     }
   };
 
-  const handleDeleteItem = async (id: string) => {
-    // If in Testing Sandbox mode, clear stock and lots in-memory without database calls
+  const handleDiscardStock = async ({
+    itemId,
+    lotNumber,
+    bottlesToDiscard = 0,
+    looseUnitsToDiscard = 0,
+    discardAll = false,
+    reason,
+  }: {
+    itemId: string;
+    lotNumber?: string;
+    bottlesToDiscard?: number;
+    looseUnitsToDiscard?: number;
+    discardAll?: boolean;
+    reason?: string;
+  }) => {
+    const target = (isTestingMode ? itemsRef.current : items).find((i) => i.id === itemId);
+    if (!target) return;
+
+    const canonicalName = getStandardItemName(target.genericName, target.dosage);
+    const pSize = Math.max(1, target.pillsPerBottle || 1);
+
+    const result: DiscardResult = applyStockDiscard(target, {
+      lotNumber,
+      bottlesToDiscard,
+      looseUnitsToDiscard,
+      discardAll,
+    });
+
+    const discardedTotal = result.totalPillsDiscarded;
+    const detailMsg = reason || (result.isFullyEmptied
+      ? `[EXPIRED / WASTE]: All remaining stock discarded (${discardedTotal} ${target.subUnit || 'units'}, ${target.bottlesAvailable} ${target.stockUnit || 'bottles'}). Cleared lot numbers and expiration date. Formulary card retained in inventory showing 0 stock.`
+      : `[EXPIRED / WASTE]: Discarded ${result.bottlesDiscarded > 0 ? `${result.bottlesDiscarded} ${target.stockUnit || 'bottle'}(s) (${discardedTotal} ${target.subUnit || 'units'})` : `${discardedTotal} ${target.subUnit || 'units'}`}${result.discardedLotNumber ? ` of Lot ${result.discardedLotNumber}` : ''}. Remaining stock: ${result.updatedItem.bottlesAvailable} ${target.stockUnit || 'bottles'}, ${result.updatedItem.looseUnitsAvailable} loose.`);
+
     if (isTestingMode) {
       if (baselineItemsRef.current.length === 0 && itemsRef.current.length > 0) {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
-      const target = itemsRef.current.find((i) => i.id === id);
-      const canonicalName = getStandardItemName(target?.genericName, target?.dosage);
       setTestAuditLogs((prev) => [
         {
-          id: 'test-del-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-          itemId: id,
+          id: 'test-discard-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+          itemId,
           itemGenericName: canonicalName,
-          quantityChanged: 0,
-          actionType: 'AUDIT',
+          quantityChanged: -discardedTotal,
+          actionType: 'DISCARD',
           userRole: `${actorTag} (TEST)`,
-          details: `[TESTING MODE - NOT REAL]: Discarded all stock for ${canonicalName} (card retained at 0 stock, lots and expiration cleared)`,
+          details: `[TESTING MODE - NOT REAL]: ${detailMsg}`,
           isTestMode: true,
           createdAt: new Date().toISOString(),
+          dispensedUnit: result.bottlesDiscarded > 0 ? 'bottle' : 'unit',
+          dispensedBottles: result.bottlesDiscarded,
+          dispensedPillsPerBottle: pSize,
+          lotNumbers: result.discardedLotNumber ? [result.discardedLotNumber] : parseLotNumbers(target.lotNumbers),
         },
         ...prev,
       ]);
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === id
-            ? {
-                ...i,
-                bottlesAvailable: 0,
-                looseUnitsAvailable: 0,
-                initialBottlesAvailable: 0,
-                initialLooseUnitsAvailable: 0,
-                lotNumbers: [],
-                expirationDate: '',
-              }
-            : i
-        )
-      );
+      setItems((prev) => prev.map((i) => (i.id === itemId ? result.updatedItem : i)));
+      itemsRef.current = itemsRef.current.map((i) => (i.id === itemId ? result.updatedItem : i));
+      saveLocalCache(itemsRef.current);
       return;
     }
 
-    const target = items.find((i) => i.id === id);
-    if (!target) return;
-
-    const canonicalName = getStandardItemName(target.genericName, target.dosage);
-    const prevTotal = calculateTotalUnits(target.bottlesAvailable, target.pillsPerBottle, target.looseUnitsAvailable);
-
-    // Keep the card showing 0 of everything, clear lots and expiration
-    const clearedItem: InventoryItem = {
-      ...target,
-      bottlesAvailable: 0,
-      looseUnitsAvailable: 0,
-      initialBottlesAvailable: 0,
-      initialLooseUnitsAvailable: 0,
-      lotNumbers: [],
-      expirationDate: '',
-    };
-
     setItems((prev) => {
-      const updated = prev.map((i) => (i.id === id ? clearedItem : i));
+      const updated = prev.map((i) => (i.id === itemId ? result.updatedItem : i));
       saveLocalCache(updated);
       return updated;
     });
 
     recordAuditLog({
-      itemId: id,
+      itemId,
       itemGenericName: canonicalName,
-      quantityChanged: 0,
-      actionType: 'AUDIT',
-      details: `[WASTE / DISCARD]: All remaining stock discarded (${prevTotal} ${target.subUnit || 'units'}, ${target.bottlesAvailable} ${target.stockUnit || 'bottles'}). Cleared lot numbers and expiration date. Formulary card retained in inventory showing 0 stock.`,
+      quantityChanged: -discardedTotal,
+      actionType: 'DISCARD',
+      details: detailMsg,
+      lotNumbers: result.discardedLotNumber ? [result.discardedLotNumber] : parseLotNumbers(target.lotNumbers),
+      dispensedUnit: result.bottlesDiscarded > 0 ? 'bottle' : 'unit',
+      dispensedBottles: result.bottlesDiscarded,
+      dispensedPillsPerBottle: pSize,
     });
 
     try {
-      await fetch(`/api/inventory/${id}`, {
+      await fetch(`/api/inventory/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...clearedItem,
+          ...result.updatedItem,
           isFullEdit: true,
         }),
       });
     } catch (e) {
-      console.error('Error updating item to 0 stock', e);
+      console.error('Error updating item after discard', e);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    const target = (isTestingMode ? itemsRef.current : items).find((i) => i.id === id);
+    if (!target) return;
+
+    const canonicalName = getStandardItemName(target.genericName, target.dosage);
+    const updated = itemsRef.current.filter((i) => i.id !== id);
+    itemsRef.current = updated;
+    setItems([...updated]);
+    saveLocalCache(updated);
+
+    recordAuditLog({
+      itemId: id,
+      itemGenericName: canonicalName,
+      quantityChanged: 0,
+      actionType: 'DELETE',
+      details: `Permanently removed formulation ${canonicalName} from clinic inventory.`,
+      lotNumbers: parseLotNumbers(target.lotNumbers),
+    });
+
+    if (!isTestingMode) {
+      try {
+        await fetch(`/api/inventory/${id}?permanent=true`, {
+          method: 'DELETE',
+        });
+      } catch (e) {
+        console.error('Failed to permanently delete item', e);
+      }
     }
   };
 
@@ -987,6 +1028,11 @@ export default function Home() {
           onAdjustStock={handleAdjustStock}
           onEditItem={openEditModal}
           onDeleteItem={handleDeleteItem}
+          onDiscardStock={handleDiscardStock}
+          onOpenDiscardModal={(item) => {
+            setDiscardItem(item);
+            setIsDiscardModalOpen(true);
+          }}
           onOpenCreateModal={openCreateModal}
           onOpenCreateEquipmentModal={openCreateEquipmentModal}
           onEditEquipmentItem={openEditEquipmentModal}
@@ -1127,7 +1173,23 @@ export default function Home() {
         item={activeItem}
         onSave={handleSaveItem}
         onDelete={handleDeleteItem}
+        onDiscardStock={handleDiscardStock}
+        onOpenDiscardModal={(item) => {
+          setDiscardItem(item);
+          setIsDiscardModalOpen(true);
+        }}
         isAutofillEnabled={isAutofillEnabled}
+      />
+
+      {/* Expired Stock Disposal Modal */}
+      <DiscardStockModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => {
+          setIsDiscardModalOpen(false);
+          setDiscardItem(null);
+        }}
+        item={discardItem}
+        onDiscard={handleDiscardStock}
       />
 
       {/* Medical Equipment & Supplies Create & Edit Modal Sheet */}

@@ -58,10 +58,28 @@ interface ItemEditModalProps {
   item: InventoryItem | null;
   onSave: (itemData: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
+  onDiscardStock?: (params: {
+    itemId: string;
+    lotNumber?: string;
+    bottlesToDiscard?: number;
+    looseUnitsToDiscard?: number;
+    discardAll?: boolean;
+    reason?: string;
+  }) => Promise<void> | void;
+  onOpenDiscardModal?: (item: InventoryItem) => void;
   isAutofillEnabled?: boolean;
 }
 
-export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete, isAutofillEnabled = true }: ItemEditModalProps) {
+export default function ItemEditModal({
+  isOpen,
+  onClose,
+  item,
+  onSave,
+  onDelete,
+  onDiscardStock,
+  onOpenDiscardModal,
+  isAutofillEnabled = true
+}: ItemEditModalProps) {
   const [formData, setFormData] = useState<Partial<InventoryItem>>({
     genericName: '',
     brandName: '',
@@ -1185,20 +1203,40 @@ export default function ItemEditModal({ isOpen, onClose, item, onSave, onDelete,
           {/* Action Footer Buttons */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
             {item?.id ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm(`Throw away all stock for ${formData.genericName}? This will clear lot numbers, expiration date, and set pills/units to 0 while keeping the card in inventory.`)) {
-                    onDelete(item.id!);
-                    onClose();
-                  }
-                }}
-                className="min-h-[48px] px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs sm:text-sm rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                title="Discard stock: clears lots, expiration date, and sets pills to 0 while keeping the medication card"
-              >
-                <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Discard Stock (0)</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenDiscardModal && item) {
+                      onOpenDiscardModal(item);
+                      onClose();
+                    } else if (onDiscardStock) {
+                      onDiscardStock({ itemId: item.id!, discardAll: true });
+                      onClose();
+                    }
+                  }}
+                  className="min-h-[48px] px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-extrabold text-xs sm:text-sm rounded-2xl border border-amber-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                  title="Dump / Expire Stock: Dumps expired bottles or all stock to 0 while keeping medication card in formulary"
+                >
+                  <PackageX className="w-4 h-4 stroke-[2.5] text-amber-700" />
+                  <span>Expire / Dump Stock</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Permanently delete "${formData.genericName}" from clinic inventory?\n\nThis will remove the entire medication card from the catalog.`)) {
+                      onDelete(item.id!);
+                      onClose();
+                    }
+                  }}
+                  className="min-h-[48px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs sm:text-sm rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                  title="Permanently delete this medication card from formulary"
+                >
+                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>Delete Card</span>
+                </button>
+              </div>
             ) : (
               <div />
             )}

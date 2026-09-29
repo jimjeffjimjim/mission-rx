@@ -37,7 +37,7 @@ export interface DispenseLog {
   itemId?: string;
   itemGenericName?: string;
   quantityChanged: number;
-  actionType: 'DISPENSE' | 'RESTOCK' | 'UNDISPENSE' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT';
+  actionType: 'DISPENSE' | 'RESTOCK' | 'UNDISPENSE' | 'EDIT' | 'CREATE' | 'DELETE' | 'AUDIT' | 'DISCARD';
   userRole?: string;
   details?: string;
   isTestMode?: boolean;

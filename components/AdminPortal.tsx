@@ -47,7 +47,7 @@ import {
   PackageX
 } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers, filterAndNetDispensaryLogs, DispensaryReportEntry } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers, filterAndNetDispensaryLogs, filterDiscardLogs, DispensaryReportEntry, DiscardReportEntry } from '@/lib/stockMath';
 import { searchSemanticFormulary, matchesClinicalQuery } from '@/lib/smartSearch';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
@@ -58,6 +58,15 @@ interface AdminPortalProps {
   onAdjustStock?: (id: string, bottleDelta: number, looseDelta: number) => void;
   onEditItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
+  onDiscardStock?: (params: {
+    itemId: string;
+    lotNumber?: string;
+    bottlesToDiscard?: number;
+    looseUnitsToDiscard?: number;
+    discardAll?: boolean;
+    reason?: string;
+  }) => Promise<void> | void;
+  onOpenDiscardModal?: (item: InventoryItem) => void;
   onOpenCreateModal: (defaultItem?: Partial<InventoryItem>) => void;
   onOpenCreateEquipmentModal?: () => void;
   onEditEquipmentItem?: (item: InventoryItem) => void;
@@ -76,6 +85,8 @@ export default function AdminPortal({
   onAdjustStock,
   onEditItem,
   onDeleteItem,
+  onDiscardStock,
+  onOpenDiscardModal,
   onOpenCreateModal,
   onOpenCreateEquipmentModal,
   onEditEquipmentItem,
@@ -312,6 +323,22 @@ export default function AdminPortal({
   const dispensaryReportLogs = useMemo(() => {
     return filterAndNetDispensaryLogs(analyticsLogs);
   }, [analyticsLogs]);
+
+  const [reportSubTab, setReportSubTab] = useState<'DISPENSARY' | 'DISCARD'>('DISPENSARY');
+
+  // Filtered and normalized records for Expired & Waste Disposal Log:
+  // Shows all DISCARD transactions and expired waste dump logs, with lot number and count
+  const discardReportLogs = useMemo(() => {
+    return filterDiscardLogs(analyticsLogs);
+  }, [analyticsLogs]);
+
+  const totalPillsDiscarded = useMemo(() => {
+    return discardReportLogs.reduce((acc, log) => acc + (log.effectivePillsDiscarded || 0), 0);
+  }, [discardReportLogs]);
+
+  const totalBottlesDiscarded = useMemo(() => {
+    return discardReportLogs.reduce((acc, log) => acc + (log.effectiveBottlesDiscarded || 0), 0);
+  }, [discardReportLogs]);
 
   const [editingDispenseItem, setEditingDispenseItem] = useState<{ genericName: string; totalDispensed: number; category: string } | null>(null);
   const [newDispenseAmt, setNewDispenseAmt] = useState<number | string>('');
@@ -590,6 +617,10 @@ export default function AdminPortal({
   };
 
   const handleDumpExpired = (item: InventoryItem) => {
+    if (onOpenDiscardModal) {
+      onOpenDiscardModal(item);
+      return;
+    }
     const currentTotal = calculateTotalUnits(item.bottlesAvailable || 0, item.pillsPerBottle || 0, item.looseUnitsAvailable || 0);
     const confirmed = window.confirm(
       `Throw away expired stock for ${item.genericName}?\n\n` +
@@ -1520,12 +1551,12 @@ export default function AdminPortal({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                      if (confirm(`Throw away all stock for ${item.genericName}? This will clear lot numbers, expiration date, and set pills to 0 while keeping the card in inventory.`)) {
+                                      if (confirm(`Permanently delete "${item.genericName}" from the formulary catalog?\n\nThis will remove the entire medication card from inventory.`)) {
                                         onDeleteItem(item.id);
                                       }
                                     }}
                                     className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs transition-colors active:scale-95 cursor-pointer"
-                                    title="Discard stock: clears lots, expiration & sets pills to 0 while keeping card"
+                                    title="Permanently delete medication card from formulary"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -1893,16 +1924,26 @@ export default function AdminPortal({
                                   <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
                                 </button>
 
+                                {/* Dump / Expire Stock */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDumpExpired(item)}
+                                  className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors cursor-pointer"
+                                  title="Dump / Expire Stock (clears units to 0 while keeping card)"
+                                >
+                                  <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                                </button>
+
                                 {/* Delete Item */}
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (confirm(`Throw away all stock for "${item.genericName}"? This will clear lot numbers, expiration date, and set units to 0 while keeping the card in inventory.`)) {
+                                    if (confirm(`Permanently delete "${item.genericName}" from clinic inventory?\n\nThis will remove the item completely from formulary.`)) {
                                       onDeleteItem(item.id);
                                     }
                                   }}
                                   className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
-                                  title="Discard stock: clears lots, expiration and sets units to 0 while keeping card"
+                                  title="Permanently delete item"
                                 >
                                   <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
                                 </button>
@@ -2063,20 +2104,57 @@ export default function AdminPortal({
               )}
             </div>
 
-            {/* COLUMN 2: DETAILED DISPENSARY AUDIT REPORT (Chrono List sorted by Time) */}
+            {/* COLUMN 2: DETAILED DISPENSARY AUDIT REPORT OR EXPIRED & WASTE DISPOSAL LOG */}
             <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4 flex flex-col">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-200">
-                    <FileText className="w-5 h-5 stroke-[2.5]" />
+                  <div className={`p-2 rounded-xl border ${reportSubTab === 'DISCARD' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
+                    {reportSubTab === 'DISCARD' ? (
+                      <PackageX className="w-5 h-5 stroke-[2.5]" />
+                    ) : (
+                      <FileText className="w-5 h-5 stroke-[2.5]" />
+                    )}
                   </div>
                   <div>
-                    <h3 className="text-base font-black text-slate-900 font-black">Dispensary Audit Log Report</h3>
-                    <p className="text-xs text-slate-500 font-medium font-bold">Chronological list sorted by transaction time</p>
+                    <h3 className="text-base font-black text-slate-900 font-black">
+                      {reportSubTab === 'DISCARD' ? 'Expired & Waste Disposal Log' : 'Dispensary Audit Log Report'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium font-bold">
+                      {reportSubTab === 'DISCARD'
+                        ? `${totalPillsDiscarded} total units (${totalBottlesDiscarded} containers) discarded`
+                        : 'Patient dispenses and inventory restocks'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Sub-report selector toggle */}
+                  <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-black">
+                    <button
+                      type="button"
+                      onClick={() => setReportSubTab('DISPENSARY')}
+                      className={`px-3 py-1.5 rounded-lg transition-all ${
+                        reportSubTab === 'DISPENSARY'
+                          ? 'bg-white text-teal-800 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Dispensary ({dispensaryReportLogs.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportSubTab('DISCARD')}
+                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                        reportSubTab === 'DISCARD'
+                          ? 'bg-rose-600 text-white shadow-2xs font-black'
+                          : 'text-rose-700 hover:text-rose-900'
+                      }`}
+                    >
+                      <PackageX className="w-3.5 h-3.5" />
+                      <span>Expired / Waste ({discardReportLogs.length})</span>
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -2091,19 +2169,26 @@ export default function AdminPortal({
                             .replace(/'/g, '&apos;');
                         };
 
-                        const relevantLogs = dispensaryReportLogs;
-                        const rowsXml = relevantLogs.map(log => {
-                          const lotArr = parseLotNumbers(log.lotNumbers);
-                          const lotStr = lotArr.length > 0 ? lotArr.join(', ') : 'N/A';
-                          const signedQty = log.actionType === 'DISPENSE' 
-                            ? `-${log.effectiveQty}` 
+                        const isDiscardReport = reportSubTab === 'DISCARD';
+                        const reportTitle = isDiscardReport ? 'Expired & Waste Disposal Log' : 'Dispensary Audit Report';
+                        const fileName = isDiscardReport
+                          ? `mission_rx_waste_disposal_report_${new Date().toISOString().split('T')[0]}.xls`
+                          : `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.xls`;
+
+                        const rowsXml = (isDiscardReport ? discardReportLogs : dispensaryReportLogs).map((log: any) => {
+                          const lotArr = parseLotNumbers(log.lotNumbers || (log.discardLotNumber ? [log.discardLotNumber] : []));
+                          const lotStr = log.discardLotNumber || (lotArr.length > 0 ? lotArr.join(', ') : 'N/A');
+                          const signedQty = isDiscardReport
+                            ? `-${log.effectivePillsDiscarded || Math.abs(log.quantityChanged || 0)}`
+                            : log.actionType === 'DISPENSE'
+                            ? `-${log.effectiveQty}`
                             : `+${log.effectiveQty} (Restocked)`;
                           const timeStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
 
                           return `
                           <Row ss:Height="20">
                             <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(timeStr)}</Data></Cell>
-                            <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(log.actionType)}</Data></Cell>
+                            <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(isDiscardReport ? 'DISCARD' : log.actionType)}</Data></Cell>
                             <Cell ss:StyleID="DataBold"><Data ss:Type="String">${escapeXml(log.itemGenericName || 'Medication')}</Data></Cell>
                             <Cell ss:StyleID="Data"><Data ss:Type="String">${escapeXml(lotStr)}</Data></Cell>
                             <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(signedQty)}</Data></Cell>
@@ -2121,7 +2206,7 @@ export default function AdminPortal({
  <Styles>
   <Style ss:ID="Header">
    <Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11"/>
-   <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+   <Interior ss:Color="${isDiscardReport ? '#BE123C' : '#0F766E'}" ss:Pattern="Solid"/>
    <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
   </Style>
   <Style ss:ID="Data">
@@ -2137,7 +2222,7 @@ export default function AdminPortal({
    <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
   </Style>
  </Styles>
- <Worksheet ss:Name="Dispensary Report">
+ <Worksheet ss:Name="${isDiscardReport ? 'Waste Disposal Log' : 'Dispensary Report'}">
   <Table>
    <Column ss:Width="140"/>
    <Column ss:Width="110"/>
@@ -2164,17 +2249,21 @@ export default function AdminPortal({
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.xls`);
+                        link.setAttribute('download', fileName);
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                       } catch (e) {
-                        console.error('Excel Dispensary Report download error:', e);
+                        console.error('Excel Report download error:', e);
                       }
                     }}
-                    className="min-h-[38px] px-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer border border-emerald-600"
-                    title="Download Excel Dispensary Report (.xls)"
+                    className={`min-h-[38px] px-3.5 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer border ${
+                      reportSubTab === 'DISCARD'
+                        ? 'bg-rose-700 hover:bg-rose-800 border-rose-600'
+                        : 'bg-emerald-700 hover:bg-emerald-800 border-emerald-600'
+                    }`}
+                    title={reportSubTab === 'DISCARD' ? 'Download Excel Waste Disposal Log (.xls)' : 'Download Excel Dispensary Report (.xls)'}
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
                     <span>Download Excel</span>
@@ -2184,50 +2273,57 @@ export default function AdminPortal({
                     type="button"
                     onClick={() => {
                       try {
+                        const isDiscardReport = reportSubTab === 'DISCARD';
                         const csvHeaders = ['Date', 'Action', 'Medication Name', 'Lot Number', 'Quantity Changed', 'Staff Role', 'Log Details'];
-                        const dataRows = dispensaryReportLogs
-                          .map((log) => {
-                            const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
-                            const logName = (log.itemGenericName || '').toLowerCase();
-                            const corrItem = items.find((i) =>
-                              Boolean((log.itemId && i.id === log.itemId) ||
-                              (logName && i.genericName.toLowerCase() === logName) ||
-                              (logName && logName.startsWith(i.genericName.toLowerCase())))
-                            );
+                        const dataList = isDiscardReport ? discardReportLogs : dispensaryReportLogs;
+                        const dataRows = dataList.map((log: any) => {
+                          const dateStr = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
+                          const logName = (log.itemGenericName || '').toLowerCase();
+                          const corrItem = items.find((i) =>
+                            Boolean((log.itemId && i.id === log.itemId) ||
+                            (logName && i.genericName.toLowerCase() === logName) ||
+                            (logName && logName.startsWith(i.genericName.toLowerCase())))
+                          );
 
-                            const lotStr = parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
+                          const lotStr = log.discardLotNumber || parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
+                          const signedQty = isDiscardReport
+                            ? `-${log.effectivePillsDiscarded || Math.abs(log.quantityChanged || 0)}`
+                            : log.actionType === 'RESTOCK'
+                            ? `+${log.effectiveQty}`
+                            : `-${log.effectiveQty}`;
 
-                            const isRestock = log.actionType === 'RESTOCK';
-                            const actionLabel = isRestock ? 'RESTOCK' : 'DISPENSE';
-                            const signedQty = isRestock ? `+${log.effectiveQty}` : `-${log.effectiveQty}`;
-
-                            return [
-                              `"${dateStr}"`,
-                              `"${actionLabel}"`,
-                              `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
-                              `"${lotStr.replace(/"/g, '""')}"`,
-                              `"${signedQty}"`,
-                              `"${(log.userRole || 'STAFF').replace(/"/g, '""')}"`,
-                              `"${(log.details || '').replace(/"/g, '""')}"`
-                            ];
-                          });
+                          return [
+                            `"${dateStr}"`,
+                            `"${isDiscardReport ? 'DISCARD' : log.actionType}"`,
+                            `"${(log.itemGenericName || 'Medication').replace(/"/g, '""')}"`,
+                            `"${lotStr.replace(/"/g, '""')}"`,
+                            `"${signedQty}"`,
+                            `"${(log.userRole || 'STAFF').replace(/"/g, '""')}"`,
+                            `"${(log.details || '').replace(/"/g, '""')}"`
+                          ];
+                        });
 
                         const csv = '\uFEFF' + [csvHeaders.join(','), ...dataRows.map(r => r.join(','))].join('\n');
                         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.setAttribute('download', `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`);
+                        link.setAttribute(
+                          'download',
+                          isDiscardReport
+                            ? `mission_rx_waste_disposal_report_${new Date().toISOString().split('T')[0]}.csv`
+                            : `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.csv`
+                        );
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                       } catch (e) {
-                        console.error('CSV Dispense download error:', e);
+                        console.error('CSV download error:', e);
                       }
                     }}
                     className="min-h-[38px] px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 self-end sm:self-auto cursor-pointer"
-                    title="Download CSV Dispensary Report with Lot Numbers"
+                    title={reportSubTab === 'DISCARD' ? 'Download CSV Waste Disposal Report' : 'Download CSV Dispensary Report'}
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Download CSV</span>
@@ -2238,8 +2334,115 @@ export default function AdminPortal({
               {loadingAnalytics ? (
                 <div className="py-12 flex-1 flex flex-col items-center justify-center space-y-2 text-slate-400">
                   <RefreshCw className="w-6 h-6 text-amber-500 animate-spin" />
-                  <span className="text-xs font-bold uppercase">Retrieving dispense logs...</span>
+                  <span className="text-xs font-bold uppercase">Retrieving transaction records...</span>
                 </div>
+              ) : reportSubTab === 'DISCARD' ? (
+                /* EXPIRED & WASTE DISPOSAL LOG TABLE */
+                discardReportLogs.length === 0 ? (
+                  <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
+                    No expired medication or supply discards logged for this timeframe.
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-x-auto border border-slate-200 rounded-2xl">
+                    <table className="w-full text-left border-collapse bg-white">
+                      <thead>
+                        <tr className="bg-rose-50/70 text-rose-900 text-[10px] font-black uppercase tracking-wider border-b border-rose-200">
+                          <th className="py-3 px-3">Date Discarded</th>
+                          <th className="py-3 px-3">Medication</th>
+                          <th className="py-3 px-3 text-center">Action</th>
+                          <th className="py-3 px-3 text-center">Expired Lot #</th>
+                          <th className="py-3 px-3 text-center">Discarded Stock</th>
+                          <th className="py-3 px-3 text-right">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-800">
+                        {discardReportLogs.map((log) => {
+                          const dateObj = log.createdAt ? new Date(log.createdAt) : new Date();
+                          const formattedDate = dateObj.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          }) + ' ' + dateObj.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          });
+
+                          const logName = (log.itemGenericName || '').toLowerCase();
+                          const corrItem = items.find((i) =>
+                            Boolean((log.itemId && i.id === log.itemId) ||
+                            (logName && i.genericName.toLowerCase() === logName) ||
+                            (logName && logName.startsWith(i.genericName.toLowerCase())))
+                          );
+
+                          const lotList = log.discardLotNumber ? [log.discardLotNumber] : parseLotNumbers(log.lotNumbers);
+
+                          return (
+                            <tr key={log.id} className="hover:bg-rose-50/30 transition-colors">
+                              <td className="py-2.5 px-3 whitespace-nowrap text-slate-500 font-mono text-[10px]">
+                                {formattedDate}
+                              </td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900 font-extrabold select-text">
+                                {log.itemGenericName || 'General Item'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className="font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded-md border bg-rose-50 text-rose-700 border-rose-300">
+                                  DISCARD
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-center select-text">
+                                <div className="flex flex-wrap items-center justify-center gap-1">
+                                  {lotList.length > 0 ? (
+                                    lotList.map((lot, lIdx) => (
+                                      <span key={lIdx} className="font-mono text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-300 px-1 py-0.5 rounded">
+                                        {lot}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">N/A</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono font-black text-sm text-rose-600">
+                                {log.effectiveBottlesDiscarded > 0 ? (
+                                  <span className="flex flex-col items-center">
+                                    <span>-{log.effectiveBottlesDiscarded} {corrItem?.stockUnit || 'bottle'}{log.effectiveBottlesDiscarded === 1 ? '' : 's'}</span>
+                                    <span className="text-[9px] font-bold text-rose-400">
+                                      (-{log.effectivePillsDiscarded} {corrItem?.subUnit || 'pills'})
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span>-{log.effectivePillsDiscarded} {corrItem?.subUnit || 'units'}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const modalData = {
+                                      ...log,
+                                      quantityChanged: -log.effectivePillsDiscarded,
+                                      isRestock: false,
+                                      lotNumbers: lotList,
+                                      brandName: corrItem?.brandName || 'N/A',
+                                      dosage: corrItem?.dosage || 'N/A',
+                                      shelfLocation: corrItem?.shelfLocation || 'N/A',
+                                      subUnit: corrItem?.subUnit || 'pills'
+                                    };
+                                    setDetailedLogItem(modalData);
+                                    setDetailedModalOpen(true);
+                                  }}
+                                  className="text-[11px] text-rose-700 hover:text-rose-900 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg font-black cursor-pointer"
+                                >
+                                  View Details
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
               ) : dispensaryReportLogs.length === 0 ? (
                 <div className="py-12 flex-1 flex items-center justify-center text-slate-400 text-xs font-bold">
                   No dispense or restock activities logged for this timeframe.

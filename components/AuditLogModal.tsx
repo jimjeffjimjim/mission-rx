@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
-import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical, FileSpreadsheet } from 'lucide-react';
+import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical, FileSpreadsheet, PackageX } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface AuditLogModalProps {
@@ -393,7 +393,7 @@ export default function AuditLogModal({
             <span className="text-xs font-bold text-slate-400 uppercase mr-1 hidden lg:inline-flex items-center gap-1">
               <Filter className="w-3.5 h-3.5" /> Type:
             </span>
-            {['ALL', 'DISPENSE', 'UNDISPENSE', 'RESTOCK', 'EDIT', 'AUDIT'].map((type) => {
+            {['ALL', 'DISPENSE', 'UNDISPENSE', 'RESTOCK', 'DISCARD', 'EDIT', 'AUDIT'].map((type) => {
               const isSelected = selectedAction === type;
               return (
                 <button
@@ -426,16 +426,18 @@ export default function AuditLogModal({
           ) : (
             filteredLogs.map((log, index) => {
               const qtyNum = Number(log.quantityChanged) || 0;
-              const isDispense = (log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE')) && log.actionType !== 'EDIT' && log.actionType !== 'AUDIT';
+              const isDiscard = log.actionType === 'DISCARD' || (log.details?.toLowerCase().includes('expired / waste') || log.details?.toLowerCase().includes('[expired'));
+              const isDispense = !isDiscard && (log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE')) && log.actionType !== 'EDIT' && log.actionType !== 'AUDIT';
               const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
               const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
               const isCreate = log.actionType === 'CREATE';
               const isEditOrAudit = log.actionType === 'EDIT' || log.actionType === 'AUDIT' || log.actionType === 'DELETE';
-              const isPositive = (isRestock || isUndispense || (isCreate && qtyNum > 0)) && !isDispense;
-              const isNegative = isDispense && qtyNum !== 0;
+              const isPositive = (isRestock || isUndispense || (isCreate && qtyNum > 0)) && !isDispense && !isDiscard;
+              const isNegative = (isDispense || isDiscard) && qtyNum !== 0;
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
-              if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
+              if (isDiscard || log.actionType === 'DISCARD') badgeStyle = 'bg-rose-100 text-rose-800 border-rose-300';
+              else if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
               else if (isUndispense) badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
               else if (isRestock) badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
               else if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-blue-50 text-blue-900 border-blue-300';
@@ -464,7 +466,9 @@ export default function AuditLogModal({
                     <div
                       className={`p-2.5 rounded-2xl border flex items-center justify-center shrink-0 ${badgeStyle}`}
                     >
-                      {log.actionType === 'DISPENSE' ? (
+                      {log.actionType === 'DISCARD' || isDiscard ? (
+                        <PackageX className="w-5 h-5 text-rose-600 stroke-[2.5]" />
+                      ) : log.actionType === 'DISPENSE' ? (
                         <ArrowDownRight className="w-5 h-5 text-rose-600 stroke-[3]" />
                       ) : log.actionType === 'UNDISPENSE' ? (
                         <RotateCcw className="w-5 h-5 text-amber-600 stroke-[2.5]" />
@@ -553,11 +557,11 @@ export default function AuditLogModal({
                           isNegative ? 'text-rose-600' : isUndispense ? 'text-amber-700' : isRestock ? 'text-emerald-600' : isCreate && qtyNum > 0 ? 'text-teal-700' : 'text-slate-600'
                         }`}
                       >
-                        {isEditOrAudit || qtyNum === 0 ? (
+                        {!isDiscard && (isEditOrAudit || qtyNum === 0) ? (
                           <span className="text-slate-500 font-bold text-xs">
                             {qtyNum === 0 ? 'No change' : qtyNum > 0 ? `+${qtyNum}` : `${qtyNum}`}
                           </span>
-                        ) : log.dispensedUnit === 'bottle' ? (
+                        ) : log.dispensedUnit === 'bottle' || (isDiscard && (log.dispensedBottles || 0) > 0) ? (
                           <span>
                             {isPositive ? '+' : isNegative ? '-' : ''}{log.dispensedBottles || 1} bottle{(log.dispensedBottles || 1) !== 1 ? 's' : ''}
                             <span className="text-[10px] font-bold text-slate-400 block sm:text-right">
