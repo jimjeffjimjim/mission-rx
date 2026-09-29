@@ -220,23 +220,47 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const data = await request.json();
-    const { id, quantityChanged, details } = data;
+    const {
+      id,
+      quantityChanged,
+      details,
+      actionType,
+      itemGenericName,
+      lotNumbers,
+      dispensedBottles,
+      dispensedUnit,
+      dispensedPillsPerBottle,
+      createdAt,
+      userRole,
+    } = data;
+
     if (!id) {
       return NextResponse.json({ error: 'Missing log record id' }, { status: 400 });
     }
 
-    const numericQty = Number(quantityChanged) || 0;
-    const updatedDetails = details || 'Clinical usage log updated manually during audit review.';
+    const numericQty = quantityChanged !== undefined ? Number(quantityChanged) : undefined;
+    const updatedDetails = details !== undefined ? details : 'Clinical usage log updated manually during audit review.';
 
     // 1. Update in Supabase Cloud Postgres
     if (supabase) {
       try {
+        const updatePayload: any = {};
+        if (numericQty !== undefined) updatePayload.quantity_changed = numericQty;
+        if (details !== undefined) updatePayload.details = updatedDetails;
+        if (actionType !== undefined) updatePayload.action_type = actionType;
+        if (itemGenericName !== undefined) updatePayload.item_generic_name = itemGenericName;
+        if (lotNumbers !== undefined) {
+          updatePayload.lot_numbers = typeof lotNumbers === 'string' ? lotNumbers : JSON.stringify(lotNumbers);
+        }
+        if (dispensedBottles !== undefined) updatePayload.dispensed_bottles = Number(dispensedBottles) || 0;
+        if (dispensedUnit !== undefined) updatePayload.dispensed_unit = dispensedUnit;
+        if (dispensedPillsPerBottle !== undefined) updatePayload.dispensed_pills_per_bottle = Number(dispensedPillsPerBottle) || 0;
+        if (createdAt !== undefined) updatePayload.created_at = createdAt;
+        if (userRole !== undefined) updatePayload.user_role = userRole;
+
         await supabase
           .from('dispense_logs')
-          .update({
-            quantity_changed: numericQty,
-            details: updatedDetails,
-          })
+          .update(updatePayload)
           .eq('id', id);
       } catch (cloudErr) {
         console.warn('Failed updating Supabase log:', cloudErr);
@@ -246,15 +270,37 @@ export async function PUT(request: Request) {
     // 2. Update local fallback cache
     const target = logsFallbackCache.find((l) => l.id === id);
     if (target) {
-      target.quantityChanged = numericQty;
-      if (details) target.details = updatedDetails;
+      if (numericQty !== undefined) target.quantityChanged = numericQty;
+      if (details !== undefined) target.details = updatedDetails;
+      if (actionType !== undefined) target.actionType = actionType;
+      if (itemGenericName !== undefined) target.itemGenericName = itemGenericName;
+      if (lotNumbers !== undefined) target.lotNumbers = Array.isArray(lotNumbers) ? lotNumbers : [String(lotNumbers)];
+      if (dispensedBottles !== undefined) target.dispensedBottles = Number(dispensedBottles) || 0;
+      if (dispensedUnit !== undefined) target.dispensedUnit = dispensedUnit;
+      if (dispensedPillsPerBottle !== undefined) target.dispensedPillsPerBottle = Number(dispensedPillsPerBottle) || 0;
+      if (createdAt !== undefined) target.createdAt = createdAt;
+      if (userRole !== undefined) target.userRole = userRole;
     }
 
     // 3. Update local SQLite if accessible
     try {
+      const sqlitePayload: any = {};
+      if (numericQty !== undefined) sqlitePayload.quantityChanged = numericQty;
+      if (details !== undefined) sqlitePayload.details = updatedDetails;
+      if (actionType !== undefined) sqlitePayload.actionType = actionType;
+      if (itemGenericName !== undefined) sqlitePayload.itemGenericName = itemGenericName;
+      if (lotNumbers !== undefined) {
+        sqlitePayload.lotNumbers = typeof lotNumbers === 'string' ? lotNumbers : JSON.stringify(lotNumbers);
+      }
+      if (dispensedBottles !== undefined) sqlitePayload.dispensedBottles = Number(dispensedBottles) || 0;
+      if (dispensedUnit !== undefined) sqlitePayload.dispensedUnit = dispensedUnit;
+      if (dispensedPillsPerBottle !== undefined) sqlitePayload.dispensedPillsPerBottle = Number(dispensedPillsPerBottle) || 0;
+      if (createdAt !== undefined) sqlitePayload.createdAt = new Date(createdAt);
+      if (userRole !== undefined) sqlitePayload.userRole = userRole;
+
       await prisma.dispenseLog.update({
         where: { id },
-        data: { quantityChanged: numericQty },
+        data: sqlitePayload,
       }).catch(() => null);
     } catch (dbErr) {
       // Ignore on serverless
@@ -270,17 +316,50 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
     const isTestMode = searchParams.get('test_mode') === 'true';
+    const isDeveloper = searchParams.get('developer') === 'true' || searchParams.get('role') === 'DEVELOPER';
 
-    if (!isTestMode) {
-      return NextResponse.json(
-        { error: 'Regulatory Protection: Live clinical transaction audit logs are permanent and cannot be deleted.' },
-        { status: 403 }
-      );
+    // 1. Allow deleting a specific log entry if ID is provided
+    if (id) {
+      if (supabase) {
+        try {
+          await supabase.from('dispense_logs').delete().eq('id', id);
+        } catch (cloudErr) {
+          console.warn('Failed deleting log from Supabase:', cloudErr);
+        }
+      }
+
+      try {
+        await prisma.dispenseLog.delete({ where: { id } }).catch(() => null);
+      } catch (e) {}
+
+      logsFallbackCache = logsFallbackCache.filter((l) => l.id !== id);
+      return NextResponse.json({ success: true, deletedId: id });
     }
 
-    logsFallbackCache = [];
-    return NextResponse.json({ success: true, message: 'Simulated test audit logs cleared.' });
+    // 2. Allow Developer or Test Mode to clear all audit logs
+    if (isDeveloper || isTestMode) {
+      if (supabase && isDeveloper) {
+        try {
+          await supabase.from('dispense_logs').delete().neq('id', '');
+        } catch (e) {
+          console.warn('Supabase clear logs error:', e);
+        }
+      }
+
+      try {
+        await prisma.dispenseLog.deleteMany({}).catch(() => null);
+      } catch (e) {}
+
+      logsFallbackCache = [];
+      return NextResponse.json({ success: true, message: 'Audit logs cleared by developer authorization.' });
+    }
+
+    return NextResponse.json(
+      { error: 'Regulatory Protection: Live clinical transaction audit logs are protected. Developer authorization required to delete.' },
+      { status: 403 }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }

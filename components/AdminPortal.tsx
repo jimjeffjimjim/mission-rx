@@ -375,6 +375,104 @@ export default function AdminPortal({
     }
   };
 
+  // Developer Authorization State
+  const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+  const isDeveloper = userRole === 'DEVELOPER' || isDevUnlocked;
+
+  const requireDeveloper = (): boolean => {
+    if (isDeveloper) return true;
+    const pin = prompt('Enter Developer PIN (7777) to authorize developer administrative edit/delete access:');
+    if (pin === '7777') {
+      setIsDevUnlocked(true);
+      return true;
+    }
+    if (pin !== null) {
+      alert('Incorrect Developer PIN.');
+    }
+    return false;
+  };
+
+  // Report Row Edit Modal State
+  const [editingReportLog, setEditingReportLog] = useState<any | null>(null);
+  const [reportLogItemName, setReportLogItemName] = useState<string>('');
+  const [reportLogQty, setReportLogQty] = useState<string>('');
+  const [reportLogBottles, setReportLogBottles] = useState<string>('');
+  const [reportLogAction, setReportLogAction] = useState<string>('DISPENSE');
+  const [reportLogLots, setReportLogLots] = useState<string>('');
+  const [reportLogDetails, setReportLogDetails] = useState<string>('');
+  const [savingReportEdit, setSavingReportEdit] = useState<boolean>(false);
+
+  const handleOpenReportLogEdit = (log: any, isDiscard: boolean) => {
+    if (!requireDeveloper()) return;
+    setEditingReportLog({ ...log, _isDiscard: isDiscard });
+    setReportLogItemName(log.itemGenericName || '');
+    const rawQty = isDiscard 
+      ? -(log.effectivePillsDiscarded || Math.abs(log.quantityChanged || 0))
+      : (log.quantityChanged ?? (log.actionType === 'RESTOCK' ? log.effectiveQty : -log.effectiveQty));
+    setReportLogQty(String(rawQty));
+    setReportLogBottles(String(log.dispensedBottles || (isDiscard ? log.effectiveBottlesDiscarded : 0) || 0));
+    setReportLogAction(log.actionType || (isDiscard ? 'DISCARD_EXPIRED' : 'DISPENSE'));
+    const parsedLots = log.discardLotNumber || (Array.isArray(log.lotNumbers) ? log.lotNumbers.join(', ') : (log.lotNumbers || ''));
+    setReportLogLots(parsedLots);
+    setReportLogDetails(log.details || '');
+  };
+
+  const handleConfirmReportLogEdit = async () => {
+    if (!editingReportLog) return;
+    setSavingReportEdit(true);
+    try {
+      const splitLots = reportLogLots.split(',').map((s: string) => s.trim()).filter(Boolean);
+      const res = await fetch('/api/logs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingReportLog.id,
+          itemGenericName: reportLogItemName,
+          actionType: reportLogAction,
+          quantityChanged: Number(reportLogQty) || 0,
+          dispensedBottles: Number(reportLogBottles) || 0,
+          lotNumbers: splitLots,
+          details: reportLogDetails,
+          developer: true
+        })
+      });
+
+      if (res.ok) {
+        setEditingReportLog(null);
+        await fetchAnalytics(timeframe);
+        if (onRefreshData) onRefreshData();
+      } else {
+        alert('Failed to update report record.');
+      }
+    } catch (e) {
+      console.error('Failed editing report log:', e);
+      alert('Error updating report record.');
+    } finally {
+      setSavingReportEdit(false);
+    }
+  };
+
+  const handleDeleteReportLog = async (log: any, label: string) => {
+    if (!requireDeveloper()) return;
+    if (!confirm(`DEVELOPER OVERRIDE: Permanently delete this ${label} transaction record for "${log.itemGenericName || 'item'}"? This removes it permanently from Supabase & SQLite databases and updates analytics.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/logs?id=${encodeURIComponent(log.id)}&developer=true`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        await fetchAnalytics(timeframe);
+        if (onRefreshData) onRefreshData();
+      } else {
+        alert('Failed to delete report record.');
+      }
+    } catch (e) {
+      console.error('Failed deleting report log:', e);
+      alert('Error deleting report record.');
+    }
+  };
+
   // Fetch Usage Analytics Data
   const fetchAnalytics = async (tf: 'today' | 'week' | 'month' | 'all') => {
     setLoadingAnalytics(true);
@@ -428,13 +526,37 @@ export default function AdminPortal({
   };
 
   const handleClearAuditLogs = async () => {
-    if (!isTestingMode) {
+    if (isTestingMode) {
+      if (!confirm('Clear simulated test logs?')) return;
+      setTestSimulatedLogs([]);
+      setAnalyticsLogs([]);
+      return;
+    }
+
+    if (!requireDeveloper()) {
       alert('Regulatory compliance protection: Real transaction audit logs are permanent and cannot be deleted.');
       return;
     }
-    if (!confirm('Clear simulated test logs?')) return;
-    setTestSimulatedLogs([]);
-    setAnalyticsLogs([]);
+
+    if (!confirm('DEVELOPER OVERRIDE: Permanently delete ALL audit log records from Supabase and SQLite databases? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/logs?developer=true', { method: 'DELETE' });
+      if (res.ok) {
+        setAnalyticsLogs([]);
+        setTopDispensed([]);
+        alert('All transaction audit logs permanently deleted.');
+        await fetchAnalytics(timeframe);
+        if (onRefreshData) onRefreshData();
+      } else {
+        alert('Failed to delete audit logs.');
+      }
+    } catch (e) {
+      console.error('Failed clearing audit logs:', e);
+      alert('Error clearing audit logs.');
+    }
   };
 
   // Apply Local Test Mode Sandbox Overlay
@@ -2074,16 +2196,19 @@ export default function AdminPortal({
                             <span className="font-mono text-rose-600 font-black">
                               {item.totalDispensed} units dispensed
                             </span>
-                            {isTestingMode && (
+                            {(isTestingMode || isDeveloper) && (
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (!isDeveloper && !isTestingMode) {
+                                    if (!requireDeveloper()) return;
+                                  }
                                   setEditingDispenseItem(item);
                                   setNewDispenseAmt(item.totalDispensed);
                                   setIsDispenseWarningOpen(true);
                                 }}
                                 className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-700 transition-all border border-slate-200 shadow-2xs active:scale-95 cursor-pointer"
-                                title="Edit total amount dispensed"
+                                title="Developer: Edit total amount dispensed"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -2415,26 +2540,48 @@ export default function AdminPortal({
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const modalData = {
-                                      ...log,
-                                      quantityChanged: -log.effectivePillsDiscarded,
-                                      isRestock: false,
-                                      lotNumbers: lotList,
-                                      brandName: corrItem?.brandName || 'N/A',
-                                      dosage: corrItem?.dosage || 'N/A',
-                                      shelfLocation: corrItem?.shelfLocation || 'N/A',
-                                      subUnit: corrItem?.subUnit || 'pills'
-                                    };
-                                    setDetailedLogItem(modalData);
-                                    setDetailedModalOpen(true);
-                                  }}
-                                  className="text-[11px] text-rose-700 hover:text-rose-900 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg font-black cursor-pointer"
-                                >
-                                  View Details
-                                </button>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const modalData = {
+                                        ...log,
+                                        quantityChanged: -log.effectivePillsDiscarded,
+                                        isRestock: false,
+                                        lotNumbers: lotList,
+                                        brandName: corrItem?.brandName || 'N/A',
+                                        dosage: corrItem?.dosage || 'N/A',
+                                        shelfLocation: corrItem?.shelfLocation || 'N/A',
+                                        subUnit: corrItem?.subUnit || 'pills'
+                                      };
+                                      setDetailedLogItem(modalData);
+                                      setDetailedModalOpen(true);
+                                    }}
+                                    className="text-[11px] text-rose-700 hover:text-rose-900 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg font-black cursor-pointer shadow-2xs"
+                                  >
+                                    View Details
+                                  </button>
+                                  {!isReadOnlyMode && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenReportLogEdit(log, true)}
+                                        className="p-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                                        title="Developer: Edit Discard Entry"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteReportLog(log, 'Expired / Discard')}
+                                        className="p-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-300 transition-all cursor-pointer shadow-2xs"
+                                        title="Developer: Delete Discard Entry"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2537,26 +2684,48 @@ export default function AdminPortal({
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const modalData = {
-                                      ...log,
-                                      quantityChanged: isRestock ? quantity : -quantity,
-                                      isRestock,
-                                      lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,
-                                      brandName: corrItem?.brandName || 'N/A',
-                                      dosage: corrItem?.dosage || 'N/A',
-                                      shelfLocation: corrItem?.shelfLocation || 'N/A',
-                                      subUnit: corrItem?.subUnit || 'pills'
-                                    };
-                                    setDetailedLogItem(modalData);
-                                    setDetailedModalOpen(true);
-                                  }}
-                                  className="text-[11px] text-teal-700 hover:text-teal-900 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg font-black cursor-pointer"
-                                >
-                                  View Details
-                                </button>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const modalData = {
+                                        ...log,
+                                        quantityChanged: isRestock ? quantity : -quantity,
+                                        isRestock,
+                                        lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,
+                                        brandName: corrItem?.brandName || 'N/A',
+                                        dosage: corrItem?.dosage || 'N/A',
+                                        shelfLocation: corrItem?.shelfLocation || 'N/A',
+                                        subUnit: corrItem?.subUnit || 'pills'
+                                      };
+                                      setDetailedLogItem(modalData);
+                                      setDetailedModalOpen(true);
+                                    }}
+                                    className="text-[11px] text-teal-700 hover:text-teal-900 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg font-black cursor-pointer shadow-2xs"
+                                  >
+                                    View Details
+                                  </button>
+                                  {!isReadOnlyMode && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenReportLogEdit(log, false)}
+                                        className="p-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                                        title="Developer: Edit Dispense/Restock Entry"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteReportLog(log, 'Dispensary')}
+                                        className="p-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-300 transition-all cursor-pointer shadow-2xs"
+                                        title="Developer: Delete Dispense/Restock Entry"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2567,6 +2736,141 @@ export default function AdminPortal({
               )}
             </div>
           </div>
+
+          {/* Developer Report Log Edit Modal */}
+          {editingReportLog && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 text-slate-900 relative max-h-[90vh] overflow-y-auto">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-2xl bg-amber-100 text-amber-700 border border-amber-300 shrink-0 shadow-inner">
+                    <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-black text-slate-900 leading-snug">
+                        Developer Report Record Revision
+                      </h3>
+                      <span className="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                        Developer Override
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-600 leading-normal">
+                      Modifying this {editingReportLog._isDiscard ? 'waste disposal' : 'dispensary'} transaction updates official totals, patient usage history, and Supabase audit reports.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Medication / Item Generic Name
+                    </label>
+                    <input
+                      type="text"
+                      value={reportLogItemName}
+                      onChange={(e) => setReportLogItemName(e.target.value)}
+                      className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                        Action Type
+                      </label>
+                      <select
+                        value={reportLogAction}
+                        onChange={(e) => setReportLogAction(e.target.value)}
+                        className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                      >
+                        <option value="DISPENSE">DISPENSE</option>
+                        <option value="DISPENSE_BOTTLE">DISPENSE_BOTTLE</option>
+                        <option value="DISCARD_EXPIRED">DISCARD_EXPIRED</option>
+                        <option value="DISCARD">DISCARD</option>
+                        <option value="UNDISPENSE">UNDISPENSE</option>
+                        <option value="RESTOCK">RESTOCK</option>
+                        <option value="EDIT">EDIT</option>
+                        <option value="AUDIT">AUDIT</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                        Lot Number(s)
+                      </label>
+                      <input
+                        type="text"
+                        value={reportLogLots}
+                        onChange={(e) => setReportLogLots(e.target.value)}
+                        placeholder="e.g. 4ME2261, LOT99"
+                        className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                        Units Delta (Negative for dispense/discard)
+                      </label>
+                      <input
+                        type="number"
+                        value={reportLogQty}
+                        onChange={(e) => setReportLogQty(e.target.value)}
+                        placeholder="e.g. -24"
+                        className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-sm font-black text-slate-950 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                        Containers / Bottles Delta
+                      </label>
+                      <input
+                        type="number"
+                        value={reportLogBottles}
+                        onChange={(e) => setReportLogBottles(e.target.value)}
+                        placeholder="e.g. 1"
+                        className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-sm font-black text-slate-950 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Audit Details / Justification Notes
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={reportLogDetails}
+                      onChange={(e) => setReportLogDetails(e.target.value)}
+                      placeholder="Clinical revision explanation..."
+                      className="w-full p-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingReportLog(null)}
+                    className="min-h-[42px] px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmReportLogEdit}
+                    disabled={savingReportEdit}
+                    className="min-h-[42px] px-5 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>{savingReportEdit ? 'Saving...' : 'Save Revisions'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

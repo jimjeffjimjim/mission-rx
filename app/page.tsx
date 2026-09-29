@@ -1250,6 +1250,7 @@ export default function Home() {
         testLogs={testAuditLogs}
         initialSearchQuery={auditSearchQuery}
         isReadOnly={role === 'VIEWER'}
+        userRole={actorTag}
       />
     </main>
   );

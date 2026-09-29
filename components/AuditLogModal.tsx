@@ -12,6 +12,7 @@ interface AuditLogModalProps {
   testLogs?: DispenseLog[];
   initialSearchQuery?: string;
   isReadOnly?: boolean;
+  userRole?: string;
 }
 
 export default function AuditLogModal({
@@ -21,15 +22,37 @@ export default function AuditLogModal({
   testLogs = [],
   initialSearchQuery = '',
   isReadOnly = false,
+  userRole = 'STAFF',
 }: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [selectedAction, setSelectedAction] = useState<string>('ALL');
   const [editingLog, setEditingLog] = useState<DispenseLog | null>(null);
+  const [editItemName, setEditItemName] = useState('');
+  const [editActionType, setEditActionType] = useState('DISPENSE');
   const [editQty, setEditQty] = useState<number | string>('');
+  const [editBottles, setEditBottles] = useState<number | string>(0);
+  const [editLots, setEditLots] = useState('');
+  const [editDetails, setEditDetails] = useState('');
   const [isWarningOpen, setIsWarningOpen] = useState(false);
   const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
+  const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+
+  const isDeveloper = userRole === 'DEVELOPER' || isDevUnlocked;
+
+  const requireDeveloper = (): boolean => {
+    if (isDeveloper) return true;
+    const pin = prompt('Enter Developer PIN (7777) to authorize developer administrative edit/delete access:');
+    if (pin === '7777') {
+      setIsDevUnlocked(true);
+      return true;
+    }
+    if (pin !== null) {
+      alert('Incorrect Developer PIN.');
+    }
+    return false;
+  };
 
   useEffect(() => {
     const checkTest = () => {
@@ -76,18 +99,47 @@ export default function AuditLogModal({
   }, [isOpen, initialSearchQuery]);
 
   const handleResetAuditLogs = async () => {
-    if (!isTestingMode) {
+    if (isTestingMode) {
+      if (!confirm('Clear simulated test logs?')) return;
+      setLogs([]);
+      if (onLogsCleared) onLogsCleared();
+      return;
+    }
+    if (!requireDeveloper()) {
       alert('Regulatory compliance protection: Real transaction audit logs are permanent and cannot be deleted.');
       return;
     }
-    if (!confirm('Clear simulated test logs?')) return;
-    setLogs([]);
-    if (onLogsCleared) onLogsCleared();
+    if (!confirm('DEVELOPER OVERRIDE: Are you sure you want to permanently delete ALL audit log records from the database? This cannot be undone.')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/logs?developer=true', { method: 'DELETE' });
+      if (res.ok) {
+        setLogs([]);
+        alert('All audit log records permanently deleted from Supabase & SQLite.');
+        if (onLogsCleared) onLogsCleared();
+      } else {
+        alert('Failed to wipe audit logs.');
+      }
+    } catch (e) {
+      console.error('Failed clearing logs:', e);
+      alert('Error wiping audit logs.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const startEditingLog = (log: DispenseLog) => {
     setEditingLog(log);
-    setEditQty(log.quantityChanged);
+    setEditItemName(log.itemGenericName || '');
+    setEditActionType(log.actionType || 'DISPENSE');
+    setEditQty(log.quantityChanged ?? 0);
+    setEditBottles(log.dispensedBottles ?? 0);
+    const rawLots = (log as any).lotNumbers;
+    const lotsStr = Array.isArray(rawLots) ? rawLots.join(', ') : (rawLots || '');
+    setEditLots(lotsStr);
+    setEditDetails(log.details || '');
     setIsWarningOpen(true);
   };
 
@@ -95,13 +147,19 @@ export default function AuditLogModal({
     if (!editingLog) return;
     setLoading(true);
     try {
+      const splitLots = editLots.split(',').map((s) => s.trim()).filter(Boolean);
       const res = await fetch('/api/logs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingLog.id,
+          itemGenericName: editItemName,
+          actionType: editActionType,
           quantityChanged: Number(editQty) || 0,
-          details: `${editingLog.details || ''} (Manual regulatory revision: quantity changed from ${editingLog.quantityChanged} to ${editQty})`,
+          dispensedBottles: Number(editBottles) || 0,
+          lotNumbers: splitLots,
+          details: editDetails,
+          developer: isDeveloper,
         }),
       });
       if (res.ok) {
@@ -109,9 +167,37 @@ export default function AuditLogModal({
         setEditingLog(null);
         await fetchLogs();
         if (onLogsCleared) onLogsCleared();
+      } else {
+        alert('Failed to update audit log entry.');
       }
     } catch (e) {
       console.error('Failed editing log:', e);
+      alert('Error updating audit log entry.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSingleLog = async (log: DispenseLog) => {
+    if (!requireDeveloper()) return;
+    if (!confirm(`DEVELOPER OVERRIDE: Permanently delete audit log record for "${log.itemGenericName || 'Item'}" (${log.actionType})? This removes it permanently from Supabase & SQLite.`)) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/logs?id=${encodeURIComponent(log.id)}&developer=true`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setLogs((prev) => prev.filter((l) => l.id !== log.id));
+        await fetchLogs();
+        if (onLogsCleared) onLogsCleared();
+      } else {
+        alert('Failed to delete log entry.');
+      }
+    } catch (e) {
+      console.error('Failed deleting log:', e);
+      alert('Error deleting log entry.');
     } finally {
       setLoading(false);
     }
@@ -332,15 +418,22 @@ export default function AuditLogModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
-            {isTestingMode && !isReadOnly && (
+            {isDeveloper && (
+              <span className="min-h-[42px] px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold text-xs rounded-2xl flex items-center gap-1.5 shadow-2xs">
+                <Terminal className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Developer Access</span>
+              </span>
+            )}
+
+            {(isDeveloper || isTestingMode) && !isReadOnly && (
               <button
                 type="button"
                 onClick={handleResetAuditLogs}
-                className="min-h-[42px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                title="Reset simulated test logs"
+                className="min-h-[42px] px-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-2xl border border-rose-300 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
+                title={isDeveloper ? "Developer: Permanently wipe all audit log records" : "Reset simulated test logs"}
               >
                 <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Clear Test Logs</span>
+                <span>{isDeveloper ? 'Wipe Audit Logs' : 'Clear Test Logs'}</span>
               </button>
             )}
 
@@ -574,14 +667,29 @@ export default function AuditLogModal({
                       </span>
                     </div>
                     {!isReadOnly && (
-                      <button
-                        type="button"
-                        onClick={() => startEditingLog(log)}
-                        className="p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 shrink-0 cursor-pointer"
-                        title="Edit recorded dispensed quantity"
-                      >
-                        <Edit3 className="w-4 h-4 stroke-[2.5]" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isDeveloper && !isTestingMode) {
+                              if (!requireDeveloper()) return;
+                            }
+                            startEditingLog(log);
+                          }}
+                          className="p-2 sm:p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 cursor-pointer"
+                          title="Developer: Edit Recorded Log"
+                        >
+                          <Edit3 className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSingleLog(log)}
+                          className="p-2 sm:p-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-300 transition-all shadow-2xs active:scale-95 cursor-pointer"
+                          title="Developer: Permanently Delete Record"
+                        >
+                          <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -590,43 +698,125 @@ export default function AuditLogModal({
           )}
         </div>
 
-        {/* Warning Confirmation Pop-up Dialog for Editing Dispensed Amount */}
+        {/* Developer / Regulatory Edit Pop-up Dialog */}
         {isWarningOpen && editingLog && !isReadOnly && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-            <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-900 relative">
+            <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 text-slate-900 relative max-h-[90vh] overflow-y-auto">
               <div className="flex items-start gap-4">
                 <div className="p-3 rounded-2xl bg-amber-100 text-amber-700 border border-amber-300 shrink-0 shadow-inner">
                   <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-black text-slate-900 leading-snug">
-                    Are you sure?
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 leading-snug">
+                      Developer Record Revision
+                    </h3>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                      Developer Override
+                    </span>
+                  </div>
                   <p className="text-xs font-semibold text-slate-600 leading-normal">
-                    You are modifying an official clinical transaction log for <span className="font-bold text-slate-900">{editingLog.itemGenericName || 'this item'}</span>. Altering regulatory usage records changes historical compliance totals and dispense reporting.
+                    You are modifying an official clinical transaction log for <span className="font-bold text-slate-900">{editingLog.itemGenericName || 'this item'}</span>. Updates will be saved permanently to Supabase and SQLite.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-                <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
-                  New Recorded Quantity (Dispensed is negative, Restock is positive):
-                </label>
-                <input
-                  type="number"
-                  value={editQty}
-                  onChange={(e) => setEditQty(e.target.value)}
-                  className="w-full min-h-[46px] px-4 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-base font-black text-slate-950 focus:outline-hidden shadow-inner select-text"
-                  placeholder="e.g. -2"
-                  autoFocus
-                />
+              <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                    Medication / Generic Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editItemName}
+                    onChange={(e) => setEditItemName(e.target.value)}
+                    className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Action Type
+                    </label>
+                    <select
+                      value={editActionType}
+                      onChange={(e) => setEditActionType(e.target.value)}
+                      className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden"
+                    >
+                      <option value="DISPENSE">DISPENSE</option>
+                      <option value="DISPENSE_BOTTLE">DISPENSE_BOTTLE</option>
+                      <option value="DISCARD_EXPIRED">DISCARD_EXPIRED</option>
+                      <option value="UNDISPENSE">UNDISPENSE</option>
+                      <option value="RESTOCK">RESTOCK</option>
+                      <option value="EDIT">EDIT</option>
+                      <option value="AUDIT">AUDIT</option>
+                      <option value="CREATE">CREATE</option>
+                      <option value="DELETE">DELETE</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Lot Numbers (comma separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={editLots}
+                      onChange={(e) => setEditLots(e.target.value)}
+                      placeholder="e.g. 4ME2261, LOT99"
+                      className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Pill / Unit Delta (Negative for dispense/discard)
+                    </label>
+                    <input
+                      type="number"
+                      value={editQty}
+                      onChange={(e) => setEditQty(e.target.value)}
+                      placeholder="e.g. -24"
+                      className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-sm font-black text-slate-950 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                      Bottles Delta
+                    </label>
+                    <input
+                      type="number"
+                      value={editBottles}
+                      onChange={(e) => setEditBottles(e.target.value)}
+                      placeholder="e.g. 1"
+                      className="w-full min-h-[40px] px-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl font-mono text-sm font-black text-slate-950 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block mb-1">
+                    Details / Reason for Revision
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editDetails}
+                    onChange={(e) => setEditDetails(e.target.value)}
+                    placeholder="Clinical revision notes..."
+                    className="w-full p-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => { setIsWarningOpen(false); setEditingLog(null); }}
-                  className="min-h-[44px] px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                  className="min-h-[42px] px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -634,10 +824,10 @@ export default function AuditLogModal({
                   type="button"
                   onClick={handleConfirmEdit}
                   disabled={loading}
-                  className="min-h-[44px] px-5 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  className="min-h-[42px] px-5 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
                   <Check className="w-4 h-4 stroke-[3]" />
-                  <span>{loading ? 'Saving...' : 'Yes, Modify Record'}</span>
+                  <span>{loading ? 'Saving...' : 'Save Revisions'}</span>
                 </button>
               </div>
             </div>
