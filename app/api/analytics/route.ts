@@ -84,7 +84,8 @@ export async function GET(request: Request) {
         if (cloudLogs && !error && cloudLogs.length > 0) {
           formattedLogs = cloudLogs.map((l: any) => {
             const parsedMeta = parseLogDetails(l.details || '');
-            const lotList = Array.from(new Set([...parsedMeta.lotNumbers, ...parseLotNumbers(l.lot_numbers)]));
+            const directLots = parseLotNumbers(l.lot_numbers);
+            const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
 
             const rawName = l.item_generic_name || 'Medication Formulation';
             const matched = (l.item_id && itemLookup.get(l.item_id)) || itemLookup.get(rawName.toLowerCase()) || null;
@@ -143,7 +144,8 @@ export async function GET(request: Request) {
 
       formattedLogs = logs.map((log: any) => {
         const parsedMeta = parseLogDetails(log.details || '');
-        const lotList = Array.from(new Set([...parsedMeta.lotNumbers, ...parseLotNumbers(log.lotNumbers)]));
+        const directLots = parseLotNumbers(log.lotNumbers);
+        const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
 
         const rawName = log.item?.genericName || (log as any).itemGenericName || 'Medication Formulation';
         const rawDosage = log.item?.dosage;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { DispenseLog } from '@/types/inventory';
+import { parseLotNumbers } from '@/lib/stockMath';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -44,13 +45,8 @@ export async function GET() {
         if (cloudLogs && !error) {
           const mapped: DispenseLog[] = cloudLogs.map((l: any) => {
             const parsedMeta = parseLogDetails(l.details || '');
-            let lotList = parsedMeta.lotNumbers;
-            try {
-              if (l.lot_numbers) {
-                const addList = typeof l.lot_numbers === 'string' ? (l.lot_numbers.startsWith('[') ? JSON.parse(l.lot_numbers) : l.lot_numbers.split(',')) : l.lot_numbers;
-                lotList = Array.from(new Set([...lotList, ...addList]));
-              }
-            } catch (e) {}
+            const directLots = parseLotNumbers(l.lot_numbers);
+            const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
             const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
             const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
@@ -96,14 +92,11 @@ export async function GET() {
     }).catch(() => []);
 
     const dbLogs: DispenseLog[] = logs.map((l) => {
-      let lotList: string[] = [];
-      try {
-        if (l.lotNumbers) {
-          lotList = l.lotNumbers.startsWith('[') ? JSON.parse(l.lotNumbers) : l.lotNumbers.split(',').map((s: string) => s.trim()).filter(Boolean);
-        }
-      } catch (e) {}
+      const parsedMeta = parseLogDetails(l.details || '');
+      const directLots = parseLotNumbers(l.lotNumbers);
+      const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
 
-      const detailsLower = (l.details || '').toLowerCase();
+      const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
       const isUndispense = l.actionType === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
       const isRestock = l.actionType === 'RESTOCK' || detailsLower.includes('restocked');
       const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.actionType || 'DISPENSE'));
@@ -117,11 +110,11 @@ export async function GET() {
         quantityChanged: resolvedQty,
         actionType: resolvedActionType as any,
         userRole: l.userRole || 'STAFF',
-        details: l.details || 'Clinical inventory adjustment logged.',
+        details: parsedMeta.details || l.details || 'Clinical inventory adjustment logged.',
         createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
-        dispensedUnit: l.dispensedUnit as any,
-        dispensedBottles: l.dispensedBottles || 0,
-        dispensedPillsPerBottle: l.dispensedPillsPerBottle || 0,
+        dispensedUnit: (l.dispensedUnit || parsedMeta.dispensedUnit) as any,
+        dispensedBottles: l.dispensedBottles || parsedMeta.dispensedBottles || 0,
+        dispensedPillsPerBottle: l.dispensedPillsPerBottle || parsedMeta.dispensedPillsPerBottle || 0,
         lotNumbers: lotList,
         isTestMode: l.isTestMode || false,
       };
@@ -239,18 +232,41 @@ export async function PUT(request: Request) {
     }
 
     const numericQty = quantityChanged !== undefined ? Number(quantityChanged) : undefined;
-    const updatedDetails = details !== undefined ? details : 'Clinical usage log updated manually during audit review.';
+    
+    // Normalize lot numbers
+    let normalizedLots: string[] | undefined = undefined;
+    if (lotNumbers !== undefined) {
+      normalizedLots = parseLotNumbers(lotNumbers);
+    }
+
+    // Clean user details and sync with new lot number
+    let baseDetails = (details !== undefined ? details : '').split(' | METADATA: ')[0].trim();
+    if (!baseDetails) {
+      baseDetails = 'Clinical usage log updated manually during audit review.';
+    }
+    if (normalizedLots && normalizedLots.length > 0 && /Lot\s+[a-zA-Z0-9_\-]+/i.test(baseDetails)) {
+      baseDetails = baseDetails.replace(/Lot\s+[a-zA-Z0-9_\-]+/gi, `Lot ${normalizedLots.join(', ')}`);
+    }
+
+    // Serialize fresh metadata payload
+    const metaObj = {
+      dispensedUnit: dispensedUnit !== undefined ? dispensedUnit : null,
+      dispensedBottles: dispensedBottles !== undefined ? (Number(dispensedBottles) || 0) : 0,
+      dispensedPillsPerBottle: dispensedPillsPerBottle !== undefined ? (Number(dispensedPillsPerBottle) || 0) : 0,
+      lotNumbers: normalizedLots !== undefined ? normalizedLots : [],
+    };
+    const fullDetailsWithMeta = `${baseDetails} | METADATA: ${JSON.stringify(metaObj)}`;
 
     // 1. Update in Supabase Cloud Postgres
     if (supabase) {
       try {
         const updatePayload: any = {};
         if (numericQty !== undefined) updatePayload.quantity_changed = numericQty;
-        if (details !== undefined) updatePayload.details = updatedDetails;
+        updatePayload.details = fullDetailsWithMeta;
         if (actionType !== undefined) updatePayload.action_type = actionType;
         if (itemGenericName !== undefined) updatePayload.item_generic_name = itemGenericName;
-        if (lotNumbers !== undefined) {
-          updatePayload.lot_numbers = typeof lotNumbers === 'string' ? lotNumbers : JSON.stringify(lotNumbers);
+        if (normalizedLots !== undefined) {
+          updatePayload.lot_numbers = JSON.stringify(normalizedLots);
         }
         if (dispensedBottles !== undefined) updatePayload.dispensed_bottles = Number(dispensedBottles) || 0;
         if (dispensedUnit !== undefined) updatePayload.dispensed_unit = dispensedUnit;
@@ -258,12 +274,18 @@ export async function PUT(request: Request) {
         if (createdAt !== undefined) updatePayload.created_at = createdAt;
         if (userRole !== undefined) updatePayload.user_role = userRole;
 
-        await supabase
+        const { error: supaErr } = await supabase
           .from('dispense_logs')
           .update(updatePayload)
           .eq('id', id);
-      } catch (cloudErr) {
+
+        if (supaErr) {
+          console.error('Supabase update log error:', supaErr);
+          return NextResponse.json({ error: supaErr.message }, { status: 500 });
+        }
+      } catch (cloudErr: any) {
         console.warn('Failed updating Supabase log:', cloudErr);
+        return NextResponse.json({ error: cloudErr.message || 'Database error' }, { status: 500 });
       }
     }
 
@@ -271,10 +293,10 @@ export async function PUT(request: Request) {
     const target = logsFallbackCache.find((l) => l.id === id);
     if (target) {
       if (numericQty !== undefined) target.quantityChanged = numericQty;
-      if (details !== undefined) target.details = updatedDetails;
+      target.details = fullDetailsWithMeta;
       if (actionType !== undefined) target.actionType = actionType;
       if (itemGenericName !== undefined) target.itemGenericName = itemGenericName;
-      if (lotNumbers !== undefined) target.lotNumbers = Array.isArray(lotNumbers) ? lotNumbers : [String(lotNumbers)];
+      if (normalizedLots !== undefined) target.lotNumbers = normalizedLots;
       if (dispensedBottles !== undefined) target.dispensedBottles = Number(dispensedBottles) || 0;
       if (dispensedUnit !== undefined) target.dispensedUnit = dispensedUnit;
       if (dispensedPillsPerBottle !== undefined) target.dispensedPillsPerBottle = Number(dispensedPillsPerBottle) || 0;
@@ -286,11 +308,11 @@ export async function PUT(request: Request) {
     try {
       const sqlitePayload: any = {};
       if (numericQty !== undefined) sqlitePayload.quantityChanged = numericQty;
-      if (details !== undefined) sqlitePayload.details = updatedDetails;
+      sqlitePayload.details = fullDetailsWithMeta;
       if (actionType !== undefined) sqlitePayload.actionType = actionType;
       if (itemGenericName !== undefined) sqlitePayload.itemGenericName = itemGenericName;
-      if (lotNumbers !== undefined) {
-        sqlitePayload.lotNumbers = typeof lotNumbers === 'string' ? lotNumbers : JSON.stringify(lotNumbers);
+      if (normalizedLots !== undefined) {
+        sqlitePayload.lotNumbers = JSON.stringify(normalizedLots);
       }
       if (dispensedBottles !== undefined) sqlitePayload.dispensedBottles = Number(dispensedBottles) || 0;
       if (dispensedUnit !== undefined) sqlitePayload.dispensedUnit = dispensedUnit;
@@ -306,7 +328,7 @@ export async function PUT(request: Request) {
       // Ignore on serverless
     }
 
-    return NextResponse.json({ success: true, id, quantityChanged: numericQty, details: updatedDetails });
+    return NextResponse.json({ success: true, id, quantityChanged: numericQty, details: baseDetails, lotNumbers: normalizedLots });
   } catch (err: any) {
     console.error('Failed to update audit log:', err);
     return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });

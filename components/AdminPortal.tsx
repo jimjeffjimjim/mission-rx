@@ -51,6 +51,7 @@ import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers, filterA
 import { searchSemanticFormulary, matchesClinicalQuery } from '@/lib/smartSearch';
 import SpecialtyManagerModal from '@/components/SpecialtyManagerModal';
 import SpreadsheetImportModal from '@/components/SpreadsheetImportModal';
+import { APP_VERSION_LABEL } from '@/lib/version';
 
 interface AdminPortalProps {
   items: InventoryItem[];
@@ -412,9 +413,10 @@ export default function AdminPortal({
     setReportLogQty(String(rawQty));
     setReportLogBottles(String(log.dispensedBottles || (isDiscard ? log.effectiveBottlesDiscarded : 0) || 0));
     setReportLogAction(log.actionType || (isDiscard ? 'DISCARD_EXPIRED' : 'DISPENSE'));
-    const parsedLots = log.discardLotNumber || (Array.isArray(log.lotNumbers) ? log.lotNumbers.join(', ') : (log.lotNumbers || ''));
+    const rawParsedLots = parseLotNumbers(log.lotNumbers);
+    const parsedLots = rawParsedLots.length > 0 ? rawParsedLots.join(', ') : (log.discardLotNumber || '');
     setReportLogLots(parsedLots);
-    setReportLogDetails(log.details || '');
+    setReportLogDetails((log.details || '').split(' | METADATA: ')[0].trim());
   };
 
   const handleConfirmReportLogEdit = async () => {
@@ -422,6 +424,10 @@ export default function AdminPortal({
     setSavingReportEdit(true);
     try {
       const splitLots = reportLogLots.split(',').map((s: string) => s.trim()).filter(Boolean);
+      let cleanDetails = reportLogDetails.split(' | METADATA: ')[0].trim();
+      if (splitLots.length > 0 && /Lot\s+[a-zA-Z0-9_\-]+/i.test(cleanDetails)) {
+        cleanDetails = cleanDetails.replace(/Lot\s+[a-zA-Z0-9_\-]+/gi, `Lot ${splitLots.join(', ')}`);
+      }
       const res = await fetch('/api/logs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -432,7 +438,7 @@ export default function AdminPortal({
           quantityChanged: Number(reportLogQty) || 0,
           dispensedBottles: Number(reportLogBottles) || 0,
           lotNumbers: splitLots,
-          details: reportLogDetails,
+          details: cleanDetails,
           developer: true
         })
       });
@@ -442,7 +448,8 @@ export default function AdminPortal({
         await fetchAnalytics(timeframe);
         if (onRefreshData) onRefreshData();
       } else {
-        alert('Failed to update report record.');
+        const errJson = await res.json().catch(() => ({}));
+        alert(`Failed to update report record: ${errJson.error || 'Server error'}`);
       }
     } catch (e) {
       console.error('Failed editing report log:', e);
@@ -973,6 +980,13 @@ export default function AdminPortal({
                   <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${isReadOnlyMode ? 'text-white' : 'text-slate-950'}`}>
                     {isReadOnlyMode ? 'Viewer Portal & Formulary Archive' : 'Admin Control Center'}
                   </h2>
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                    isReadOnlyMode 
+                      ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/30' 
+                      : 'bg-slate-950/20 text-slate-950 border-slate-950/30 font-mono'
+                  }`}>
+                    {APP_VERSION_LABEL}
+                  </span>
                   {isReadOnlyMode && (
                     <span className="text-[11px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2.5 py-0.5 rounded-full">
                       Read-Only
@@ -2301,8 +2315,8 @@ export default function AdminPortal({
                           : `mission_rx_dispensary_report_${new Date().toISOString().split('T')[0]}.xls`;
 
                         const rowsXml = (isDiscardReport ? discardReportLogs : dispensaryReportLogs).map((log: any) => {
-                          const lotArr = parseLotNumbers(log.lotNumbers || (log.discardLotNumber ? [log.discardLotNumber] : []));
-                          const lotStr = log.discardLotNumber || (lotArr.length > 0 ? lotArr.join(', ') : 'N/A');
+                          const lotArr = parseLotNumbers(log.lotNumbers);
+                          const lotStr = lotArr.length > 0 ? lotArr.join(', ') : (log.discardLotNumber || 'N/A');
                           const signedQty = isDiscardReport
                             ? `-${log.effectivePillsDiscarded || Math.abs(log.quantityChanged || 0)}`
                             : log.actionType === 'DISPENSE'
@@ -2410,7 +2424,8 @@ export default function AdminPortal({
                             (logName && logName.startsWith(i.genericName.toLowerCase())))
                           );
 
-                          const lotStr = log.discardLotNumber || parseLotNumbers(log.lotNumbers && log.lotNumbers.length > 0 ? log.lotNumbers : corrItem?.lotNumbers).join(', ') || 'N/A';
+                          const rawLogLots = parseLotNumbers(log.lotNumbers);
+                          const lotStr = rawLogLots.length > 0 ? rawLogLots.join(', ') : (log.discardLotNumber || parseLotNumbers(corrItem?.lotNumbers).join(', ') || 'N/A');
                           const signedQty = isDiscardReport
                             ? `-${log.effectivePillsDiscarded || Math.abs(log.quantityChanged || 0)}`
                             : log.actionType === 'RESTOCK'
@@ -2499,7 +2514,8 @@ export default function AdminPortal({
                             (logName && logName.startsWith(i.genericName.toLowerCase())))
                           );
 
-                          const lotList = log.discardLotNumber ? [log.discardLotNumber] : parseLotNumbers(log.lotNumbers);
+                          const rawParsedLots = parseLotNumbers(log.lotNumbers);
+                          const lotList = rawParsedLots.length > 0 ? rawParsedLots : (log.discardLotNumber ? [log.discardLotNumber] : []);
 
                           return (
                             <tr key={log.id} className="hover:bg-rose-50/30 transition-colors">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
+import { parseLotNumbers } from '@/lib/stockMath';
 
 let backupsFallbackCache: any[] = [];
 
@@ -64,7 +65,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing valid inventory array for backup snapshot.' }, { status: 400 });
     }
 
-    let finalLogs: any[] = Array.isArray(logs) && logs.length > 0 ? logs : [];
+    let finalLogs: any[] = [];
+    if (Array.isArray(logs) && logs.length > 0) {
+      finalLogs = logs.map((l: any) => ({
+        id: l.id || `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        itemId: l.itemId || l.item_id || 'unknown',
+        itemGenericName: l.itemGenericName || l.item_generic_name || 'Medication Transaction Record',
+        quantityChanged: Number(l.quantityChanged ?? l.quantity_changed) || 0,
+        actionType: l.actionType || l.action_type || 'DISPENSE',
+        userRole: l.userRole || l.user_role || 'STAFF',
+        details: l.details || 'Clinical inventory adjustment logged.',
+        createdAt: l.createdAt || l.created_at || new Date().toISOString(),
+        lotNumbers: parseLotNumbers(l.lotNumbers ?? l.lot_numbers),
+        dispensedBottles: Number(l.dispensedBottles ?? l.dispensed_bottles) || 0,
+        dispensedUnit: l.dispensedUnit || l.dispensed_unit || null,
+        dispensedPillsPerBottle: Number(l.dispensedPillsPerBottle ?? l.dispensed_pills_per_bottle) || 0,
+        isTestMode: Boolean(l.isTestMode ?? l.is_test_mode),
+      }));
+    }
 
     // If logs were not provided (e.g. background automated snapshot), dynamically fetch all live audit logs
     if (finalLogs.length === 0) {
@@ -84,6 +102,11 @@ export async function POST(request: Request) {
               userRole: l.user_role || 'STAFF',
               details: l.details || 'Clinical inventory adjustment logged.',
               createdAt: l.created_at || new Date().toISOString(),
+              lotNumbers: parseLotNumbers(l.lot_numbers),
+              dispensedBottles: Number(l.dispensed_bottles) || 0,
+              dispensedUnit: l.dispensed_unit || null,
+              dispensedPillsPerBottle: Number(l.dispensed_pills_per_bottle) || 0,
+              isTestMode: Boolean(l.is_test_mode),
             }));
           }
         } catch (e) {
@@ -98,12 +121,17 @@ export async function POST(request: Request) {
             finalLogs = dbLogs.map((l: any) => ({
               id: l.id,
               itemId: l.itemId,
-              itemGenericName: l.itemGenericName || 'Medication Transaction Record',
-              quantityChanged: l.quantityChanged,
+              itemGenericName: (l as any).itemGenericName || 'Medication Transaction Record',
+              quantityChanged: Number(l.quantityChanged) || 0,
               actionType: l.actionType || 'DISPENSE',
               userRole: l.userRole || 'STAFF',
               details: l.details || 'Clinical inventory adjustment logged.',
               createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
+              lotNumbers: parseLotNumbers(l.lotNumbers),
+              dispensedBottles: Number(l.dispensedBottles) || 0,
+              dispensedUnit: l.dispensedUnit || null,
+              dispensedPillsPerBottle: Number(l.dispensedPillsPerBottle) || 0,
+              isTestMode: Boolean(l.isTestMode),
             }));
           }
         } catch (e) {
@@ -168,7 +196,7 @@ export async function POST(request: Request) {
       itemCount,
       logCount,
       inventorySnapshot: inventory,
-      logsSnapshot: logs || [],
+      logsSnapshot: finalLogs,
       notes: cleanNotes,
     };
 
@@ -269,6 +297,33 @@ export async function PUT(request: Request) {
 
       await supabase.from('inventory_items').insert(restoredItems);
 
+      // Restore historical audit & discard logs if present in backup snapshot
+      if (Array.isArray(targetBackup.logs) && targetBackup.logs.length > 0) {
+        const restoredLogs = targetBackup.logs.map((log: any) => {
+          const rawLots = log.lotNumbers || log.lot_numbers || [];
+          const lots = parseLotNumbers(rawLots);
+          return {
+            id: log.id || `log_restore_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            item_id: log.itemId || log.item_id || 'RESTORE',
+            item_generic_name: log.itemGenericName || log.item_generic_name || 'Medication Transaction Record',
+            quantity_changed: Number(log.quantityChanged ?? log.quantity_changed) || 0,
+            action_type: log.actionType || log.action_type || 'DISPENSE',
+            user_role: log.userRole || log.user_role || 'ADMIN',
+            details: log.details || 'Clinical inventory adjustment logged.',
+            created_at: log.createdAt || log.created_at || new Date().toISOString(),
+            lot_numbers: JSON.stringify(lots),
+            dispensed_bottles: Number(log.dispensedBottles ?? log.dispensed_bottles) || 0,
+            dispensed_unit: log.dispensedUnit || log.dispensed_unit || null,
+            dispensed_pills_per_bottle: Number(log.dispensedPillsPerBottle ?? log.dispensed_pills_per_bottle) || 0,
+          };
+        });
+
+        for (let i = 0; i < restoredLogs.length; i += 100) {
+          const batch = restoredLogs.slice(i, i + 100);
+          await supabase.from('dispense_logs').upsert(batch, { onConflict: 'id' });
+        }
+      }
+
       // Add restoration audit log
       await supabase.from('dispense_logs').insert([{
         id: `log_restore_${Date.now()}`,
@@ -277,12 +332,69 @@ export async function PUT(request: Request) {
         quantity_changed: 0,
         action_type: 'AUDIT',
         user_role: 'ADMIN',
-        details: `Clinic inventory successfully restored from historical weekly backup: "${targetBackup.title}".`,
+        details: `Clinic inventory and audit trail successfully restored from historical weekly backup: "${targetBackup.title}".`,
         created_at: new Date().toISOString(),
       }]);
     }
 
-    return NextResponse.json({ success: true, message: `Successfully restored inventory from backup: ${targetBackup.title}` });
+    // 2. Synchronize SQLite local database if accessible
+    try {
+      if (Array.isArray(targetBackup.inventory) && targetBackup.inventory.length > 0) {
+        await prisma.inventoryItem.deleteMany({}).catch(() => null);
+        for (const item of targetBackup.inventory) {
+          await prisma.inventoryItem.create({
+            data: {
+              id: item.id,
+              shelfLocation: item.shelfLocation || item.shelf_location,
+              genericName: item.genericName || item.generic_name,
+              brandName: item.brandName || item.brand_name || null,
+              chemicalName: item.chemicalName || item.chemical_name || null,
+              dosage: item.dosage || '',
+              itemType: item.itemType || item.item_type || 'TABLET',
+              stockUnit: item.stockUnit || item.stock_unit || 'Bottles',
+              subUnit: item.subUnit || item.sub_unit || 'pills',
+              bottlesAvailable: item.bottlesAvailable ?? item.bottles_available ?? 0,
+              pillsPerBottle: item.pillsPerBottle ?? item.pills_per_bottle ?? 0,
+              looseUnitsAvailable: item.looseUnitsAvailable ?? item.loose_units_available ?? 0,
+              expirationDate: item.expirationDate || item.expiration_date || '',
+              lotNumbers: typeof item.lotNumbers === 'string' ? item.lotNumbers : JSON.stringify(item.lotNumbers || []),
+              directions: item.directions || null,
+            },
+          }).catch(() => null);
+        }
+      }
+
+      if (Array.isArray(targetBackup.logs) && targetBackup.logs.length > 0) {
+        for (const log of targetBackup.logs) {
+          const lots = parseLotNumbers(log.lotNumbers || log.lot_numbers);
+          await prisma.dispenseLog.upsert({
+            where: { id: log.id },
+            update: {
+              lotNumbers: JSON.stringify(lots),
+              details: log.details || '',
+              quantityChanged: Number(log.quantityChanged ?? log.quantity_changed) || 0,
+            },
+            create: {
+              id: log.id,
+              itemId: log.itemId || log.item_id || 'RESTORE',
+              quantityChanged: Number(log.quantityChanged ?? log.quantity_changed) || 0,
+              actionType: log.actionType || log.action_type || 'DISPENSE',
+              userRole: log.userRole || log.user_role || 'ADMIN',
+              details: log.details || 'Clinical inventory adjustment logged.',
+              createdAt: log.createdAt ? new Date(log.createdAt) : new Date(),
+              lotNumbers: JSON.stringify(lots),
+              dispensedBottles: Number(log.dispensedBottles ?? log.dispensed_bottles) || 0,
+              dispensedUnit: log.dispensedUnit || log.dispensed_unit || null,
+              dispensedPillsPerBottle: Number(log.dispensedPillsPerBottle ?? log.dispensed_pills_per_bottle) || 0,
+            },
+          }).catch(() => null);
+        }
+      }
+    } catch (dbErr) {
+      // Ignore on serverless
+    }
+
+    return NextResponse.json({ success: true, message: `Successfully restored inventory and logs from backup: ${targetBackup.title}` });
   } catch (err: any) {
     console.error('Failed restoring from backup:', err);
     return NextResponse.json({ error: err.message || 'Restore error' }, { status: 500 });

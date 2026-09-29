@@ -583,7 +583,7 @@ export function filterDiscardLogs(rawLogs: DispenseLog[]): DiscardReportEntry[] 
 
     // Extract lot from log or details
     const lots = parseLotNumbers(log.lotNumbers);
-    let lotStr = lots.length > 0 ? lots[0] : '';
+    let lotStr = lots.length > 0 ? lots.join(', ') : '';
     if (!lotStr && log.details) {
       const lMatch = log.details.match(/lot\s*([a-z0-9_-]+)/i);
       if (lMatch) lotStr = lMatch[1];
@@ -594,6 +594,7 @@ export function filterDiscardLogs(rawLogs: DispenseLog[]): DiscardReportEntry[] 
       actionType: 'DISCARD',
       effectivePillsDiscarded: pills,
       effectiveBottlesDiscarded: bottles,
+      lotNumbers: lots.length > 0 ? lots : (lotStr ? [lotStr] : []),
       discardLotNumber: lotStr || undefined,
     });
   }

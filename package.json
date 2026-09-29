@@ -1,13 +1,14 @@
 {
   "name": "formulary-medical-inventory",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed && next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "bump-version": "tsx scripts/bump_version.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",

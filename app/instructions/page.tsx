@@ -25,6 +25,7 @@ import {
   Info,
   Trash2
 } from 'lucide-react';
+import { APP_VERSION_FULL } from '@/lib/version';
 
 export default function InstructionsPage() {
   const [activeTab, setActiveTab] = useState<'quickstart' | 'doctor' | 'admin' | 'glossary' | 'faq'>('quickstart');
@@ -76,7 +77,7 @@ export default function InstructionsPage() {
           <div className="relative z-10 space-y-3">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-extrabold">
               <Sparkles className="w-4 h-4 stroke-[2.5]" />
-              <span>Beginner-Friendly Operating Guide</span>
+              <span>Beginner-Friendly Operating Guide • {APP_VERSION_FULL}</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
               Welcome to MissionRx Inventory System
