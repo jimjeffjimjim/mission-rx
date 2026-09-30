@@ -336,7 +336,7 @@ export default function InstructionsPage() {
                     <span>5. Viewer & Auditor Mode (PIN 8888)</span>
                   </h4>
                   <p className="text-indigo-950">
-                    Use PIN <code className="font-mono font-bold text-indigo-900">8888</code> for auditors, clinic partners, and staff who need to browse the full admin inventory, examine equipment, check usage analytics, and export Excel/CSV reports without modifying anything. In Viewer mode, all edit, dispense, restock, and delete controls are safely disabled and hidden.
+                    Use PIN <code className="font-mono font-bold text-indigo-900">8888</code> for auditors, clinic partners, and staff who need to browse the full admin inventory, examine equipment, check usage analytics, waste expired stock with confirmation, and export Excel/CSV reports without modifying clinical formulations. In Viewer mode, formulation edits, patient dispensing, restocking, and permanent card deletions remain safely protected.
                   </p>
                 </div>
 

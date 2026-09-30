@@ -1156,6 +1156,10 @@ export default function Home() {
                           onUpdateStock={handleUpdateStock}
                           onAdjustStock={handleAdjustStock}
                           onEditItem={openEditModal}
+                          onOpenDiscardModal={(item) => {
+                            setDiscardItem(item);
+                            setIsDiscardModalOpen(true);
+                          }}
                         />
                       ))}
                     </div>

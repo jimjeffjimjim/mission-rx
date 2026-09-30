@@ -13,7 +13,8 @@ import {
   Tag, 
   Layers, 
   AlertTriangle,
-  FileText
+  FileText,
+  PackageX
 } from 'lucide-react';
 import { calculateTotalUnits, convertTotalUnitsToStock } from '@/lib/stockMath';
 
@@ -23,9 +24,10 @@ interface InventoryCardProps {
   onUpdateStock: (id: string, newBottles: number, newLoose: number) => void;
   onAdjustStock?: (id: string, bottleDelta: number, looseDelta: number) => void;
   onEditItem: (item: InventoryItem) => void;
+  onOpenDiscardModal?: (item: InventoryItem) => void;
 }
 
-export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock, onEditItem }: InventoryCardProps) {
+export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock, onEditItem, onOpenDiscardModal }: InventoryCardProps) {
   // Local state for direct numeric typing entry when in Admin mode
   const [editingBottles, setEditingBottles] = useState(false);
   const [bottlesInput, setBottlesInput] = useState(item.bottlesAvailable.toString());
@@ -238,6 +240,21 @@ export default function InventoryCard({ item, role, onUpdateStock, onAdjustStock
               <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
               <span>{expStatus.label}</span>
             </span>
+
+            {expStatus.type === 'EXPIRED' && totalUnits > 0 && onOpenDiscardModal && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDiscardModal(item);
+                }}
+                className="px-2.5 py-1 rounded-full bg-rose-700 hover:bg-rose-800 text-white font-black text-xs flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer transition-all shrink-0"
+                title="Expired Stock: Click to safely waste/dump stock with confirmation"
+              >
+                <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Waste Stock</span>
+              </button>
+            )}
           </div>
         </div>
 

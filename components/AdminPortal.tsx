@@ -761,7 +761,13 @@ export default function AdminPortal({
 
     if (!confirmed) return;
 
-    if (onDeleteItem) {
+    if (onDiscardStock) {
+      onDiscardStock({
+        itemId: item.id,
+        discardAll: true,
+        reason: '[EXPIRED / WASTE]: Full stock discard approved via quick dump action'
+      });
+    } else if (onDeleteItem) {
       onDeleteItem(item.id);
     }
   };
@@ -989,13 +995,13 @@ export default function AdminPortal({
                   </span>
                   {isReadOnlyMode && (
                     <span className="text-[11px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 px-2.5 py-0.5 rounded-full">
-                      Read-Only
+                      Viewer (Stock Waste Permitted)
                     </span>
                   )}
                 </div>
                 <p className={`text-xs sm:text-sm font-bold ${isReadOnlyMode ? 'text-indigo-200/90' : 'text-slate-900/80'}`}>
                   {isReadOnlyMode
-                    ? 'Clinical Oversight, Data Verification & Full Formulary Export Hub (PIN 8888)'
+                    ? 'Clinical Oversight, Data Verification & Stock Waste Access (PIN 8888)'
                     : 'Central Pharmaceutical Inventory & Dispense Analytics Management'}
                 </p>
               </div>
@@ -1332,7 +1338,7 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4 text-center">Total Volume / Units</th>
                   <th className="py-3.5 px-4">Expiry Date</th>
                   <th className="py-3.5 px-4">Lot Numbers</th>
-                  <th className="py-3.5 px-4 text-right">{isReadOnlyMode ? 'History' : 'Actions'}</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-sm font-medium">
@@ -1609,12 +1615,12 @@ export default function AdminPortal({
                                 <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
                                 <span>Expired ({Math.abs(expDays)}d ago)</span>
                               </span>
-                              {!isReadOnlyMode && totalUnits > 0 && (
+                              {totalUnits > 0 && (
                                 <button
                                   type="button"
                                   onClick={() => handleDumpExpired(item)}
                                   className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer transition-all shrink-0"
-                                  title="Pills expired and dumped out? Click to clear lots, expiration, and set count to 0 (card preserved)"
+                                  title="Pills expired and dumped out? Click to open waste disposal modal with confirmation (card preserved)"
                                 >
                                   <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
                                   <span>Dump (0)</span>
@@ -1653,27 +1659,28 @@ export default function AdminPortal({
                               </button>
                             )}
 
+                            <button
+                              type="button"
+                              onClick={() => handleDumpExpired(item)}
+                              disabled={totalUnits === 0}
+                              className={`p-2 rounded-xl border font-bold text-xs transition-all active:scale-95 ${
+                                totalUnits === 0
+                                  ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                                  : isExp
+                                  ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border-rose-300 shadow-2xs cursor-pointer'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 cursor-pointer'
+                              }`}
+                              title={
+                                totalUnits === 0
+                                  ? 'Stock is already 0'
+                                  : 'Discard / Waste Stock: Open waste disposal modal with confirmation (does NOT count as dispensed)'
+                              }
+                            >
+                              <PackageX className="w-4 h-4" />
+                            </button>
+
                             {!isReadOnlyMode && (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDumpExpired(item)}
-                                  disabled={totalUnits === 0}
-                                  className={`p-2 rounded-xl border font-bold text-xs transition-all active:scale-95 ${
-                                    totalUnits === 0
-                                      ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                                      : isExp
-                                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border-rose-300 shadow-2xs cursor-pointer'
-                                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 cursor-pointer'
-                                  }`}
-                                  title={
-                                    totalUnits === 0
-                                      ? 'Stock is already 0'
-                                      : 'Dump Expired Stock: Set pill count to 0 (does NOT count as dispensed)'
-                                  }
-                                >
-                                  <PackageX className="w-4 h-4" />
-                                </button>
 
                                 <button
                                   type="button"
@@ -1775,7 +1782,7 @@ export default function AdminPortal({
                   <th className="py-3.5 px-4">Total Available</th>
                   <th className="py-3.5 px-4">Serial / Lot #</th>
                   <th className="py-3.5 px-4">Maintenance / Expiry</th>
-                  <th className="py-3.5 px-4 text-right">{isReadOnlyMode ? 'History' : 'Actions'}</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
@@ -2042,6 +2049,16 @@ export default function AdminPortal({
                               </button>
                             )}
 
+                            {/* Dump / Expire Stock (Allowed for both Viewer & Admin) */}
+                            <button
+                              type="button"
+                              onClick={() => handleDumpExpired(item)}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors cursor-pointer"
+                              title="Dump / Expire Stock (clears units to 0 while keeping card)"
+                            >
+                              <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+
                             {!isReadOnlyMode && (
                               <>
                                 {/* Edit Item */}
@@ -2058,16 +2075,6 @@ export default function AdminPortal({
                                   title="Edit Equipment Details"
                                 >
                                   <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                                </button>
-
-                                {/* Dump / Expire Stock */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDumpExpired(item)}
-                                  className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors cursor-pointer"
-                                  title="Dump / Expire Stock (clears units to 0 while keeping card)"
-                                >
-                                  <PackageX className="w-3.5 h-3.5 stroke-[2.5]" />
                                 </button>
 
                                 {/* Delete Item */}

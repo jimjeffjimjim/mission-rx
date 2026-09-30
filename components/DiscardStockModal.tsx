@@ -417,8 +417,8 @@ export default function DiscardStockModal({
                 {isDiscarding
                   ? 'Recording Discard...'
                   : mode === 'ALL_STOCK'
-                  ? `Discard All (${totalAvailableUnits} ${item.subUnit || 'pills'})`
-                  : `Discard ${calculatedDiscardUnits} ${item.subUnit || 'pills'}`}
+                  ? `Confirm Waste (${totalAvailableUnits} ${item.subUnit || 'pills'})`
+                  : `Confirm Waste (${calculatedDiscardUnits} ${item.subUnit || 'pills'})`}
               </span>
             </button>
           </div>
