@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AuthRole } from '@/types/inventory';
 import { Lock, AlertCircle, KeyRound, BookOpen } from 'lucide-react';
+import { APP_VERSION_LABEL } from '@/lib/version';
 
 interface AuthGateProps {
   currentRole: AuthRole;
@@ -273,7 +274,7 @@ export default function AuthGate({ currentRole, onAuthenticate }: AuthGateProps)
 
         {/* Footer Legal Links */}
         <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-center gap-2.5 text-xs font-bold text-slate-500">
-          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">v3.3 Live</span>
+          <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold">{APP_VERSION_LABEL}</span>
           <span className="text-slate-300">•</span>
           {isTestingMode && (
             <>

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { FileText, ArrowLeft, ShieldCheck, AlertTriangle, Sparkles, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { APP_VERSION_LEGAL } from '@/lib/version';
 
 export default function TermsOfServicePage() {
   return (
@@ -42,7 +43,7 @@ export default function TermsOfServicePage() {
             <div className="pt-2 text-xs font-bold text-amber-200/80 flex items-center gap-4">
               <span>Effective Date: August 2026</span>
               <span>•</span>
-              <span>Version 2.5 (Ironclad Legal Edition)</span>
+              <span>{APP_VERSION_LEGAL}</span>
             </div>
           </div>
         </div>
