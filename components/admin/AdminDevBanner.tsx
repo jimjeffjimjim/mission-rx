@@ -9,6 +9,7 @@ export interface AdminDevBannerProps {
   isResettingInventory: boolean;
   handleResetInventoryToStart: () => void;
   handleClearAuditLogs: () => void;
+  isDeveloper?: boolean;
 }
 
 export default function AdminDevBanner({
@@ -17,8 +18,9 @@ export default function AdminDevBanner({
   isResettingInventory,
   handleResetInventoryToStart,
   handleClearAuditLogs,
+  isDeveloper = false,
 }: AdminDevBannerProps) {
-  if (!isTestingMode) return null;
+  if (!isTestingMode && !isDeveloper) return null;
 
   return (
     <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
@@ -28,9 +30,9 @@ export default function AdminDevBanner({
         </div>
         <div>
           <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
-            <span>Dev & Testing Utilities</span>
+            <span>{isDeveloper ? 'Developer & Testing Utilities' : 'Dev & Testing Utilities'}</span>
             <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-              Temporary
+              {isDeveloper ? 'Developer (7777)' : 'Temporary'}
             </span>
           </span>
           <p className="text-[11px] font-semibold text-slate-300 flex items-center gap-2">
@@ -44,6 +46,10 @@ export default function AdminDevBanner({
             <span>|</span>
             <span>
               Admin: <strong className="font-mono text-amber-400">7890</strong>
+            </span>
+            <span>|</span>
+            <span>
+              Developer: <strong className="font-mono text-emerald-400">7777</strong>
             </span>
           </p>
         </div>

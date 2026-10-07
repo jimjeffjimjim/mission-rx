@@ -27,16 +27,25 @@ interface DeveloperQrModalProps {
   isOpen: boolean;
   onClose: () => void;
   items: InventoryItem[];
+  userRole?: string;
 }
 
 export default function DeveloperQrModal({
   isOpen,
   onClose,
   items,
+  userRole,
 }: DeveloperQrModalProps) {
-  const [isPinUnlocked, setIsPinUnlocked] = useState(false);
+  const isDevUser = userRole === 'DEVELOPER';
+  const [isPinUnlocked, setIsPinUnlocked] = useState(isDevUser);
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState(false);
+
+  useEffect(() => {
+    if (userRole === 'DEVELOPER') {
+      setIsPinUnlocked(true);
+    }
+  }, [userRole]);
 
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');

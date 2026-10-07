@@ -18,7 +18,7 @@ import { getSpecialtyColor } from '@/lib/specialtyColors';
 import { subscribeToClinicalUpdates } from '@/lib/supabase';
 import { Layers, RefreshCw } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations, applyStockDiscard, DiscardResult } from '@/lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, parseLotNumbers, isFormulationExpired, consolidateDoctorFormulations, applyStockDiscard, DiscardResult, generateItemEditDiff } from '@/lib/stockMath';
 import { searchSemanticFormulary, matchesClinicalQuery, searchReferenceCatalog } from '@/lib/smartSearch';
 import { APP_VERSION_LABEL } from '@/lib/version';
 
@@ -562,7 +562,7 @@ export default function Home() {
           itemId: target.id,
           itemGenericName: canonicalName,
           quantityChanged: delta,
-          actionType: delta >= 0 ? 'RESTOCK' : 'AUDIT',
+          actionType: 'AUDIT',
           details: u.logNote || `Physical count audit adjusted inventory from ${prevTotal} to ${newTotal} units.`,
           lotNumbers: parseLotNumbers(target.lotNumbers),
         });
@@ -590,10 +590,15 @@ export default function Home() {
         baselineItemsRef.current = JSON.parse(JSON.stringify(itemsRef.current));
       }
       if (itemData.id) {
+        const oldItem = itemsRef.current.find((i) => i.id === itemData.id) || items.find((i) => i.id === itemData.id);
+        const diffResult = generateItemEditDiff(oldItem, itemData);
         setItems((prev) =>
           prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i))
         );
-        const canonicalName = getStandardItemName(itemData.genericName, itemData.dosage);
+        const canonicalName = getStandardItemName(
+          itemData.genericName || oldItem?.genericName,
+          itemData.dosage !== undefined ? itemData.dosage : oldItem?.dosage
+        );
         setTestAuditLogs((prev) => [
           {
             id: 'test-edit-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
@@ -602,7 +607,7 @@ export default function Home() {
             quantityChanged: 0,
             actionType: 'EDIT',
             userRole: `${actorTag} (TEST)`,
-            details: `[TESTING MODE - NOT REAL]: Updated medication details for ${canonicalName} in sandbox`,
+            details: `[TESTING MODE - NOT REAL]: ${diffResult.diffString}`,
             isTestMode: true,
             createdAt: new Date().toISOString(),
           },
@@ -646,25 +651,33 @@ export default function Home() {
         ]);
       }
       setIsEditModalOpen(false);
+      setIsEquipmentModalOpen(false);
       setActiveItem(null);
       return;
     }
 
     if (itemData.id) {
+      const oldItem = items.find((i) => i.id === itemData.id) || itemsRef.current.find((i) => i.id === itemData.id);
+      const diffResult = generateItemEditDiff(oldItem, itemData);
+
       setItems((prev) => {
         const updated = prev.map((i) => (i.id === itemData.id ? ({ ...i, ...itemData } as InventoryItem) : i));
+        itemsRef.current = updated;
         saveLocalCache(updated);
         return updated;
       });
 
-      const canonicalName = getStandardItemName(itemData.genericName, itemData.dosage);
+      const canonicalName = getStandardItemName(
+        itemData.genericName || oldItem?.genericName,
+        itemData.dosage !== undefined ? itemData.dosage : oldItem?.dosage
+      );
 
       recordAuditLog({
         itemId: itemData.id,
         itemGenericName: canonicalName,
         quantityChanged: 0,
         actionType: 'EDIT',
-        details: `Updated formulation details, dosage strength (${itemData.dosage || 'N/A'}), or lot tracking history.`,
+        details: diffResult.diffString,
       });
 
       try {
@@ -1220,6 +1233,7 @@ export default function Home() {
         isOpen={isDeveloperQrOpen}
         onClose={() => setIsDeveloperQrOpen(false)}
         items={items}
+        userRole={actorTag}
       />
 
       {/* Footer Legal & Compliance Navigation Bar */}

@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Check,
 } from 'lucide-react';
+import { parseItemEditDiff } from '@/lib/stockMath';
 
 export interface AdminReportLogEditModalProps {
   editingReportLog: any;
@@ -154,6 +155,28 @@ export default function AdminReportLogEditModal({
               placeholder="Clinical revision explanation..."
               className="w-full p-3 bg-white border border-slate-300 focus:border-amber-500 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden"
             />
+            {(() => {
+              const diffChanges = reportLogDetails ? parseItemEditDiff(reportLogDetails) : [];
+              if (diffChanges.length === 0) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                  <span className="text-[10px] uppercase font-black text-blue-900 tracking-wider mr-1">
+                    Diff Preview:
+                  </span>
+                  {diffChanges.map((change, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-900 border border-blue-200 px-2 py-0.5 rounded-lg shadow-2xs"
+                    >
+                      <span className="font-bold text-blue-950">{change.label}:</span>
+                      <span className="line-through text-slate-400 font-mono text-[10px]">'{change.from}'</span>
+                      <span className="text-blue-600 font-black">➔</span>
+                      <span className="text-blue-900 font-bold font-mono text-[10px]">'{change.to}'</span>
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

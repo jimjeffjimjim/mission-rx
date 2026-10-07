@@ -43,6 +43,7 @@ export interface AdminStatsHeaderProps {
   setIsSpreadsheetModalOpen: (open: boolean) => void;
   setIsSpecialtyModalOpen: (open: boolean) => void;
   onExitTestingMode: () => void;
+  isDeveloper?: boolean;
 }
 
 export default function AdminStatsHeader({
@@ -70,6 +71,7 @@ export default function AdminStatsHeader({
   setIsSpreadsheetModalOpen,
   setIsSpecialtyModalOpen,
   onExitTestingMode,
+  isDeveloper = false,
 }: AdminStatsHeaderProps) {
   return (
     <div className="space-y-4">
@@ -80,6 +82,7 @@ export default function AdminStatsHeader({
         isResettingInventory={isResettingInventory}
         handleResetInventoryToStart={handleResetInventoryToStart}
         handleClearAuditLogs={handleClearAuditLogs}
+        isDeveloper={isDeveloper}
       />
 
       {/* Admin / Viewer Portal Banner Header */}

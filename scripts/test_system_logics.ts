@@ -1,4 +1,4 @@
-import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs, applyStockDiscard, filterDiscardLogs, aggregateTopDispensed } from '../lib/stockMath';
+import { calculateTotalUnits, convertTotalUnitsToStock, getStandardItemName, filterAndNetDispensaryLogs, applyStockDiscard, filterDiscardLogs, aggregateTopDispensed, generateItemEditDiff, parseItemEditDiff } from '../lib/stockMath';
 import { InventoryItem } from '../types/inventory';
 
 // Test Runner Framework
@@ -380,6 +380,396 @@ assertEquals(normalizedDiscards[0].discardLotNumber, '4ME2261', 'Advil discarded
 assertEquals(normalizedDiscards[1].itemGenericName, 'Pitavastatin Calcium (2 mg Tablet)', 'Pitavastatin appears second');
 assertEquals(normalizedDiscards[1].effectivePillsDiscarded, 2160, 'Pitavastatin effective pills discarded is 2160');
 assertEquals(normalizedDiscards[1].effectiveBottlesDiscarded, 24, 'Pitavastatin effective bottles discarded is 24');
+
+// -------------------------------------------------------------
+// 9. Inventory Edit Audit Trail Diff Tests
+// -------------------------------------------------------------
+console.log('\n📝 9. Inventory Edit Audit Trail Diff Tests:');
+
+// Test 9.1: Single field change (e.g. shelfLocation changed from 'Shelf A' to 'Dental B')
+const singleChangeDiff = generateItemEditDiff(
+  { shelfLocation: 'Shelf A' },
+  { shelfLocation: 'Dental B' }
+);
+assertEquals(
+  singleChangeDiff.diffString,
+  "Location: 'Shelf A' -> 'Dental B'",
+  'Single field change generates exact Location before -> after diff'
+);
+assertEquals(
+  singleChangeDiff.changes,
+  [{ field: 'shelfLocation', label: 'Location', from: 'Shelf A', to: 'Dental B' }],
+  'Single change parsed into structured change list'
+);
+
+// Test 9.2: Multiple field changes (location, dosage, pack size)
+const multiChangeDiff = generateItemEditDiff(
+  { shelfLocation: 'Shelf A', dosage: '10mg', pillsPerBottle: 100 },
+  { shelfLocation: 'Dental B', dosage: '20mg', pillsPerBottle: 200 }
+);
+assertEquals(
+  multiChangeDiff.diffString,
+  "Location: 'Shelf A' -> 'Dental B', Dosage: '10mg' -> '20mg', Pack Size: '100' -> '200'",
+  'Multiple field changes generate comma-separated diff string'
+);
+assertEquals(multiChangeDiff.changes.length, 3, 'Multiple field changes records 3 changes');
+
+// Test 9.3: Null/empty to value change (brandName null/empty -> 'Advil')
+const emptyToValDiff = generateItemEditDiff(
+  { brandName: '' },
+  { brandName: 'Advil' }
+);
+assertEquals(
+  emptyToValDiff.diffString,
+  "Brand Name: 'None' -> 'Advil'",
+  'Empty to value change formats from as None'
+);
+
+// Test 9.4: No tracked changes returns empty diff summary
+const noChangeDiff = generateItemEditDiff(
+  { genericName: 'Amoxicillin', dosage: '500mg' },
+  { genericName: 'Amoxicillin', dosage: '500mg' }
+);
+assertEquals(
+  noChangeDiff.diffString,
+  'Updated formulation details (no tracked field changes).',
+  'No tracked changes returns standard no-changes string'
+);
+assertEquals(noChangeDiff.changes.length, 0, 'No changes returns empty changes array');
+
+// Test 9.5: Round-trip diff string parsing via parseItemEditDiff
+const parsedDiff = parseItemEditDiff("Location: 'Shelf A' -> 'Dental B', Dosage: '10mg' -> '20mg'");
+assertEquals(parsedDiff.length, 2, 'parseItemEditDiff parses 2 field diff items from text');
+assertEquals(parsedDiff[0], { field: 'location', label: 'Location', from: 'Shelf A', to: 'Dental B' }, 'First parsed diff entry is Location');
+assertEquals(parsedDiff[1], { field: 'dosage', label: 'Dosage', from: '10mg', to: '20mg' }, 'Second parsed diff entry is Dosage');
+
+// Test 9.6: Metadata array pass-through in parseItemEditDiff
+const metaParsed = parseItemEditDiff('some details', [{ field: 'directions', label: 'Directions', from: 'Take 1 daily', to: 'Take 2 daily' }]);
+assertEquals(metaParsed, [{ field: 'directions', label: 'Directions', from: 'Take 1 daily', to: 'Take 2 daily' }], 'parseItemEditDiff preserves structured metadata diff array');
+
+// -------------------------------------------------------------
+// 10. Discard Exclusion & Separation Verification Tests
+// -------------------------------------------------------------
+console.log('\n🚫 10. Discard Exclusion & Separation Verification Tests:');
+
+// Test 10.1: Discards must be completely excluded from dispensary audit reports (filterAndNetDispensaryLogs)
+const dispensaryMixedLogs = [
+  {
+    id: 'disp-1',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -20,
+    createdAt: '2026-09-30T10:00:00Z',
+    details: 'Dispensed 20 capsules'
+  },
+  {
+    id: 'disc-1',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISCARD',
+    quantityChanged: -50,
+    createdAt: '2026-09-30T11:00:00Z',
+    details: '[EXPIRED / WASTE]: Discarded 50 expired capsules'
+  },
+  {
+    id: 'disc-2',
+    itemGenericName: 'Ibuprofen (200mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -30,
+    createdAt: '2026-09-30T11:30:00Z',
+    details: 'Damaged packaging disposal, thrown away into medical waste'
+  },
+  {
+    id: 'restock-1',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'RESTOCK',
+    quantityChanged: 100,
+    createdAt: '2026-09-30T12:00:00Z',
+    details: 'Restocked 100 capsules'
+  }
+];
+
+const dispensaryFiltered = filterAndNetDispensaryLogs(dispensaryMixedLogs as any);
+assertEquals(dispensaryFiltered.length, 2, 'Only 2 dispensary entries returned (both discards strictly excluded)');
+assert(!dispensaryFiltered.some(l => (l.actionType || '').toUpperCase() === 'DISCARD'), 'No DISCARD actionType in dispensary report');
+assert(!dispensaryFiltered.some(l => (l.details || '').toLowerCase().includes('thrown away')), 'No waste/thrown away records in dispensary report');
+assertEquals(dispensaryFiltered[0].actionType, 'RESTOCK', 'Restock record preserved at index 0');
+assertEquals(dispensaryFiltered[1].actionType, 'DISPENSE', 'Legitimate dispense preserved at index 1');
+
+// Test 10.2: Discards must be excluded from aggregateTopDispensed
+const topDispensedInput = [
+  {
+    itemGenericName: 'Paracetamol (500mg)',
+    quantityChanged: -45,
+    actionType: 'DISPENSE',
+    details: 'Dispensed 45 tablets'
+  },
+  {
+    itemGenericName: 'Doxycycline (100mg)',
+    quantityChanged: -500,
+    actionType: 'DISCARD',
+    details: '[EXPIRED / WASTE]: Discarded 500 expired pills'
+  },
+  {
+    itemGenericName: 'Ciprofloxacin (500mg)',
+    quantityChanged: -120,
+    actionType: 'DISPENSE',
+    details: 'Disposal of contaminated lot, thrown away'
+  }
+];
+
+const topDispensedOutput = aggregateTopDispensed(topDispensedInput as any);
+assertEquals(topDispensedOutput.length, 1, 'Only legitimate dispenses included in top dispensed');
+assertEquals(topDispensedOutput[0].genericName, 'Paracetamol (500mg)', 'Paracetamol is the only top dispensed item');
+assertEquals(topDispensedOutput[0].totalDispensed, 45, 'Paracetamol total dispensed count is exactly 45');
+assert(!topDispensedOutput.some(i => i.genericName.includes('Doxycycline')), 'Discarded Doxycycline completely absent from top dispensed');
+assert(!topDispensedOutput.some(i => i.genericName.includes('Ciprofloxacin')), 'Wasted Ciprofloxacin completely absent from top dispensed');
+
+// Test 10.3: Administrative EDIT updating expiration date must NOT be classified as discard in filterDiscardLogs
+const editExpirationLogs = [
+  {
+    id: 'edit-1',
+    itemGenericName: 'Metformin (500mg)',
+    actionType: 'EDIT',
+    quantityChanged: 0,
+    createdAt: '2026-09-30T14:00:00Z',
+    details: "Expiration Date: '2025-01-01' -> '2026-01-01', Location: 'Shelf A' -> 'Shelf B'"
+  }
+];
+
+const discardFromEdit = filterDiscardLogs(editExpirationLogs as any);
+assertEquals(discardFromEdit.length, 0, 'EDIT log modifying expiration date is NOT treated as a discard');
+
+// Test 10.4: Undispense does NOT cancel or net out discard records
+const undispenseVsDiscardLogs = [
+  {
+    itemGenericName: 'Azithromycin (250mg)',
+    quantityChanged: -10,
+    actionType: 'DISCARD',
+    details: '[EXPIRED / WASTE]: Discarded 10 tablets'
+  },
+  {
+    itemGenericName: 'Azithromycin (250mg)',
+    quantityChanged: 10,
+    actionType: 'UNDISPENSE',
+    details: 'Undispensed 10 tablets'
+  }
+];
+
+const dispensaryNetCheck = filterAndNetDispensaryLogs(undispenseVsDiscardLogs as any);
+assertEquals(dispensaryNetCheck.length, 0, 'Dispensary report is empty because discard is excluded and orphaned undispense has no dispense to net');
+
+const discardReportCheck = filterDiscardLogs(undispenseVsDiscardLogs as any);
+assertEquals(discardReportCheck.length, 1, 'Discard report still contains the discard record (undispense cannot cancel discards)');
+assertEquals(discardReportCheck[0].effectivePillsDiscarded, 10, 'Discard pills discarded remains 10');
+
+// -------------------------------------------------------------
+// 11. Hardened Inventory Edit Diff Generation & Delimiter Safety Tests
+// -------------------------------------------------------------
+console.log('\n📝 11. Hardened Inventory Edit Diff Generation & Delimiter Safety Tests:');
+
+// Test 11.1: Chemical Name field diff tracking
+const chemDiff = generateItemEditDiff(
+  { chemicalName: 'Paracetamol' },
+  { chemicalName: 'Acetaminophen' }
+);
+assertEquals(
+  chemDiff.diffString,
+  "Chemical Name: 'Paracetamol' -> 'Acetaminophen'",
+  'Chemical Name change generates exact Chemical Name before -> after diff'
+);
+assertEquals(chemDiff.changes[0].field, 'chemicalName', 'Change field is chemicalName');
+
+// Test 11.2: Apostrophe delimiter safety in field values
+const apostropheDiff = generateItemEditDiff(
+  { directions: "Patient's preference: 1 tab at bedtime" },
+  { directions: "Doctor's orders: 2 tabs with food" }
+);
+assert(!apostropheDiff.diffString.includes("Patient's"), 'Raw single quote escaped to curly apostrophe in diff string');
+const parsedApostrophe = parseItemEditDiff(apostropheDiff.diffString);
+assertEquals(parsedApostrophe.length, 1, 'parseItemEditDiff parses diff with apostrophes cleanly without delimiter clipping');
+assertEquals(parsedApostrophe[0].label, 'Directions', 'Parsed label is Directions');
+
+// Test 11.3: Directions containing colons and arrows
+const colonArrowDiff = parseItemEditDiff("Directions: 'Take at: 08:00 AM' -> 'Take at: 12:00 PM', Location: 'Shelf A' -> 'Shelf B'");
+assertEquals(colonArrowDiff.length, 2, 'parseItemEditDiff successfully handles colons within quoted values');
+assertEquals(colonArrowDiff[0].from, 'Take at: 08:00 AM', 'Parsed from value preserves colon');
+assertEquals(colonArrowDiff[0].to, 'Take at: 12:00 PM', 'Parsed to value preserves colon');
+
+// -------------------------------------------------------------
+// 12. Robust Undispense Netting & Double-Counting Safeguards
+// -------------------------------------------------------------
+console.log('\n🛡️ 12. Robust Undispense Netting & Double-Counting Safeguards:');
+
+// Test 12.1: Generic itemId ('unknown' or 'test-item') on distinct drugs must NEVER cross-cancel
+const crossDrugGenericIdLogs = [
+  {
+    id: 'disp-1',
+    itemId: 'unknown',
+    itemGenericName: 'Ibuprofen (200mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -20,
+    createdAt: '2026-09-30T10:00:00Z',
+  },
+  {
+    id: 'undisp-1',
+    itemId: 'unknown',
+    itemGenericName: 'Paracetamol (500mg)',
+    actionType: 'UNDISPENSE',
+    quantityChanged: 20,
+    createdAt: '2026-09-30T10:30:00Z',
+  }
+];
+const genericIdReport = filterAndNetDispensaryLogs(crossDrugGenericIdLogs as any);
+assertEquals(genericIdReport.length, 1, 'Generic unknown itemId does NOT cause cross-medication cancellation');
+assertEquals(genericIdReport[0].itemGenericName, 'Ibuprofen (200mg)', 'Ibuprofen dispense preserved; Paracetamol undispense does not cross-net');
+
+// Test 12.2: Overlapping medication prefixes must NOT cancel each other (e.g. Amoxicillin vs Amoxicillin / Clavulanate)
+const overlappingPrefixLogs = [
+  {
+    id: 'disp-amox',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -30,
+    createdAt: '2026-09-30T10:00:00Z',
+  },
+  {
+    id: 'undisp-clav',
+    itemGenericName: 'Amoxicillin / Clavulanate (875mg)',
+    actionType: 'UNDISPENSE',
+    quantityChanged: 30,
+    createdAt: '2026-09-30T10:30:00Z',
+  }
+];
+const prefixReport = filterAndNetDispensaryLogs(overlappingPrefixLogs as any);
+assertEquals(prefixReport.length, 1, 'Distinct combination drugs (Amoxicillin / Clavulanate) do NOT cancel plain Amoxicillin');
+assertEquals(prefixReport[0].itemGenericName, 'Amoxicillin (500mg)', 'Amoxicillin dispense strictly preserved');
+
+// Test 12.3: Same medication with dosage variations DOES correctly net out
+const sameMedDosageVariationLogs = [
+  {
+    id: 'disp-amox-base',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -20,
+    createdAt: '2026-09-30T10:00:00Z',
+  },
+  {
+    id: 'undisp-amox-nobase',
+    itemGenericName: 'Amoxicillin',
+    actionType: 'UNDISPENSE',
+    quantityChanged: 20,
+    createdAt: '2026-09-30T10:30:00Z',
+  }
+];
+const sameMedReport = filterAndNetDispensaryLogs(sameMedDosageVariationLogs as any);
+assertEquals(sameMedReport.length, 0, 'Same medication with and without dosage suffix cleanly nets out');
+
+// Test 12.4: Case-insensitive Top Dispensed aggregation
+const caseInsensitiveTopLogs = [
+  { itemGenericName: 'Ibuprofen (200mg)', quantityChanged: -15, actionType: 'DISPENSE' },
+  { itemGenericName: 'ibuprofen (200mg)', quantityChanged: -10, actionType: 'DISPENSE' },
+  { itemGenericName: 'IBUPROFEN (200mg)', quantityChanged: 5, actionType: 'UNDISPENSE' }
+];
+const caseTopResult = aggregateTopDispensed(caseInsensitiveTopLogs as any);
+assertEquals(caseTopResult.length, 1, 'Differently cased medication names aggregate into single item without double counting');
+assertEquals(caseTopResult[0].totalDispensed, 20, 'Net dispensed correctly sums (15 + 10 - 5 = 20)');
+
+// -------------------------------------------------------------
+// 13. Developer Authorization & Discard Normalization Tests
+// -------------------------------------------------------------
+console.log('\n🔒 13. Developer Authorization & Discard Normalization Tests:');
+
+// Test 13.1: Legacy expired waste dump with actionType AUDIT is captured in discard report
+const legacyAuditWasteLogs = [
+  {
+    id: 'audit-waste-1',
+    itemGenericName: 'Doxycycline Hyclate (100 mg Capsule)',
+    actionType: 'AUDIT',
+    quantityChanged: -100,
+    createdAt: '2026-09-30T11:00:00Z',
+    details: '[EXPIRED WASTE DISPOSAL]: Expired lot dumped out into medical destruction receptacle'
+  },
+  {
+    id: 'audit-reconcile-1',
+    itemGenericName: 'Metformin (500 mg Tablet)',
+    actionType: 'AUDIT',
+    quantityChanged: -5,
+    createdAt: '2026-09-30T11:30:00Z',
+    details: 'Physical count reconciliation: adjusted from 100 to 95 units (-5 units)'
+  }
+];
+const legacyDiscards = filterDiscardLogs(legacyAuditWasteLogs as any);
+assertEquals(legacyDiscards.length, 1, 'Only genuine expired waste audit log is in discard report; routine physical audit reconciliation excluded');
+assertEquals(legacyDiscards[0].itemGenericName, 'Doxycycline Hyclate (100 mg Capsule)', 'Correct waste item captured');
+assertEquals(legacyDiscards[0].effectivePillsDiscarded, 100, 'Effective pills discarded is 100');
+
+// -------------------------------------------------------------
+// 14. Advanced Inventory Edit & Cross-Netting Boundary Tests
+// -------------------------------------------------------------
+console.log('\n🔬 14. Advanced Inventory Edit & Cross-Netting Boundary Tests:');
+
+// Test 14.1: Category fallback in generateItemEditDiff
+const categoryDiff = generateItemEditDiff(
+  { category: 'Dental' } as any,
+  { category: 'Cardiology' } as any
+);
+assertEquals(
+  categoryDiff.diffString,
+  "Location: 'Dental' -> 'Cardiology'",
+  'category property fallback generates exact Location diff'
+);
+assertEquals(categoryDiff.changes[0].field, 'shelfLocation', 'Change field is shelfLocation');
+
+// Test 14.2: Distinct dosage strengths must NOT cancel each other in filterAndNetDispensaryLogs
+const distinctDoseLogs = [
+  {
+    id: 'disp-amox-500',
+    itemGenericName: 'Amoxicillin (500mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -30,
+    createdAt: '2026-09-30T10:00:00Z',
+  },
+  {
+    id: 'undisp-amox-250',
+    itemGenericName: 'Amoxicillin (250mg)',
+    actionType: 'UNDISPENSE',
+    quantityChanged: 30,
+    createdAt: '2026-09-30T10:30:00Z',
+  }
+];
+const distinctDoseReport = filterAndNetDispensaryLogs(distinctDoseLogs as any);
+assertEquals(distinctDoseReport.length, 1, 'Distinct dosage strengths (500mg vs 250mg) do NOT cancel each other');
+assertEquals(distinctDoseReport[0].itemGenericName, 'Amoxicillin (500mg)', '500mg dispense strictly preserved');
+assertEquals(distinctDoseReport[0].effectiveQty, 30, '500mg effectiveQty remains 30');
+
+// Test 14.3: Matching itemId maps across name variations in aggregateTopDispensed
+const itemIdAggregateLogs = [
+  {
+    itemId: 'item-unique-123',
+    itemGenericName: 'Ibuprofen (200mg)',
+    actionType: 'DISPENSE',
+    quantityChanged: -50,
+  },
+  {
+    itemId: 'item-unique-123',
+    itemGenericName: 'Ibuprofen',
+    actionType: 'UNDISPENSE',
+    quantityChanged: 20,
+  }
+];
+const itemAggResult = aggregateTopDispensed(itemIdAggregateLogs as any);
+assertEquals(itemAggResult.length, 1, 'Same itemId aggregates into single Top Dispensed entry');
+assertEquals(itemAggResult[0].totalDispensed, 30, 'Net dispensed correctly reflects undispense against same itemId (50 - 20 = 30)');
+
+// Test 14.4: parseItemEditDiff parses Unicode arrow (➔) and ascii arrows identically
+const unicodeArrowDiff = parseItemEditDiff("Location: 'Shelf A' ➔ 'Dental B', Pack Size: '100' --> '200'");
+assertEquals(unicodeArrowDiff.length, 2, 'parseItemEditDiff parses Unicode and extended arrows cleanly');
+assertEquals(unicodeArrowDiff[0].label, 'Location', 'First parsed change is Location');
+assertEquals(unicodeArrowDiff[0].from, 'Shelf A', 'Parsed from value is Shelf A');
+assertEquals(unicodeArrowDiff[0].to, 'Dental B', 'Parsed to value is Dental B');
+assertEquals(unicodeArrowDiff[1].label, 'Pack Size', 'Second parsed change is Pack Size');
+assertEquals(unicodeArrowDiff[1].from, '100', 'Parsed from value is 100');
+assertEquals(unicodeArrowDiff[1].to, '200', 'Parsed to value is 200');
 
 console.log('\n============================================================');
 console.log(`🎉 TEST SUMMARY: ${passedTests}/${totalTests} Passed (${failedTests} Failed)`);

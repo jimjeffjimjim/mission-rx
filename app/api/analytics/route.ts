@@ -93,12 +93,38 @@ export async function GET(request: Request) {
 
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
             const actUpper = (l.action_type || '').toUpperCase();
-            const isDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD') || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
+            const isAdministrative =
+              actUpper === 'AUDIT' ||
+              actUpper === 'EDIT' ||
+              actUpper === 'CREATE' ||
+              actUpper === 'DELETE';
+
+            const isDiscard =
+              actUpper === 'DISCARD' ||
+              actUpper === 'DISCARD_EXPIRED' ||
+              actUpper.includes('DISCARD') ||
+              ((!isAdministrative) && (
+                detailsLower.includes('waste') ||
+                detailsLower.includes('discard') ||
+                detailsLower.includes('thrown away') ||
+                detailsLower.includes('disposal') ||
+                (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+              ));
+
             const isUndispense = !isDiscard && (actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked')));
             const isRestock = !isDiscard && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
-            const resolvedActionType = isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE')));
+            const resolvedActionType = isAdministrative
+              ? actUpper
+              : (isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.action_type || 'DISPENSE'))));
+
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = isAdministrative && actUpper === 'EDIT'
+              ? 0
+              : (isUndispense || isRestock)
+              ? Math.abs(rawQty)
+              : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD')
+              ? -Math.abs(rawQty)
+              : rawQty);
 
             return {
               id: l.id,
@@ -154,12 +180,38 @@ export async function GET(request: Request) {
 
         const detailsLower = (parsedMeta.details || log.details || '').toLowerCase();
         const actUpper = (log.actionType || '').toUpperCase();
-        const isDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD') || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
+        const isAdministrative =
+          actUpper === 'AUDIT' ||
+          actUpper === 'EDIT' ||
+          actUpper === 'CREATE' ||
+          actUpper === 'DELETE';
+
+        const isDiscard =
+          actUpper === 'DISCARD' ||
+          actUpper === 'DISCARD_EXPIRED' ||
+          actUpper.includes('DISCARD') ||
+          ((!isAdministrative) && (
+            detailsLower.includes('waste') ||
+            detailsLower.includes('discard') ||
+            detailsLower.includes('thrown away') ||
+            detailsLower.includes('disposal') ||
+            (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+          ));
+
         const isUndispense = !isDiscard && (actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked')));
         const isRestock = !isDiscard && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
-        const resolvedActionType = isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (log.actionType || 'DISPENSE')));
+        const resolvedActionType = isAdministrative
+          ? actUpper
+          : (isDiscard ? 'DISCARD' : (isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (log.actionType || 'DISPENSE'))));
+
         const rawQty = Number(log.quantityChanged) || 0;
-        const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
+        const resolvedQty = isAdministrative && actUpper === 'EDIT'
+          ? 0
+          : (isUndispense || isRestock)
+          ? Math.abs(rawQty)
+          : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD')
+          ? -Math.abs(rawQty)
+          : rawQty);
 
         return {
           id: log.id,

@@ -48,6 +48,7 @@ export default function AdminDispensaryReportTable({
         </thead>
         <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-800">
           {logs.map((log) => {
+            if (log.actionType === 'DISCARD') return null;
             const quantity = log.effectiveQty;
             const dateObj = log.createdAt ? new Date(log.createdAt) : new Date();
             const formattedDate =
@@ -132,6 +133,7 @@ export default function AdminDispensaryReportTable({
                       onClick={() => {
                         const modalData = {
                           ...log,
+                          actionType: isRestock ? 'RESTOCK' : 'DISPENSE',
                           quantityChanged: isRestock ? quantity : -quantity,
                           isRestock,
                           lotNumbers: log.lotNumbers && Array.isArray(log.lotNumbers) && log.lotNumbers.length > 0 ? log.lotNumbers : lotList,

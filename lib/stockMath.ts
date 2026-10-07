@@ -434,19 +434,24 @@ export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryRe
     const act = (log.actionType || '').toUpperCase();
     const detailsLower = (log.details || '').toLowerCase();
 
-    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE, DISCARD, EXPIRED WASTE)
-    const isDiscard =
-      act.includes('DISCARD') ||
-      act.includes('EXPIRED') ||
-      detailsLower.includes('waste') ||
-      detailsLower.includes('discard') ||
-      detailsLower.includes('expired');
-
     const isAdministrative =
       act === 'AUDIT' ||
       act === 'EDIT' ||
       act === 'CREATE' ||
       act === 'DELETE';
+
+    // Strictly exclude non-dispensary operational logs (EDIT, AUDIT, CREATE, DELETE, DISCARD, EXPIRED WASTE)
+    const isDiscard =
+      act.includes('DISCARD') ||
+      act.includes('EXPIRED') ||
+      act.includes('WASTE') ||
+      ((!isAdministrative) && (
+        detailsLower.includes('waste') ||
+        detailsLower.includes('discard') ||
+        detailsLower.includes('thrown away') ||
+        detailsLower.includes('disposal') ||
+        (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+      ));
 
     if (isDiscard || isAdministrative) {
       continue;
@@ -495,10 +500,28 @@ export function filterAndNetDispensaryLogs(rawLogs: DispenseLog[]): DispensaryRe
         }
 
         const prevMedName = (prev.itemGenericName || '').toLowerCase().trim();
-        const isMatch = Boolean(
-          (log.itemId && prev.itemId && log.itemId === prev.itemId) ||
-          (logMedName && prevMedName && (logMedName === prevMedName || logMedName.startsWith(prevMedName) || prevMedName.startsWith(logMedName)))
+        const hasValidId = Boolean(
+          log.itemId && prev.itemId && log.itemId !== 'unknown' && log.itemId !== 'test-item' && prev.itemId !== 'unknown' && prev.itemId !== 'test-item'
         );
+        const idMatches = hasValidId && log.itemId === prev.itemId;
+        const baseLog = logMedName.replace(/\s*\([^)]*\)/g, '').trim();
+        const basePrev = prevMedName.replace(/\s*\([^)]*\)/g, '').trim();
+
+        // Do not net if both logs have distinct dosage suffixes in parentheses
+        const doseLogMatch = logMedName.match(/\(([^)]+)\)/);
+        const dosePrevMatch = prevMedName.match(/\(([^)]+)\)/);
+        const doseMismatch = Boolean(
+          doseLogMatch &&
+          dosePrevMatch &&
+          doseLogMatch[1].trim().toLowerCase() !== dosePrevMatch[1].trim().toLowerCase()
+        );
+
+        const nameMatches = Boolean(
+          !doseMismatch &&
+          ((logMedName && prevMedName && logMedName === prevMedName) ||
+          (baseLog && basePrev && baseLog === basePrev))
+        );
+        const isMatch = idMatches || nameMatches;
 
         if (isMatch) {
           if (undispenseQty >= prev.effectiveQty) {
@@ -549,19 +572,32 @@ export function filterDiscardLogs(rawLogs: DispenseLog[]): DiscardReportEntry[] 
   const output: DiscardReportEntry[] = [];
 
   for (const log of rawLogs) {
+    const actUpper = (log.actionType || '').toUpperCase();
     const detailsLower = (log.details || '').toLowerCase();
-    const isExplicitDiscard = log.actionType === 'DISCARD';
-    const isWasteOrExpired =
-      detailsLower.includes('waste') ||
-      detailsLower.includes('discard') ||
-      detailsLower.includes('expired');
 
-    if (!isExplicitDiscard && !isWasteOrExpired) {
+    const isAdministrative =
+      actUpper === 'EDIT' ||
+      actUpper === 'CREATE' ||
+      actUpper === 'DELETE' ||
+      (actUpper === 'AUDIT' && !detailsLower.includes('waste') && !detailsLower.includes('expired') && !detailsLower.includes('discard') && !detailsLower.includes('dump'));
+
+    if (isAdministrative) {
       continue;
     }
 
-    // Skip normal dispenses or restocks that might coincidentally mention words
-    if (log.actionType === 'RESTOCK' || log.actionType === 'UNDISPENSE') {
+    if (actUpper === 'RESTOCK' || actUpper === 'UNDISPENSE') {
+      continue;
+    }
+
+    const isExplicitDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD');
+    const isWasteOrExpired =
+      detailsLower.includes('waste') ||
+      detailsLower.includes('discard') ||
+      detailsLower.includes('thrown away') ||
+      detailsLower.includes('disposal') ||
+      (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'));
+
+    if (!isExplicitDiscard && !isWasteOrExpired) {
       continue;
     }
 
@@ -624,31 +660,51 @@ export function aggregateTopDispensed(logs: DispenseLog[] | any[]): TopDispensed
     return [];
   }
 
-  const usageMap: { [canonicalName: string]: { dispensed: number; undispensed: number; category: string } } = {};
+  const usageMap: { [canonicalKey: string]: { genericName: string; dispensed: number; undispensed: number; category: string } } = {};
+  const idToKey = new Map<string, string>();
 
   logs.forEach((log: any) => {
-    const name = log.itemGenericName || 'General Inventory Item';
-    if (!usageMap[name]) {
-      usageMap[name] = { dispensed: 0, undispensed: 0, category: log.category || 'General Medical' };
+    const rawName = (log.itemGenericName || 'General Inventory Item').trim();
+    const hasValidId = Boolean(
+      log.itemId &&
+      log.itemId !== 'unknown' &&
+      log.itemId !== 'test-item' &&
+      log.itemId !== 'new-item'
+    );
+    const key = hasValidId && idToKey.has(log.itemId)
+      ? idToKey.get(log.itemId)!
+      : rawName.toLowerCase();
+
+    if (hasValidId && !idToKey.has(log.itemId)) {
+      idToKey.set(log.itemId, key);
+    }
+
+    if (!usageMap[key]) {
+      usageMap[key] = { genericName: rawName, dispensed: 0, undispensed: 0, category: log.category || 'General Medical' };
     }
 
     const qty = Math.abs(Number(log.quantityChanged) || 0);
     const act = (log.actionType || '').toUpperCase();
     const detailsLower = (log.details || '').toLowerCase();
 
-    // STRICT DISCARD CHECK: Discarded or expired medications are NEVER counted as patient dispenses!
-    const isDiscard =
-      act.includes('DISCARD') ||
-      act.includes('EXPIRED') ||
-      detailsLower.includes('waste') ||
-      detailsLower.includes('discard') ||
-      detailsLower.includes('expired');
-
     const isAdministrative =
       act === 'AUDIT' ||
       act === 'EDIT' ||
       act === 'CREATE' ||
       act === 'DELETE';
+
+    // STRICT DISCARD CHECK: Discarded or expired medications are NEVER counted as patient dispenses!
+    const isDiscard =
+      act.includes('DISCARD') ||
+      act.includes('EXPIRED') ||
+      act.includes('WASTE') ||
+      ((!isAdministrative) && (
+        detailsLower.includes('waste') ||
+        detailsLower.includes('discard') ||
+        detailsLower.includes('thrown away') ||
+        detailsLower.includes('disposal') ||
+        (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+      ));
 
     if (isDiscard || isAdministrative) {
       return;
@@ -663,20 +719,20 @@ export function aggregateTopDispensed(logs: DispenseLog[] | any[]): TopDispensed
       detailsLower.includes('restocked');
 
     if (isUndispense) {
-      usageMap[name].undispensed += qty;
+      usageMap[key].undispensed += qty;
     } else if (isRestock) {
       // Restocking adds inventory but does not count as dispensing
       return;
     } else if (act === 'DISPENSE' || act === 'DISPENSE_BOTTLE' || (Number(log.quantityChanged) < 0 && !isDiscard && !isAdministrative)) {
-      usageMap[name].dispensed += qty;
+      usageMap[key].dispensed += qty;
     }
   });
 
-  return Object.keys(usageMap)
-    .map((name) => ({
-      genericName: name,
-      totalDispensed: Math.max(0, usageMap[name].dispensed - usageMap[name].undispensed),
-      category: usageMap[name].category,
+  return Object.values(usageMap)
+    .map((item) => ({
+      genericName: item.genericName,
+      totalDispensed: Math.max(0, item.dispensed - item.undispensed),
+      category: item.category,
     }))
     .filter((item) => item.totalDispensed > 0)
     .sort((a, b) => b.totalDispensed - a.totalDispensed);
@@ -813,6 +869,298 @@ export function applyStockDiscard(
     discardedLotExpiration: discardedLotExp,
     isFullyEmptied: newTotalUnits === 0,
   };
+}
+
+export interface ItemEditChange {
+  field: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+export interface ItemEditDiffResult {
+  diffString: string;
+  changes: ItemEditChange[];
+}
+
+/**
+ * Compares an inventory item's before and after states and generates an exact, human-readable
+ * audit trail diff showing what fields changed from what to what.
+ * E.g., "Location: 'Shelf A' -> 'Dental B', Dosage: '10mg' -> '20mg'"
+ */
+export function generateItemEditDiff(
+  before?: Partial<InventoryItem> | null,
+  after?: Partial<InventoryItem> | null
+): ItemEditDiffResult {
+  if (!before && !after) {
+    return { diffString: 'No formulation details recorded.', changes: [] };
+  }
+  if (!before && after) {
+    return { diffString: 'Initial item record created.', changes: [] };
+  }
+  if (before && !after) {
+    return { diffString: 'Item formulation record deleted.', changes: [] };
+  }
+
+  const b = before!;
+  const a = after!;
+  const changes: ItemEditChange[] = [];
+
+  const normalizeStr = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
+  const displayVal = (v: any) => {
+    const s = normalizeStr(v);
+    return s ? s.replace(/'/g, '’') : 'None';
+  };
+
+  // 1. Location / Shelf Location / Category
+  if (a.shelfLocation !== undefined || (a as any).category !== undefined) {
+    const bLoc = normalizeStr(b.shelfLocation !== undefined ? b.shelfLocation : (b as any).category);
+    const aLoc = normalizeStr(a.shelfLocation !== undefined ? a.shelfLocation : (a as any).category);
+    if (bLoc !== aLoc) {
+      changes.push({
+        field: 'shelfLocation',
+        label: 'Location',
+        from: displayVal(bLoc),
+        to: displayVal(aLoc),
+      });
+    }
+  }
+
+  // 2. Generic Name
+  if (a.genericName !== undefined) {
+    const bGen = normalizeStr(b.genericName);
+    const aGen = normalizeStr(a.genericName);
+    if (bGen !== aGen) {
+      changes.push({
+        field: 'genericName',
+        label: 'Generic Name',
+        from: displayVal(bGen),
+        to: displayVal(aGen),
+      });
+    }
+  }
+
+  // 3. Brand Name
+  if (a.brandName !== undefined) {
+    const bBrand = normalizeStr(b.brandName);
+    const aBrand = normalizeStr(a.brandName);
+    if (bBrand !== aBrand) {
+      changes.push({
+        field: 'brandName',
+        label: 'Brand Name',
+        from: displayVal(bBrand),
+        to: displayVal(aBrand),
+      });
+    }
+  }
+
+  // 3b. Chemical Name
+  if (a.chemicalName !== undefined) {
+    const bChem = normalizeStr(b.chemicalName);
+    const aChem = normalizeStr(a.chemicalName);
+    if (bChem !== aChem) {
+      changes.push({
+        field: 'chemicalName',
+        label: 'Chemical Name',
+        from: displayVal(bChem),
+        to: displayVal(aChem),
+      });
+    }
+  }
+
+  // 4. Dosage Strength
+  if (a.dosage !== undefined) {
+    const bDosage = normalizeStr(b.dosage);
+    const aDosage = normalizeStr(a.dosage);
+    if (bDosage !== aDosage) {
+      changes.push({
+        field: 'dosage',
+        label: 'Dosage',
+        from: displayVal(bDosage),
+        to: displayVal(aDosage),
+      });
+    }
+  }
+
+  // 5. Item Type (Medication, OTC, Supply)
+  if (a.itemType !== undefined) {
+    const bType = normalizeStr(b.itemType);
+    const aType = normalizeStr(a.itemType);
+    if (bType !== aType) {
+      changes.push({
+        field: 'itemType',
+        label: 'Item Type',
+        from: displayVal(bType),
+        to: displayVal(aType),
+      });
+    }
+  }
+
+  // 6. Stock Unit (Bottles, Boxes, Tubes, etc.)
+  if (a.stockUnit !== undefined) {
+    const bStockUnit = normalizeStr(b.stockUnit);
+    const aStockUnit = normalizeStr(a.stockUnit);
+    if (bStockUnit !== aStockUnit) {
+      changes.push({
+        field: 'stockUnit',
+        label: 'Stock Unit',
+        from: displayVal(bStockUnit),
+        to: displayVal(aStockUnit),
+      });
+    }
+  }
+
+  // 7. Sub Unit (pills, tablets, mL, etc.)
+  if (a.subUnit !== undefined) {
+    const bSubUnit = normalizeStr(b.subUnit);
+    const aSubUnit = normalizeStr(a.subUnit);
+    if (bSubUnit !== aSubUnit) {
+      changes.push({
+        field: 'subUnit',
+        label: 'Sub Unit',
+        from: displayVal(bSubUnit),
+        to: displayVal(aSubUnit),
+      });
+    }
+  }
+
+  // 8. Pills Per Bottle (Pack size)
+  if (a.pillsPerBottle !== undefined) {
+    const bPack = Number(b.pillsPerBottle) || 0;
+    const aPack = Number(a.pillsPerBottle) || 0;
+    if (bPack !== aPack) {
+      changes.push({
+        field: 'pillsPerBottle',
+        label: 'Pack Size',
+        from: String(bPack),
+        to: String(aPack),
+      });
+    }
+  }
+
+  // 9. Directions / Clinical Notes
+  if (a.directions !== undefined) {
+    const bDir = normalizeStr(b.directions);
+    const aDir = normalizeStr(a.directions);
+    if (bDir !== aDir) {
+      changes.push({
+        field: 'directions',
+        label: 'Directions',
+        from: displayVal(bDir),
+        to: displayVal(aDir),
+      });
+    }
+  }
+
+  // 10. Expiration Date
+  if (a.expirationDate !== undefined) {
+    const bExp = normalizeStr(b.expirationDate);
+    const aExp = normalizeStr(a.expirationDate);
+    if (bExp !== aExp) {
+      changes.push({
+        field: 'expirationDate',
+        label: 'Expiration Date',
+        from: displayVal(bExp),
+        to: displayVal(aExp),
+      });
+    }
+  }
+
+  // 11. Bottles Available
+  if (a.bottlesAvailable !== undefined) {
+    const bBottles = Number(b.bottlesAvailable) || 0;
+    const aBottles = Number(a.bottlesAvailable) || 0;
+    if (bBottles !== aBottles) {
+      changes.push({
+        field: 'bottlesAvailable',
+        label: 'Bottles Stock',
+        from: String(bBottles),
+        to: String(aBottles),
+      });
+    }
+  }
+
+  // 12. Loose Units Available
+  if (a.looseUnitsAvailable !== undefined) {
+    const bLoose = Number(b.looseUnitsAvailable) || 0;
+    const aLoose = Number(a.looseUnitsAvailable) || 0;
+    if (bLoose !== aLoose) {
+      changes.push({
+        field: 'looseUnitsAvailable',
+        label: 'Loose Stock',
+        from: String(bLoose),
+        to: String(aLoose),
+      });
+    }
+  }
+
+  // 13. Lot Numbers
+  if (a.lotNumbers !== undefined) {
+    const bLots = parseLotNumbers(b.lotNumbers).sort().join(', ');
+    const aLots = parseLotNumbers(a.lotNumbers).sort().join(', ');
+    if (bLots !== aLots) {
+      changes.push({
+        field: 'lotNumbers',
+        label: 'Lot Numbers',
+        from: displayVal(bLots),
+        to: displayVal(aLots),
+      });
+    }
+  }
+
+  if (changes.length === 0) {
+    return {
+      diffString: 'Updated formulation details (no tracked field changes).',
+      changes: [],
+    };
+  }
+
+  const diffString = changes
+    .map((c) => `${c.label}: '${c.from}' -> '${c.to}'`)
+    .join(', ');
+
+  return { diffString, changes };
+}
+
+/**
+ * Safely parses field diffs from an audit log's details string or metadata object.
+ * Returns array of ItemEditChange objects for UI rendering.
+ */
+export function parseItemEditDiff(detailsText?: string, metaDiff?: any): ItemEditChange[] {
+  if (Array.isArray(metaDiff) && metaDiff.length > 0) {
+    return metaDiff.map((c: any) => ({
+      field: String(c.field || 'field'),
+      label: String(c.label || c.field || 'Field'),
+      from: String(c.from ?? 'None'),
+      to: String(c.to ?? 'None'),
+    }));
+  }
+
+  if (!detailsText || typeof detailsText !== 'string') {
+    return [];
+  }
+
+  const results: ItemEditChange[] = [];
+  // Match patterns like: Label: 'Old' -> 'New'  OR  Label: 'Old' ➔ 'New'  OR  Label: Old -> New
+  const regex = /([A-Za-z0-9\s/_-]+):\s*(?:'([^']*)'|"([^"]*)"|([^,'"\n->➔]+))\s*(?:->|➔|-->)\s*(?:'([^']*)'|"([^"]*)"|([^,'"\n|]+))/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(detailsText)) !== null) {
+    const label = match[1].trim();
+    const from = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+    const to = (match[5] ?? match[6] ?? match[7] ?? '').trim();
+
+    if (label && (from || to)) {
+      results.push({
+        field: label.toLowerCase().replace(/[\s/_-]+/g, '_'),
+        label,
+        from,
+        to,
+      });
+    }
+  }
+
+  return results;
 }
 
 

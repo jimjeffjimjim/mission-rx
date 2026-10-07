@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DispenseLog } from '@/types/inventory';
 import { X, Search, FileText, Download, ShieldCheck, Clock, User, Filter, ArrowUpRight, ArrowDownRight, RotateCcw, Trash2, Edit3, AlertTriangle, Check, Terminal, FlaskConical, FileSpreadsheet, PackageX } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { parseItemEditDiff } from '@/lib/stockMath';
 
 interface AuditLogModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export default function AuditLogModal({
   userRole = 'STAFF',
 }: AuditLogModalProps) {
   const [logs, setLogs] = useState<DispenseLog[]>([]);
+  const [localTestLogs, setLocalTestLogs] = useState<DispenseLog[]>(testLogs);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [selectedAction, setSelectedAction] = useState<string>('ALL');
@@ -38,6 +40,10 @@ export default function AuditLogModal({
   const [isWarningOpen, setIsWarningOpen] = useState(false);
   const [isTestingMode, setIsTestingMode] = useState<boolean>(false);
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+
+  useEffect(() => {
+    setLocalTestLogs(testLogs);
+  }, [testLogs]);
 
   const isDeveloper = userRole === 'DEVELOPER' || isDevUnlocked;
 
@@ -101,6 +107,7 @@ export default function AuditLogModal({
   const handleResetAuditLogs = async () => {
     if (isTestingMode) {
       if (!confirm('Clear simulated test logs?')) return;
+      setLocalTestLogs([]);
       setLogs([]);
       if (onLogsCleared) onLogsCleared();
       return;
@@ -117,6 +124,7 @@ export default function AuditLogModal({
       const res = await fetch('/api/logs?developer=true', { method: 'DELETE' });
       if (res.ok) {
         setLogs([]);
+        setLocalTestLogs([]);
         alert('All audit log records permanently deleted from Supabase & SQLite.');
         if (onLogsCleared) onLogsCleared();
       } else {
@@ -148,6 +156,27 @@ export default function AuditLogModal({
     setLoading(true);
     try {
       const splitLots = editLots.split(',').map((s) => s.trim()).filter(Boolean);
+      if (editingLog.id && String(editingLog.id).startsWith('test-')) {
+        setLocalTestLogs((prev) =>
+          prev.map((l) =>
+            l.id === editingLog.id
+              ? {
+                  ...l,
+                  itemGenericName: editItemName,
+                  actionType: editActionType as any,
+                  quantityChanged: Number(editQty) || 0,
+                  dispensedBottles: Number(editBottles) || 0,
+                  lotNumbers: splitLots,
+                  details: editDetails,
+                }
+              : l
+          )
+        );
+        setIsWarningOpen(false);
+        setEditingLog(null);
+        return;
+      }
+
       const res = await fetch('/api/logs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -183,6 +212,13 @@ export default function AuditLogModal({
     if (!confirm(`DEVELOPER OVERRIDE: Permanently delete audit log record for "${log.itemGenericName || 'Item'}" (${log.actionType})? This removes it permanently from Supabase & SQLite.`)) {
       return;
     }
+
+    if (log.id && String(log.id).startsWith('test-')) {
+      setLocalTestLogs((prev) => prev.filter((l) => l.id !== log.id));
+      setLogs((prev) => prev.filter((l) => l.id !== log.id));
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`/api/logs?id=${encodeURIComponent(log.id)}&developer=true`, {
@@ -204,7 +240,7 @@ export default function AuditLogModal({
   };
 
   const safeLogs = React.useMemo(() => (Array.isArray(logs) ? logs : []), [logs]);
-  const safeTestLogs = React.useMemo(() => (Array.isArray(testLogs) ? testLogs : []), [testLogs]);
+  const safeTestLogs = React.useMemo(() => (Array.isArray(localTestLogs) ? localTestLogs : []), [localTestLogs]);
 
   const displayedLogs = React.useMemo(() => {
     if (isTestingMode && safeTestLogs.length > 0) {
@@ -212,6 +248,47 @@ export default function AuditLogModal({
     }
     return safeLogs;
   }, [safeLogs, safeTestLogs, isTestingMode]);
+
+  const getEffectiveLogAction = (log: DispenseLog): string => {
+    const actUpper = (log.actionType || '').toUpperCase();
+    const detailsLower = (log.details || '').toLowerCase();
+    const isAdministrative =
+      actUpper === 'AUDIT' ||
+      actUpper === 'EDIT' ||
+      actUpper === 'CREATE' ||
+      actUpper === 'DELETE';
+
+    if (isAdministrative) {
+      return actUpper;
+    }
+
+    const isExplicitDiscard = actUpper === 'DISCARD' || actUpper === 'DISCARD_EXPIRED' || actUpper.includes('DISCARD');
+    const isWasteOrExpired =
+      (!isAdministrative) &&
+      (detailsLower.includes('waste') ||
+       detailsLower.includes('discard') ||
+       detailsLower.includes('thrown away') ||
+       detailsLower.includes('disposal') ||
+       (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:')));
+
+    if (isExplicitDiscard || isWasteOrExpired) {
+      return 'DISCARD';
+    }
+
+    if (actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'))) {
+      return 'UNDISPENSE';
+    }
+
+    if (actUpper === 'RESTOCK' || detailsLower.includes('restocked')) {
+      return 'RESTOCK';
+    }
+
+    if (actUpper === 'DISPENSE' || actUpper === 'DISPENSE_BOTTLE' || actUpper.startsWith('DISPENSE')) {
+      return 'DISPENSE';
+    }
+
+    return actUpper || 'DISPENSE';
+  };
 
   const filteredLogs = React.useMemo(() => {
     const list = Array.isArray(displayedLogs) ? displayedLogs : [];
@@ -228,8 +305,11 @@ export default function AuditLogModal({
         const matchLots = lots.includes(q);
         if (!matchName && !matchDetails && !matchRole && !matchLots) return false;
       }
-      if (selectedAction !== 'ALL' && log.actionType !== selectedAction) {
-        return false;
+      if (selectedAction !== 'ALL') {
+        const eff = getEffectiveLogAction(log);
+        if (eff !== selectedAction) {
+          return false;
+        }
       }
       return true;
     });
@@ -519,23 +599,28 @@ export default function AuditLogModal({
           ) : (
             filteredLogs.map((log, index) => {
               const qtyNum = Number(log.quantityChanged) || 0;
-              const isDiscard = log.actionType === 'DISCARD' || (log.details?.toLowerCase().includes('expired / waste') || log.details?.toLowerCase().includes('[expired'));
-              const isDispense = !isDiscard && (log.actionType === 'DISPENSE' || (qtyNum < 0 && log.actionType !== 'RESTOCK' && log.actionType !== 'UNDISPENSE')) && log.actionType !== 'EDIT' && log.actionType !== 'AUDIT';
-              const isUndispense = log.actionType === 'UNDISPENSE' || (log.details?.toLowerCase().includes('undispensed') && !log.details?.toLowerCase().includes('restocked'));
-              const isRestock = log.actionType === 'RESTOCK' || log.details?.toLowerCase().includes('restocked');
-              const isCreate = log.actionType === 'CREATE';
-              const isEditOrAudit = log.actionType === 'EDIT' || log.actionType === 'AUDIT' || log.actionType === 'DELETE';
+              const effectiveType = getEffectiveLogAction(log);
+              const isDiscard = effectiveType === 'DISCARD';
+              const isDispense = effectiveType === 'DISPENSE';
+              const isUndispense = effectiveType === 'UNDISPENSE';
+              const isRestock = effectiveType === 'RESTOCK';
+              const isEdit = effectiveType === 'EDIT';
+              const isAudit = effectiveType === 'AUDIT';
+              const isCreate = effectiveType === 'CREATE';
+              const isDelete = effectiveType === 'DELETE';
+
               const isPositive = (isRestock || isUndispense || (isCreate && qtyNum > 0)) && !isDispense && !isDiscard;
               const isNegative = (isDispense || isDiscard) && qtyNum !== 0;
 
               let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
-              if (isDiscard || log.actionType === 'DISCARD') badgeStyle = 'bg-rose-100 text-rose-800 border-rose-300';
+              if (isDiscard) badgeStyle = 'bg-rose-100 text-rose-800 border-rose-300';
               else if (isDispense) badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
               else if (isUndispense) badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
               else if (isRestock) badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
-              else if (log.actionType === 'EDIT' || log.actionType === 'AUDIT') badgeStyle = 'bg-blue-50 text-blue-900 border-blue-300';
-              else if (log.actionType === 'CREATE') badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
-              else if (log.actionType === 'DELETE') badgeStyle = 'bg-red-50 text-red-800 border-red-300';
+              else if (isEdit) badgeStyle = 'bg-blue-50 text-blue-900 border-blue-300';
+              else if (isAudit) badgeStyle = 'bg-amber-50 text-amber-900 border-amber-300';
+              else if (isCreate) badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300';
+              else if (isDelete) badgeStyle = 'bg-red-50 text-red-800 border-red-300';
 
               const formattedDate = formatLogDate(log.createdAt);
               const isTestRecord = Boolean(
@@ -545,6 +630,7 @@ export default function AuditLogModal({
               );
 
               const safeKey = `log-${log.id || 'entry'}-${index}`;
+              const diffChanges = isEdit || (log.details && (log.details.includes(' -> ') || log.details.includes(' ➔ ') || log.details.includes(' --> '))) ? parseItemEditDiff(log.details) : [];
 
               return (
                 <div
@@ -559,14 +645,16 @@ export default function AuditLogModal({
                     <div
                       className={`p-2.5 rounded-2xl border flex items-center justify-center shrink-0 ${badgeStyle}`}
                     >
-                      {log.actionType === 'DISCARD' || isDiscard ? (
+                      {isDiscard ? (
                         <PackageX className="w-5 h-5 text-rose-600 stroke-[2.5]" />
-                      ) : log.actionType === 'DISPENSE' ? (
+                      ) : isDispense ? (
                         <ArrowDownRight className="w-5 h-5 text-rose-600 stroke-[3]" />
-                      ) : log.actionType === 'UNDISPENSE' ? (
+                      ) : isUndispense ? (
                         <RotateCcw className="w-5 h-5 text-amber-600 stroke-[2.5]" />
-                      ) : log.actionType === 'RESTOCK' ? (
+                      ) : isRestock ? (
                         <ArrowUpRight className="w-5 h-5 text-emerald-600 stroke-[3]" />
+                      ) : isEdit ? (
+                        <Edit3 className="w-5 h-5 text-blue-600 stroke-[2.5]" />
                       ) : (
                         <FileText className="w-5 h-5 text-amber-600 stroke-[2.5]" />
                       )}
@@ -581,7 +669,7 @@ export default function AuditLogModal({
                           </span>
                         )}
                         <span className={`font-mono text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${badgeStyle}`}>
-                          {log.actionType || 'ACTIVITY'}
+                          {effectiveType}
                         </span>
                         <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -607,6 +695,24 @@ export default function AuditLogModal({
                       <p className="text-xs font-medium text-slate-600 leading-normal">
                         {log.details || 'Routine clinical dispensary action.'}
                       </p>
+
+                      {/* Before -> After Diff Visual Badges for Edits */}
+                      {diffChanges.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                          {diffChanges.map((d, dIdx) => (
+                            <span
+                              key={dIdx}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-blue-50/90 text-blue-900 border border-blue-200 px-2 py-0.5 rounded-lg shadow-2xs select-text"
+                            >
+                              <span className="font-extrabold text-blue-950">{d.label}:</span>
+                              <span className="line-through text-slate-400 font-mono text-[10px]">'{d.from}'</span>
+                              <span className="text-blue-600 font-black">➔</span>
+                              <span className="text-blue-900 font-bold font-mono text-[10px]">'{d.to}'</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {(() => {
                         const rawLots = (log as any).lotNumbers;
                         let parsedLots: string[] = [];
@@ -650,7 +756,11 @@ export default function AuditLogModal({
                           isNegative ? 'text-rose-600' : isUndispense ? 'text-amber-700' : isRestock ? 'text-emerald-600' : isCreate && qtyNum > 0 ? 'text-teal-700' : 'text-slate-600'
                         }`}
                       >
-                        {!isDiscard && (isEditOrAudit || qtyNum === 0) ? (
+                        {isEdit ? (
+                          <span className="text-blue-700 font-bold text-xs bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                            Details Edited
+                          </span>
+                        ) : !isDiscard && (isAudit || isDelete || qtyNum === 0) ? (
                           <span className="text-slate-500 font-bold text-xs">
                             {qtyNum === 0 ? 'No change' : qtyNum > 0 ? `+${qtyNum}` : `${qtyNum}`}
                           </span>

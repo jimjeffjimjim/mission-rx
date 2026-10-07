@@ -86,23 +86,56 @@ export function useAdminAnalytics({
     setSavingDispenseEdit(true);
     try {
       const currentVal = editingDispenseItem.totalDispensed;
-      const targetVal = Number(newDispenseAmt) || 0;
+      const targetVal = Math.max(0, Number(newDispenseAmt) || 0);
       const diff = targetVal - currentVal;
-      await fetch('/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemGenericName: editingDispenseItem.genericName,
-          quantityChanged: -diff,
-          actionType: 'EDIT',
-          userRole: userRole || 'ADMIN',
-          details: `Manual adjustment of total amount dispensed from ${currentVal} to ${targetVal} units via Usage Analytics.`,
-          createdAt: new Date().toISOString(),
-        }),
-      });
+      if (diff === 0) {
+        setIsDispenseWarningOpen(false);
+        setEditingDispenseItem(null);
+        return;
+      }
+      const isIncrease = diff > 0;
+      const actionType = isIncrease ? 'DISPENSE' : 'UNDISPENSE';
+      const quantityChanged = isIncrease ? -diff : Math.abs(diff);
+
+      const isTest = typeof window !== 'undefined' && localStorage.getItem('mission_rx_testing_mode') === 'true';
+      if (isTest) {
+        setAnalyticsLogs((prev) => [
+          {
+            id: `test-adjust-${Date.now()}`,
+            itemGenericName: editingDispenseItem.genericName,
+            quantityChanged,
+            actionType: actionType as any,
+            userRole: `${userRole || 'DEVELOPER'} (TEST)`,
+            details: `[TESTING MODE - NOT REAL]: Developer adjustment of total amount dispensed from ${currentVal} to ${targetVal} units (${isIncrease ? `+${diff}` : `-${Math.abs(diff)}`})`,
+            createdAt: new Date().toISOString(),
+            isTestMode: true,
+          },
+          ...prev,
+        ]);
+        setTopDispensed((prev) =>
+          prev.map((i) =>
+            i.genericName.toLowerCase().trim() === editingDispenseItem.genericName.toLowerCase().trim()
+              ? { ...i, totalDispensed: targetVal }
+              : i
+          )
+        );
+      } else {
+        await fetch('/api/logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemGenericName: editingDispenseItem.genericName,
+            quantityChanged,
+            actionType,
+            userRole: userRole || 'DEVELOPER',
+            details: `Developer adjustment of total amount dispensed from ${currentVal} to ${targetVal} units (${isIncrease ? `+${diff}` : `-${Math.abs(diff)}`}) via Usage Analytics.`,
+            createdAt: new Date().toISOString(),
+          }),
+        });
+        await fetchAnalytics(timeframe);
+      }
       setIsDispenseWarningOpen(false);
       setEditingDispenseItem(null);
-      await fetchAnalytics(timeframe);
       if (onRefreshData) onRefreshData();
     } catch (e) {
       console.error('Failed updating dispensed amount:', e);
@@ -179,6 +212,27 @@ export function useAdminAnalytics({
           `Lot ${splitLots.join(', ')}`
         );
       }
+      if (editingReportLog.id && String(editingReportLog.id).startsWith('test-')) {
+        setAnalyticsLogs((prev) =>
+          prev.map((l) =>
+            l.id === editingReportLog.id
+              ? {
+                  ...l,
+                  itemGenericName: reportLogItemName,
+                  actionType: reportLogAction as any,
+                  quantityChanged: Number(reportLogQty) || 0,
+                  dispensedBottles: Number(reportLogBottles) || 0,
+                  lotNumbers: splitLots,
+                  details: cleanDetails,
+                }
+              : l
+          )
+        );
+        setEditingReportLog(null);
+        if (onRefreshData) onRefreshData();
+        return;
+      }
+
       const res = await fetch('/api/logs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -221,6 +275,13 @@ export function useAdminAnalytics({
     ) {
       return;
     }
+
+    if (log.id && String(log.id).startsWith('test-')) {
+      setAnalyticsLogs((prev) => prev.filter((l) => l.id !== log.id));
+      if (onRefreshData) onRefreshData();
+      return;
+    }
+
     try {
       const res = await fetch(
         `/api/logs?id=${encodeURIComponent(log.id)}&developer=true`,

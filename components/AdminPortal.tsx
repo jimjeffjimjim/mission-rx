@@ -157,6 +157,7 @@ export default function AdminPortal({
         setIsSpreadsheetModalOpen={setIsSpreadsheetModalOpen}
         setIsSpecialtyModalOpen={setIsSpecialtyModalOpen}
         onExitTestingMode={testingState.handleExitTestingMode}
+        isDeveloper={analyticsState.isDeveloper}
       />
 
       {activeTab === 'TABLE' && (

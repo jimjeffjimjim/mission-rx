@@ -119,6 +119,7 @@ export default function AdminDiscardReportTable({
                       onClick={() => {
                         const modalData = {
                           ...log,
+                          actionType: 'DISCARD',
                           quantityChanged: -log.effectivePillsDiscarded,
                           isRestock: false,
                           lotNumbers: lotList,

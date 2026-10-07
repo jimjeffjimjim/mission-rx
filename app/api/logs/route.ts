@@ -47,13 +47,46 @@ export async function GET() {
             const parsedMeta = parseLogDetails(l.details || '');
             const directLots = parseLotNumbers(l.lot_numbers);
             const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
+            const actUpper = (l.action_type || '').toUpperCase();
             const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
-            const isUndispense = l.action_type === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
-            const isRestock = l.action_type === 'RESTOCK' || detailsLower.includes('restocked');
-            const isDiscard = l.action_type === 'DISCARD' || detailsLower.includes('waste') || detailsLower.includes('discard') || detailsLower.includes('expired');
-            const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (isDiscard ? 'DISCARD' : (l.action_type || 'DISPENSE')));
+            const isAdministrative =
+              actUpper === 'AUDIT' ||
+              actUpper === 'EDIT' ||
+              actUpper === 'CREATE' ||
+              actUpper === 'DELETE';
+
+            const isUndispense = actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+            const isRestock = !isUndispense && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
+            const isDiscard =
+              actUpper === 'DISCARD' ||
+              actUpper === 'DISCARD_EXPIRED' ||
+              actUpper.includes('DISCARD') ||
+              ((!isAdministrative) && (
+                detailsLower.includes('waste') ||
+                detailsLower.includes('discard') ||
+                detailsLower.includes('thrown away') ||
+                detailsLower.includes('disposal') ||
+                (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+              ));
+
+            const resolvedActionType = isAdministrative
+              ? actUpper
+              : isUndispense
+              ? 'UNDISPENSE'
+              : isRestock
+              ? 'RESTOCK'
+              : isDiscard
+              ? 'DISCARD'
+              : (l.action_type || 'DISPENSE');
+
             const rawQty = Number(l.quantity_changed) || 0;
-            const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD') ? -Math.abs(rawQty) : rawQty);
+            const resolvedQty = isAdministrative && actUpper === 'EDIT'
+              ? 0
+              : (isUndispense || isRestock)
+              ? Math.abs(rawQty)
+              : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD')
+              ? -Math.abs(rawQty)
+              : rawQty);
 
             return {
               id: l.id,
@@ -96,12 +129,46 @@ export async function GET() {
       const directLots = parseLotNumbers(l.lotNumbers);
       const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;
 
+      const actUpper = (l.actionType || '').toUpperCase();
       const detailsLower = (parsedMeta.details || l.details || '').toLowerCase();
-      const isUndispense = l.actionType === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
-      const isRestock = l.actionType === 'RESTOCK' || detailsLower.includes('restocked');
-      const resolvedActionType = isUndispense ? 'UNDISPENSE' : (isRestock ? 'RESTOCK' : (l.actionType || 'DISPENSE'));
+      const isAdministrative =
+        actUpper === 'AUDIT' ||
+        actUpper === 'EDIT' ||
+        actUpper === 'CREATE' ||
+        actUpper === 'DELETE';
+
+      const isUndispense = actUpper === 'UNDISPENSE' || (detailsLower.includes('undispensed') && !detailsLower.includes('restocked'));
+      const isRestock = !isUndispense && (actUpper === 'RESTOCK' || detailsLower.includes('restocked'));
+      const isDiscard =
+        actUpper === 'DISCARD' ||
+        actUpper === 'DISCARD_EXPIRED' ||
+        actUpper.includes('DISCARD') ||
+        ((!isAdministrative) && (
+          detailsLower.includes('waste') ||
+          detailsLower.includes('discard') ||
+          detailsLower.includes('thrown away') ||
+          detailsLower.includes('disposal') ||
+          (detailsLower.includes('expired') && !detailsLower.includes('expiration date') && !detailsLower.includes('expiration:'))
+        ));
+
+      const resolvedActionType = isAdministrative
+        ? actUpper
+        : isUndispense
+        ? 'UNDISPENSE'
+        : isRestock
+        ? 'RESTOCK'
+        : isDiscard
+        ? 'DISCARD'
+        : (l.actionType || 'DISPENSE');
+
       const rawQty = Number(l.quantityChanged) || 0;
-      const resolvedQty = (isUndispense || isRestock) ? Math.abs(rawQty) : (resolvedActionType === 'DISPENSE' ? -Math.abs(rawQty) : rawQty);
+      const resolvedQty = isAdministrative && actUpper === 'EDIT'
+        ? 0
+        : (isUndispense || isRestock)
+        ? Math.abs(rawQty)
+        : ((resolvedActionType === 'DISPENSE' || resolvedActionType === 'DISCARD')
+        ? -Math.abs(rawQty)
+        : rawQty);
 
       return {
         id: l.id,
@@ -231,6 +298,15 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing log record id' }, { status: 400 });
     }
 
+    const isDeveloper = data.developer === true || data.role === 'DEVELOPER' || userRole === 'DEVELOPER';
+    const isTestMode = data.isTestMode === true;
+    if (!isDeveloper && !isTestMode) {
+      return NextResponse.json(
+        { error: 'Regulatory Protection: Developer authorization required to modify historical audit log records.' },
+        { status: 403 }
+      );
+    }
+
     const numericQty = quantityChanged !== undefined ? Number(quantityChanged) : undefined;
     
     // Normalize lot numbers
@@ -341,6 +417,13 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     const isTestMode = searchParams.get('test_mode') === 'true';
     const isDeveloper = searchParams.get('developer') === 'true' || searchParams.get('role') === 'DEVELOPER';
+
+    if (!isDeveloper && !isTestMode) {
+      return NextResponse.json(
+        { error: 'Regulatory Protection: Live clinical transaction audit logs are protected. Developer authorization required to delete.' },
+        { status: 403 }
+      );
+    }
 
     // 1. Allow deleting a specific log entry if ID is provided
     if (id) {
