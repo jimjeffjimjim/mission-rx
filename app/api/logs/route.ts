@@ -91,7 +91,7 @@ export async function GET() {
       take: 500,
     }).catch(() => []);
 
-    const dbLogs: DispenseLog[] = logs.map((l) => {
+    const dbLogs: DispenseLog[] = logs.map((l: any) => {
       const parsedMeta = parseLogDetails(l.details || '');
       const directLots = parseLotNumbers(l.lotNumbers);
       const lotList = directLots.length > 0 ? directLots : parsedMeta.lotNumbers;

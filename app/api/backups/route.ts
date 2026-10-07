@@ -38,7 +38,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const formatted = dbBackups.map((b) => ({
+    const formatted = dbBackups.map((b: any) => ({
       id: b.id,
       title: b.title,
       createdAt: b.createdAt.toISOString(),
