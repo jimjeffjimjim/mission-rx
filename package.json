@@ -7,6 +7,7 @@
     "build": "npx prisma generate && npx prisma db push --accept-data-loss && npm run seed && next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "seed": "tsx prisma/seed.ts",
     "bump-version": "tsx scripts/bump_version.ts"
   },
@@ -35,6 +36,8 @@
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
   }
 }
