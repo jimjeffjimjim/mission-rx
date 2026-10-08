@@ -36,7 +36,6 @@ interface AdminPortalProps {
   onEditEquipmentItem?: (item: InventoryItem) => void;
   onOpenAuditLogs?: (searchQuery?: string) => void;
   onOpenPhysicalAuditModal?: () => void;
-  onOpenDeveloperQrModal?: () => void;
   onRefreshData?: () => void;
   userRole?: string;
   isReadOnly?: boolean;

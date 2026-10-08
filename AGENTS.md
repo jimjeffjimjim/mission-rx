@@ -27,7 +27,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - `components/AuthGate.tsx` — Supabase authentication wrapper & role protection
   - `components/InventoryCard.tsx` — Medication & supply card view
   - `components/FilterBar.tsx` — Category/specialty filtering & search bar
-  - `components/*Modal.tsx` — Modals (ItemEdit, EquipmentEdit, PhysicalAudit, BarcodeScanner, DeveloperQr, SpecialtyManager, SpreadsheetImport, AuditLog)
+  - `components/*Modal.tsx` — Modals (ItemEdit, EquipmentEdit, PhysicalAudit, SpecialtyManager, SpreadsheetImport, AuditLog)
 
 - `lib/` — Business logic & utilities:
   - `lib/medicalKnowledge.ts` — Medical search engine & FDA lookup (data loaded from `@/data/medicalKnowledge.json`)

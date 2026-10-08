@@ -66,9 +66,8 @@
     print-color-adjust: exact !important;
   }
 
-  /* When printing from PhysicalAuditModal or DeveloperQrModal, isolate modal content */
-  body:has(#physical-audit-modal-root) > *:not(:has(#physical-audit-modal-root)),
-  body:has(#developer-qr-modal-root) > *:not(:has(#developer-qr-modal-root)) {
+  /* When printing from PhysicalAuditModal, isolate modal content */
+  body:has(#physical-audit-modal-root) > *:not(:has(#physical-audit-modal-root)) {
     display: none !important;
   }
 

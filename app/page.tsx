@@ -10,7 +10,6 @@ import InventoryCard from '@/components/InventoryCard';
 import ItemEditModal from '@/components/ItemEditModal';
 import EquipmentEditModal from '@/components/EquipmentEditModal';
 import PhysicalAuditModal from '@/components/PhysicalAuditModal';
-import DeveloperQrModal from '@/components/DeveloperQrModal';
 import AdminPortal from '@/components/AdminPortal';
 import AuditLogModal from '@/components/AuditLogModal';
 import DiscardStockModal from '@/components/DiscardStockModal';
@@ -38,7 +37,6 @@ export default function Home() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
   const [isPhysicalAuditOpen, setIsPhysicalAuditOpen] = useState(false);
-  const [isDeveloperQrOpen, setIsDeveloperQrOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [discardItem, setDiscardItem] = useState<InventoryItem | null>(null);
@@ -1051,7 +1049,6 @@ export default function Home() {
           onOpenCreateEquipmentModal={openCreateEquipmentModal}
           onEditEquipmentItem={openEditEquipmentModal}
           onOpenPhysicalAuditModal={() => setIsPhysicalAuditOpen(true)}
-          onOpenDeveloperQrModal={() => setIsDeveloperQrOpen(true)}
           onOpenAuditLogs={(query?: string) => {
             setAuditSearchQuery(query || '');
             setIsAuditModalOpen(true);
@@ -1225,14 +1222,6 @@ export default function Home() {
         onClose={() => setIsPhysicalAuditOpen(false)}
         items={items}
         onBatchUpdateStock={handleBatchUpdateStock}
-        userRole={actorTag}
-      />
-
-      {/* Developer QR & Clinical Label Portal (PIN 7777) */}
-      <DeveloperQrModal
-        isOpen={isDeveloperQrOpen}
-        onClose={() => setIsDeveloperQrOpen(false)}
-        items={items}
         userRole={actorTag}
       />
 

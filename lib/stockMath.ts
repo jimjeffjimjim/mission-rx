@@ -37,6 +37,93 @@ export function convertTotalUnitsToStock(totalUnits: number, packSize: number): 
 }
 
 /**
+ * Reverts and re-evaluates item inventory when a transaction log is deleted.
+ * E.g., deleting a +1 bottle RESTOCK log subtracts 1 bottle (reverting 6 -> 5 bottles).
+ * Deleting a -30 pill DISPENSE log restores 30 pills to stock.
+ */
+export function revertInventoryFromDeletedLog<T extends {
+  bottlesAvailable?: number | null;
+  looseUnitsAvailable?: number | null;
+  pillsPerBottle?: number | null;
+}>(
+  item: T,
+  log: {
+    actionType?: string | null;
+    quantityChanged?: number | null;
+    dispensedUnit?: string | null;
+    dispensedBottles?: number | null;
+    dispensedPillsPerBottle?: number | null;
+    details?: string | null;
+  }
+): { bottlesAvailable: number; looseUnitsAvailable: number; pillDiff: number } {
+  const currentBottles = Math.max(0, Number(item.bottlesAvailable) || 0);
+  const currentLoose = Math.max(0, Number(item.looseUnitsAvailable) || 0);
+  const packSize = Math.max(1, Number(item.pillsPerBottle) || Number(log.dispensedPillsPerBottle) || 100);
+
+  const act = (log.actionType || '').toUpperCase();
+  const detailsLower = (log.details || '').toLowerCase();
+  const isRestock = act === 'RESTOCK' || detailsLower.includes('restocked');
+  const isDispense = act === 'DISPENSE' || detailsLower.includes('dispensed');
+  const isDiscard = act === 'DISCARD' || detailsLower.includes('discard');
+  const isUndispense = act === 'UNDISPENSE' || detailsLower.includes('undispensed');
+
+  const isBottleUnit = log.dispensedUnit === 'bottle';
+  const bottleCount = Math.max(0, Number(log.dispensedBottles) || 0);
+  const rawQty = Number(log.quantityChanged) || 0;
+
+  // 1. If deleting a RESTOCK or UNDISPENSE: stock was added, so we must SUBTRACT it back out
+  if (isRestock || isUndispense) {
+    if (isBottleUnit && bottleCount > 0) {
+      const newBottles = Math.max(0, currentBottles - bottleCount);
+      return {
+        bottlesAvailable: newBottles,
+        looseUnitsAvailable: currentLoose,
+        pillDiff: -(bottleCount * packSize),
+      };
+    } else {
+      const pillsToRemove = rawQty > 0 ? rawQty : (bottleCount > 0 ? bottleCount * packSize : Math.abs(rawQty));
+      const currentTotal = calculateTotalUnits(currentBottles, packSize, currentLoose);
+      const newTotal = Math.max(0, currentTotal - pillsToRemove);
+      const { bottles, loose } = convertTotalUnitsToStock(newTotal, packSize);
+      return {
+        bottlesAvailable: bottles,
+        looseUnitsAvailable: loose,
+        pillDiff: -pillsToRemove,
+      };
+    }
+  }
+
+  // 2. If deleting a DISPENSE or DISCARD: stock was subtracted/wasted, so we must ADD it back
+  if (isDispense || isDiscard) {
+    if (isBottleUnit && bottleCount > 0) {
+      const newBottles = currentBottles + bottleCount;
+      return {
+        bottlesAvailable: newBottles,
+        looseUnitsAvailable: currentLoose,
+        pillDiff: bottleCount * packSize,
+      };
+    } else {
+      const pillsToAdd = Math.abs(rawQty) || (bottleCount > 0 ? bottleCount * packSize : 0);
+      const currentTotal = calculateTotalUnits(currentBottles, packSize, currentLoose);
+      const newTotal = currentTotal + pillsToAdd;
+      const { bottles, loose } = convertTotalUnitsToStock(newTotal, packSize);
+      return {
+        bottlesAvailable: bottles,
+        looseUnitsAvailable: loose,
+        pillDiff: pillsToAdd,
+      };
+    }
+  }
+
+  // 3. Metadata actions (EDIT, AUDIT, etc.) do not affect physical stock
+  return {
+    bottlesAvailable: currentBottles,
+    looseUnitsAvailable: currentLoose,
+    pillDiff: 0,
+  };
+}
+
+/**
  * Generates the standardized canonical display name for a formulary item,
  * preventing duplicate keys or split names (e.g. "Clotrimazole Cream" vs "Clotrimazole Cream (1oz, cream)").
  */

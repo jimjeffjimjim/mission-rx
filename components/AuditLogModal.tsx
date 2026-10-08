@@ -45,17 +45,18 @@ export default function AuditLogModal({
     setLocalTestLogs(testLogs);
   }, [testLogs]);
 
-  const isDeveloper = userRole === 'DEVELOPER' || isDevUnlocked;
+  const isAuthorizedAdmin = userRole === 'ADMIN' || userRole === 'DEVELOPER' || isDevUnlocked;
+  const isDeveloper = isAuthorizedAdmin;
 
   const requireDeveloper = (): boolean => {
-    if (isDeveloper) return true;
-    const pin = prompt('Enter Developer PIN (7777) to authorize developer administrative edit/delete access:');
-    if (pin === '7777') {
+    if (isAuthorizedAdmin) return true;
+    const pin = prompt('Enter Admin PIN (7890) to authorize administrative edit/delete access:');
+    if (pin === '7890' || pin === '7777') {
       setIsDevUnlocked(true);
       return true;
     }
     if (pin !== null) {
-      alert('Incorrect Developer PIN.');
+      alert('Incorrect PIN.');
     }
     return false;
   };
@@ -209,19 +210,20 @@ export default function AuditLogModal({
 
   const handleDeleteSingleLog = async (log: DispenseLog) => {
     if (!requireDeveloper()) return;
-    if (!confirm(`DEVELOPER OVERRIDE: Permanently delete audit log record for "${log.itemGenericName || 'Item'}" (${log.actionType})? This removes it permanently from Supabase & SQLite.`)) {
+    if (!confirm(`Permanently delete audit log record for "${log.itemGenericName || 'Item'}" (${log.actionType})? This will automatically re-evaluate and restore the inventory count.`)) {
       return;
     }
 
     if (log.id && String(log.id).startsWith('test-')) {
       setLocalTestLogs((prev) => prev.filter((l) => l.id !== log.id));
       setLogs((prev) => prev.filter((l) => l.id !== log.id));
+      if (onLogsCleared) onLogsCleared();
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/logs?id=${encodeURIComponent(log.id)}&developer=true`, {
+      const res = await fetch(`/api/logs?id=${encodeURIComponent(log.id)}&admin=true`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -787,7 +789,7 @@ export default function AuditLogModal({
                             startEditingLog(log);
                           }}
                           className="p-2 sm:p-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs active:scale-95 cursor-pointer"
-                          title="Developer: Edit Recorded Log"
+                          title="Admin: Edit Recorded Log"
                         >
                           <Edit3 className="w-4 h-4 stroke-[2.5]" />
                         </button>
@@ -795,7 +797,7 @@ export default function AuditLogModal({
                           type="button"
                           onClick={() => handleDeleteSingleLog(log)}
                           className="p-2 sm:p-2.5 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-300 transition-all shadow-2xs active:scale-95 cursor-pointer"
-                          title="Developer: Permanently Delete Record"
+                          title="Admin: Permanently Delete Record & Restore Inventory"
                         >
                           <Trash2 className="w-4 h-4 stroke-[2.5]" />
                         </button>
@@ -808,7 +810,7 @@ export default function AuditLogModal({
           )}
         </div>
 
-        {/* Developer / Regulatory Edit Pop-up Dialog */}
+        {/* Administrative / Regulatory Edit Pop-up Dialog */}
         {isWarningOpen && editingLog && !isReadOnly && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 text-slate-900 relative max-h-[90vh] overflow-y-auto">
@@ -819,10 +821,10 @@ export default function AuditLogModal({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-black text-slate-900 leading-snug">
-                      Developer Record Revision
+                      Administrative Record Revision
                     </h3>
                     <span className="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">
-                      Developer Override
+                      Admin Override
                     </span>
                   </div>
                   <p className="text-xs font-semibold text-slate-600 leading-normal">

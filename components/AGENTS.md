@@ -8,8 +8,6 @@
 - `*Modal.tsx` — Specialized modal forms:
   - `ItemEditModal.tsx` / `EquipmentEditModal.tsx` — Medication / equipment creation & modification.
   - `PhysicalAuditModal.tsx` — Live count & batch reconciliation.
-  - `BarcodeScannerModal.tsx` — Camera-based GS1 / UPC scanning.
-  - `DeveloperQrModal.tsx` — QR generation for rapid testing.
   - `SpecialtyManagerModal.tsx` — Custom category management and color schemes.
   - `SpreadsheetImportModal.tsx` — Bulk spreadsheet reconciliation.
   - `AuditLogModal.tsx` — Full audit history drawer.

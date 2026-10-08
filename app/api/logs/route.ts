@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { supabase } from '@/lib/supabase';
 import { DispenseLog } from '@/types/inventory';
-import { parseLotNumbers } from '@/lib/stockMath';
+import { parseLotNumbers, revertInventoryFromDeletedLog } from '@/lib/stockMath';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -417,16 +417,94 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     const isTestMode = searchParams.get('test_mode') === 'true';
     const isDeveloper = searchParams.get('developer') === 'true' || searchParams.get('role') === 'DEVELOPER';
+    const isAdmin = searchParams.get('admin') === 'true' || searchParams.get('role') === 'ADMIN';
 
-    if (!isDeveloper && !isTestMode) {
+    if (!isDeveloper && !isAdmin && !isTestMode) {
       return NextResponse.json(
-        { error: 'Regulatory Protection: Live clinical transaction audit logs are protected. Developer authorization required to delete.' },
+        { error: 'Administrative authorization required to modify or delete clinical audit records.' },
         { status: 403 }
       );
     }
 
     // 1. Allow deleting a specific log entry if ID is provided
     if (id) {
+      // Step A: Fetch the log record before deletion to find the linked inventory item
+      let logToDelete: any = null;
+      try {
+        logToDelete = await prisma.dispenseLog.findUnique({
+          where: { id },
+        });
+      } catch (e) {}
+
+      if (!logToDelete && supabase) {
+        try {
+          const { data } = await supabase.from('dispense_logs').select('*').eq('id', id).maybeSingle();
+          if (data) logToDelete = data;
+        } catch (e) {}
+      }
+
+      if (!logToDelete) {
+        logToDelete = logsFallbackCache.find((l) => l.id === id);
+      }
+
+      let updatedItem: any = null;
+
+      // Step B: Re-evaluate and revert the inventory on the item!
+      const targetItemId = logToDelete?.itemId || logToDelete?.item_id;
+      if (targetItemId && logToDelete) {
+        let currentItem: any = null;
+        try {
+          currentItem = await prisma.inventoryItem.findUnique({ where: { id: targetItemId } });
+        } catch (e) {}
+
+        if (!currentItem && supabase) {
+          try {
+            const { data } = await supabase.from('inventory_items').select('*').eq('id', targetItemId).maybeSingle();
+            if (data) currentItem = data;
+          } catch (e) {}
+        }
+
+        if (currentItem) {
+          const normItem = {
+            id: currentItem.id,
+            bottlesAvailable: currentItem.bottlesAvailable ?? currentItem.bottles_available,
+            looseUnitsAvailable: currentItem.looseUnitsAvailable ?? currentItem.loose_units_available,
+            pillsPerBottle: currentItem.pillsPerBottle ?? currentItem.pills_per_bottle,
+          };
+
+          const normLog = {
+            actionType: logToDelete.actionType || logToDelete.action_type,
+            quantityChanged: logToDelete.quantityChanged ?? logToDelete.quantity_changed,
+            dispensedUnit: logToDelete.dispensedUnit || logToDelete.dispensed_unit,
+            dispensedBottles: logToDelete.dispensedBottles ?? logToDelete.dispensed_bottles,
+            dispensedPillsPerBottle: logToDelete.dispensedPillsPerBottle ?? logToDelete.dispensed_pills_per_bottle,
+            details: logToDelete.details,
+          };
+
+          const revertedStock = revertInventoryFromDeletedLog(normItem, normLog);
+
+          try {
+            updatedItem = await prisma.inventoryItem.update({
+              where: { id: targetItemId },
+              data: {
+                bottlesAvailable: revertedStock.bottlesAvailable,
+                looseUnitsAvailable: revertedStock.looseUnitsAvailable,
+              },
+            });
+          } catch (e) {}
+
+          if (supabase) {
+            try {
+              await supabase.from('inventory_items').update({
+                bottles_available: revertedStock.bottlesAvailable,
+                loose_units_available: revertedStock.looseUnitsAvailable,
+              }).eq('id', targetItemId);
+            } catch (e) {}
+          }
+        }
+      }
+
+      // Step C: Delete the log record from Supabase & SQLite
       if (supabase) {
         try {
           await supabase.from('dispense_logs').delete().eq('id', id);
@@ -440,12 +518,12 @@ export async function DELETE(request: Request) {
       } catch (e) {}
 
       logsFallbackCache = logsFallbackCache.filter((l) => l.id !== id);
-      return NextResponse.json({ success: true, deletedId: id });
+      return NextResponse.json({ success: true, deletedId: id, revertedItem: updatedItem });
     }
 
-    // 2. Allow Developer or Test Mode to clear all audit logs
-    if (isDeveloper || isTestMode) {
-      if (supabase && isDeveloper) {
+    // 2. Allow Admin, Developer, or Test Mode to clear all audit logs
+    if (isDeveloper || isAdmin || isTestMode) {
+      if (supabase && (isDeveloper || isAdmin)) {
         try {
           await supabase.from('dispense_logs').delete().neq('id', '');
         } catch (e) {
@@ -458,11 +536,11 @@ export async function DELETE(request: Request) {
       } catch (e) {}
 
       logsFallbackCache = [];
-      return NextResponse.json({ success: true, message: 'Audit logs cleared by developer authorization.' });
+      return NextResponse.json({ success: true, message: 'Audit logs cleared by administrative authorization.' });
     }
 
     return NextResponse.json(
-      { error: 'Regulatory Protection: Live clinical transaction audit logs are protected. Developer authorization required to delete.' },
+      { error: 'Administrative authorization required to delete records.' },
       { status: 403 }
     );
   } catch (error: any) {

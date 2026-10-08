@@ -144,21 +144,22 @@ export function useAdminAnalytics({
     }
   };
 
-  // Developer Authorization State
+  // Administrative Authorization State
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
-  const isDeveloper = userRole === 'DEVELOPER' || isDevUnlocked;
+  const isAuthorizedAdmin = userRole === 'ADMIN' || userRole === 'DEVELOPER' || isDevUnlocked;
+  const isDeveloper = isAuthorizedAdmin;
 
   const requireDeveloper = (): boolean => {
-    if (isDeveloper) return true;
+    if (isAuthorizedAdmin) return true;
     const pin = prompt(
-      'Enter Developer PIN (7777) to authorize developer administrative edit/delete access:'
+      'Enter Admin PIN (7890) to authorize administrative edit/delete access:'
     );
-    if (pin === '7777') {
+    if (pin === '7890' || pin === '7777') {
       setIsDevUnlocked(true);
       return true;
     }
     if (pin !== null) {
-      alert('Incorrect Developer PIN.');
+      alert('Incorrect PIN.');
     }
     return false;
   };
@@ -268,9 +269,9 @@ export function useAdminAnalytics({
     if (!requireDeveloper()) return;
     if (
       !confirm(
-        `DEVELOPER OVERRIDE: Permanently delete this ${label} transaction record for "${
+        `Permanently delete this ${label} transaction record for "${
           log.itemGenericName || 'item'
-        }"? This removes it permanently from Supabase & SQLite databases and updates analytics.`
+        }"? This will automatically re-evaluate and restore the inventory count.`
       )
     ) {
       return;
@@ -284,7 +285,7 @@ export function useAdminAnalytics({
 
     try {
       const res = await fetch(
-        `/api/logs?id=${encodeURIComponent(log.id)}&developer=true`,
+        `/api/logs?id=${encodeURIComponent(log.id)}&admin=true`,
         { method: 'DELETE' }
       );
       if (res.ok) {

@@ -15,15 +15,11 @@ import {
   Check, 
   ShieldCheck,
   Tag,
-  Camera,
-  Barcode,
   Truck,
   PackagePlus,
   ArrowUpRight
 } from 'lucide-react';
 import { calculateTotalUnits, convertTotalUnitsToStock, parseLotNumbers } from '@/lib/stockMath';
-import BarcodeScannerModal from '@/components/BarcodeScannerModal';
-import { ScannedMedicationData } from '@/lib/ndcLookup';
 
 const PRESET_EQUIPMENT_CATEGORIES = [
   'Supplies',
@@ -107,7 +103,6 @@ export default function EquipmentEditModal({
   const [customSubUnitText, setCustomSubUnitText] = useState('');
 
   const [doesNotExpire, setDoesNotExpire] = useState(true);
-  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Multi-Lot / Multi-Serial Tracking Rows
   const [lotEntries, setLotEntries] = useState<LotEntry[]>([]);
@@ -265,63 +260,6 @@ export default function EquipmentEditModal({
 
   const handleChange = (field: keyof InventoryItem, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleBarcodeScanned = (data: ScannedMedicationData) => {
-    if (data.expirationDate && data.expirationDate !== '3000-01-01') {
-      setDoesNotExpire(false);
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      genericName: data.genericName,
-      brandName: data.brandName || prev.brandName,
-      dosage: data.dosage !== 'Standard Formulation' ? data.dosage : (prev.dosage || 'Medical Supply / Device'),
-      shelfLocation: data.shelfLocation || prev.shelfLocation,
-      stockUnit: data.stockUnit || prev.stockUnit,
-      subUnit: data.subUnit || prev.subUnit,
-      pillsPerBottle: data.pillsPerBottle || prev.pillsPerBottle,
-      expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : prev.expirationDate),
-      directions: data.directions || prev.directions,
-    }));
-
-    if (data.lotNumber || data.expirationDate) {
-      setLotEntries((prev) => {
-        const hasExistingData = prev.some((l) => l.lotNumber.trim() !== '' || (l.expirationDate && !l.expirationDate.startsWith('3000')));
-        if (!hasExistingData) {
-          return [
-            {
-              id: `lot-${Date.now()}`,
-              lotNumber: data.lotNumber || '',
-              expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
-              bottles: 1,
-              looseUnits: 0,
-            },
-          ];
-        }
-
-        // If lot already exists in the table, update it
-        const existingIdx = data.lotNumber ? prev.findIndex((l) => l.lotNumber.toLowerCase() === data.lotNumber!.toLowerCase()) : -1;
-        if (existingIdx !== -1) {
-          return prev.map((l, idx) => idx === existingIdx ? {
-            ...l,
-            expirationDate: data.expirationDate || l.expirationDate,
-          } : l);
-        }
-
-        // Otherwise append as a new batch row
-        return [
-          ...prev,
-          {
-            id: `lot-${Date.now()}`,
-            lotNumber: data.lotNumber || '',
-            expirationDate: data.expirationDate || (doesNotExpire ? '3000-01-01' : '3000-01-01'),
-            bottles: 1,
-            looseUnits: 0,
-          },
-        ];
-      });
-    }
   };
 
   // Multi-Lot Handlers
@@ -566,18 +504,6 @@ export default function EquipmentEditModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {!item && (
-              <button
-                type="button"
-                onClick={() => setIsBarcodeScannerOpen(true)}
-                className="min-h-[38px] px-3 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-black text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border border-teal-800"
-                title="Scan supply UPC, 2D GS1 DataMatrix, or packaging barcode"
-              >
-                <Camera className="w-4 h-4 stroke-[2.5]" />
-                <span>Scan Barcode</span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={onClose}
@@ -1158,15 +1084,6 @@ export default function EquipmentEditModal({
           </div>
         </form>
       </div>
-
-      {/* Live Inbound Camera Barcode Scanner Modal */}
-      <BarcodeScannerModal
-        isOpen={isBarcodeScannerOpen}
-        onClose={() => setIsBarcodeScannerOpen(false)}
-        onScanSuccess={handleBarcodeScanned}
-        title="Scan Supply / Device Barcode"
-        subtitle="Point camera at manufacturer UPC, 2D GS1 DataMatrix, or packaging barcode."
-      />
     </div>
   );
 }
