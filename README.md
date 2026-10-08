@@ -14,7 +14,7 @@ Mission-RX is a specialized clinical formulary management and dispensary trackin
 - **Real-Time Clinical Inventory**: Dual tracking of sealed containers and loose units with multi-pack conversion mathematics.
 - **Multi-Lot Expiration Safety**: Earliest-expiring batch roll-forward and Look-Alike Sound-Alike (LASA) safety checks.
 - **Dispensary & Waste Auditing**: Complete FIFO netting, dispense reconciliation, and waste/discard tracking.
-- **Role-Based Clinical Access**: Doctor/Staff, Viewer/Auditor (PIN 8888), Admin (PIN 7890), and Developer (PIN 7777) access tiers.
+- **Role-Based Clinical Access**: Doctor/Staff, Viewer/Auditor, Admin, and Developer access tiers.
 - **Dual-Database Resilience**: Cloud primary PostgreSQL (Supabase) synchronized with local SQLite (Prisma) fallback.
 
 ---
